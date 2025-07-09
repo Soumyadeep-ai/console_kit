@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Soumyadeep Pal"]
   spec.email = ["soumyadeeppal2001@gmail.com"]
 
-  spec.summary = "TODO: Write a short summary, because RubyGems requires one."
-  spec.description = "TODO: Write a longer description or delete this line."
+  spec.summary = "Toolkit for enhancing Rails console: multi-tenancy."
+  spec.description = "Adds tenant selection to Rails consoles"
   spec.homepage = "TODO: Put your gem's website or public repo URL here."
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
@@ -35,6 +35,8 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
+  spec.add_dependency "rails", ">= 7.2.1"
+  spec.add_dependency "mongoid"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
