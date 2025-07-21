@@ -36,22 +36,26 @@ module ConsoleKit
         input = $stdin.gets&.chomp&.strip
         input = '1' if input.to_s.empty?
 
-        unless valid_integer?(input)
-          Output.print_warning('Invalid input. Please enter a number.')
-          return -1
-        end
+        return invalid_input_response unless valid_integer?(input)
 
         parsed_index = input.to_i
-        unless parsed_index.between?(0, max_index)
-          Output.print_warning("Selection must be between 0 and #{max_index}.")
-          return -1
-        end
+        return invalid_range_response(max_index) unless parsed_index.between?(0, max_index)
 
         parsed_index
       end
 
       def valid_integer?(input)
         input.match?(/\A\d+\z/)
+      end
+
+      def invalid_input_response
+        Output.print_warning('Invalid input. Please enter a number.')
+        -1
+      end
+
+      def invalid_range_response(max_index)
+        Output.print_warning("Selection must be between 0 and #{max_index}.")
+        -1
       end
     end
   end

@@ -4,10 +4,7 @@ require 'spec_helper'
 
 RSpec.describe ConsoleKit::TenantSelector do
   let(:tenants) do
-    {
-      'alpha' => { constants: { partner_code: 'ALPHA' } },
-      'beta' => { constants: { partner_code: 'BETA' } }
-    }
+    { 'alpha' => { constants: { partner_code: 'ALPHA' } }, 'beta' => { constants: { partner_code: 'BETA' } } }
   end
 
   let(:keys) { tenants.keys }
