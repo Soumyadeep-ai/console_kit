@@ -13,9 +13,7 @@ module ConsoleKit
         max_attempts.times do
           index = prompt_user_for_selection(keys.size)
           return nil if index.zero?
-
-          selected_key = keys[index - 1]
-          return selected_key if selected_key
+          return keys[index - 1] if index.positive?
         end
 
         nil
@@ -38,14 +36,22 @@ module ConsoleKit
         input = $stdin.gets&.chomp&.strip
         input = '1' if input.to_s.empty?
 
-        parsed_index = input.to_i
+        unless valid_integer?(input)
+          Output.print_warning('Invalid input. Please enter a number.')
+          return -1
+        end
 
+        parsed_index = input.to_i
         unless parsed_index.between?(0, max_index)
-          Output.print_warning('Invalid selection. Please try again.')
+          Output.print_warning("Selection must be between 0 and #{max_index}.")
           return -1
         end
 
         parsed_index
+      end
+
+      def valid_integer?(input)
+        input.match?(/\A\d+\z/)
       end
     end
   end

@@ -21,6 +21,8 @@ RSpec.describe ConsoleKit::Output do
 
     expect do
       described_class.print_backtrace(exception)
-    end.to output(/line 1.*line 2/).to_stdout
+    end.to output(
+      /\e\[0;90m\[ConsoleKit\]     line 1\e\[0m\n\e\[0;90m\[ConsoleKit\]     line 2\e\[0m\n/
+    ).to_stdout
   end
 end
