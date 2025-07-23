@@ -43,6 +43,8 @@ RSpec.describe ConsoleKit do
 
     it 'sets @last_tenant after setup' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+      allow(ConsoleKit::Output).to receive(:print_success)
       ConsoleKit.setup
       expect(ConsoleKit.last_tenant).to eq('globex')
     end
@@ -61,8 +63,9 @@ RSpec.describe ConsoleKit do
 
     it 'prints error if tenant selection returns nil' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
+      allow(ConsoleKit::Output).to receive(:print_error)
       expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
-      described_class.setup
+      ConsoleKit.setup
     end
 
     it 'rescues and prints setup error' do
