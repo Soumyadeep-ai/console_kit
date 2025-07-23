@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.2] - 2025-07-23
+### Added
+- Changelog added.
+- Readme and installation instructions added.
+
+---
+
 ## [0.1.1] - 2025-07-21
 ### Added
 - Initial generator: `console_kit:install` to scaffold configuration.
