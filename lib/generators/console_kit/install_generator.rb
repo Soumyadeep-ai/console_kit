@@ -22,7 +22,9 @@ module ConsoleKit
 
       def remind_about_customization
         say "\n✅ Setup complete!", :green
-        say '👉 Please update `config/initializers/console_kit.rb` to set your `tenants` and `context_class`.', :green
+        say '📄 Modify `config/initializers/console_kit.rb`:', :green
+        say '  - Set `tenants` (required)', :green
+        say '  - Set `context_class` (required)', :green
       end
     end
   end

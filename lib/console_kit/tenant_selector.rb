@@ -10,10 +10,12 @@ module ConsoleKit
         print_tenant_selection_menu(tenants, keys)
 
         max_attempts = 3
-        max_attempts.times do
+        max_attempts.times do |attempt|
           index = prompt_user_for_selection(keys.size)
           return nil if index.zero?
           return keys[index - 1] if index.positive?
+
+          print_tenant_selection_menu(tenants, keys) if attempt < max_attempts - 1
         end
 
         nil
