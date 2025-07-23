@@ -8,6 +8,7 @@ require_relative 'output'
 module ConsoleKit
   class << self
     attr_accessor :tenants, :context_class
+    attr_reader :last_tenant
 
     def setup
       return Output.print_error('No tenants configured.') if tenants.nil? || tenants.empty?
@@ -41,6 +42,7 @@ module ConsoleKit
     def initialize_tenant(tenant_key)
       TenantConfigurator.configure_tenant(tenant_key, tenants, context_class)
       Output.print_success("Tenant initialized: #{tenant_key}")
+      @last_tenant = tenant_key
     end
 
     def handle_setup_error(error)

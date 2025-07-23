@@ -41,6 +41,14 @@ RSpec.describe ConsoleKit::TenantSelector do
       allow($stdin).to receive(:gets).and_return("bad\n", "nope\n", "2\n")
       expect(described_class.select(tenants, keys)).to eq('beta')
     end
+
+    it 'reprints the menu after invalid inputs before final retry' do
+      allow($stdin).to receive(:gets).and_return("bad\n", "nope\n", "0\n")
+
+      allow(ConsoleKit::Output).to receive(:print_info)
+      expect(ConsoleKit::Output).to receive(:print_header).exactly(3).times # once + 2 reprints
+      described_class.select(tenants, keys)
+    end
   end
 
   context 'input validation' do
@@ -53,6 +61,23 @@ RSpec.describe ConsoleKit::TenantSelector do
     it 'returns true for valid digit strings' do
       expect(described_class.send(:valid_integer?, '0')).to be true
       expect(described_class.send(:valid_integer?, '15')).to be true
+    end
+
+    it 'uses "1" when user presses enter (empty input)' do
+      allow($stdin).to receive(:gets).and_return("\n")
+      expect(ConsoleKit::Output).to receive(:print_prompt)
+      expect(described_class.select(tenants, keys)).to eq('alpha')
+    end
+
+    it 'warns about input selection being out of range' do
+      allow($stdin).to receive(:gets).and_return("9\n", "1\n")
+      expect(ConsoleKit::Output).to receive(:print_warning).with('Selection must be between 0 and 2.')
+      described_class.select(tenants, keys)
+    end
+
+    it 'strips surrounding whitespace from input' do
+      allow($stdin).to receive(:gets).and_return(" 2 \n")
+      expect(described_class.select(tenants, keys)).to eq('beta')
     end
   end
 end

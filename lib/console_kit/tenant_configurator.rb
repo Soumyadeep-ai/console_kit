@@ -29,7 +29,9 @@ module ConsoleKit
       end
 
       def setup_database_connections(context_class)
-        ApplicationRecord.establish_connection(context_class.tenant_shard.to_sym)
+        ApplicationRecord.establish_connection(context_class.tenant_shard.to_sym) if defined?(ApplicationRecord)
+        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
+
         Mongoid.override_client(context_class.tenant_mongo_db.to_s)
       end
     end
