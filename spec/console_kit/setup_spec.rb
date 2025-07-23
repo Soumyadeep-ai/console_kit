@@ -33,6 +33,10 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  before do
+    ConsoleKit.instance_variable_set(:@last_tenant, nil)
+  end
+
   describe '.setup' do
     it 'sets up tenant successfully via TenantConfigurator' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
@@ -63,7 +67,7 @@ RSpec.describe ConsoleKit do
 
     it 'prints error if tenant selection returns nil' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-      allow(ConsoleKit::Output).to receive(:print_error)
+      allow(ConsoleKit::Output).to receive(:print_success)
       expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
       ConsoleKit.setup
     end
