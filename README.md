@@ -1,5 +1,11 @@
 # ConsoleKit
 
+![Gem Version](https://img.shields.io/gem/v/console_kit.svg)
+![Gem Downloads](https://img.shields.io/gem/dt/console_kit.svg)
+![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/release.yml/badge.svg)
+![License](https://img.shields.io/github/license/Soumyadeep-ai/console_kit)
+![Ruby](https://img.shields.io/badge/ruby-%3E=3.1.0-red)
+
 A simple and flexible multi-tenant console setup toolkit for Rails applications.
 
 ConsoleKit helps you manage tenant-specific database connections and context configuration via an easy CLI interface and Rails integration.
