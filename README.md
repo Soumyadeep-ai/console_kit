@@ -8,23 +8,25 @@ ConsoleKit helps you manage tenant-specific database connections and context con
 
 Install the gem and add to the application's Gemfile by executing:
 
-```bash
+```ruby
 bundle add console_kit
 ```
 
 Additionally you can also add this line to your application's Gemfile:
+
 ```ruby
 gem 'console_kit'
 ```
 
 And then execute:
-```bash
+
+```ruby
 bundle install
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
-```bash
+```ruby
 gem install console_kit
 ```
 
