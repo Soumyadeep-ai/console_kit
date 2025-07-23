@@ -1,28 +1,57 @@
 # ConsoleKit
 
-TODO: Delete this and the text below, and describe your gem
+A simple and flexible multi-tenant console setup toolkit for Rails applications.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/console_kit`. To experiment with that code, run `bin/console` for an interactive prompt.
+ConsoleKit helps you manage tenant-specific database connections and context configuration via an easy CLI interface and Rails integration.
 
 ## Installation
-
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
 
 Install the gem and add to the application's Gemfile by executing:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle add console_kit
+```
+
+Additionally you can also add this line to your application's Gemfile:
+```ruby
+gem 'console_kit'
+```
+
+And then execute:
+```bash
+bundle install
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install console_kit
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+After installing, generate the initializer and configuration files by running:
+
+```ruby
+rails generate console_kit:install
+```
+
+Then, edit config/initializers/console_kit.rb to define your tenants and context class. Example format:
+
+```ruby
+ConsoleKit.configure do |config|
+  config.tenants = {
+    tenant_one: {
+      constants: { shard: :tenant_one_db, mongo_db: :tenant_one_mongo, partner_code: 'partnerA' }
+    },
+    tenant_two: {
+      constants: { shard: :tenant_two_db, mongo_db: :tenant_two_mongo, partner_code: 'partnerB' }
+    }
+  }
+
+  config.context_class = CurrentContext
+end
+```
 
 ## Development
 
@@ -32,7 +61,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/console_kit. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/console_kit/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/Soumyadeep-ai/console_kit. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
@@ -40,4 +69,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the ConsoleKit project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/console_kit/blob/master/CODE_OF_CONDUCT.md).
+Everyone interacting in the ConsoleKit project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
