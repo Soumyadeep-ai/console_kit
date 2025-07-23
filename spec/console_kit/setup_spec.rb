@@ -46,11 +46,12 @@ RSpec.describe ConsoleKit do
     end
 
     it 'sets @last_tenant after setup' do
+      allow($stdin).to receive(:tty?).and_return(true) # ensures interactive
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
       allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
       allow(ConsoleKit::Output).to receive(:print_success)
-      ConsoleKit.setup
-      expect(ConsoleKit.last_tenant).to eq('globex')
+      described_class.setup
+      expect(described_class.last_tenant).to eq('globex')
     end
 
     it 'prints error when tenants is nil' do
@@ -66,10 +67,11 @@ RSpec.describe ConsoleKit do
     end
 
     it 'prints error if tenant selection returns nil' do
+      allow($stdin).to receive(:tty?).and_return(true) # ensures interactive
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
       allow(ConsoleKit::Output).to receive(:print_success)
       expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
-      ConsoleKit.setup
+      described_class.setup
     end
 
     it 'rescues and prints setup error' do
