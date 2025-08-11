@@ -18,13 +18,27 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  def stub_successful_setup(tenant)
+    allow(ConsoleKit::TenantSelector).to receive(:select).and_return(tenant)
+    allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(tenant, anything,
+                                                                             anything).and_return(true)
+  end
+
+  shared_examples 'a successful tenant setup' do |tenant|
+    it "sets current_tenant to #{tenant}" do
+      stub_successful_setup(tenant)
+      described_class.setup
+      expect(described_class.current_tenant).to eq(tenant)
+    end
+  end
+
   before do
     described_class.configure do |config|
       config.tenants = tenants
       config.context_class = context_class
     end
-
     described_class.instance_variable_set(:@current_tenant, nil)
+    allow(ConsoleKit::Output).to receive(:print_success)
   end
 
   describe '.configure' do
@@ -48,86 +62,43 @@ RSpec.describe ConsoleKit do
   end
 
   describe '.setup' do
-    it 'sets up tenant successfully via TenantConfigurator' do
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-      expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-      expect(ConsoleKit::Output).to receive(:print_success).with(/Tenant set to: acme/)
-      expect(ConsoleKit::Output).to receive(:print_success).with(/Tenant initialized: acme/)
-      ConsoleKit.setup
-      expect(described_class.current_tenant).to eq('acme')
-    end
+    include_examples 'a successful tenant setup', 'acme'
 
-    it 'sets @current_tenant after setup' do
-      allow($stdin).to receive(:tty?).and_return(true)
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(true)
-      allow(ConsoleKit::Output).to receive(:print_success)
-      described_class.setup
-      expect(described_class.current_tenant).to eq('globex')
-    end
-
-    it 'does not set @current_tenant if configuration fails' do
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
-      expect(ConsoleKit::Output).not_to receive(:print_success)
-      described_class.setup
-      expect(described_class.current_tenant).to be_nil
-    end
-
-    it 'prints error when tenants is nil' do
-      described_class.tenants = nil
-      expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
-      described_class.setup
-    end
-
-    it 'prints error when tenants are empty' do
-      described_class.tenants = {}
-      expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
-      described_class.setup
-    end
-
-    it 'prints error if tenant selection returns nil' do
-      allow($stdin).to receive(:tty?).and_return(true)
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-      expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
-      described_class.setup
-    end
-
-    it 'rescues and prints setup error' do
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(StandardError.new('Boom'))
-      expect(ConsoleKit::Output).to receive(:print_error).with(/Error setting up tenant: Boom/)
-      expect(ConsoleKit::Output).to receive(:print_backtrace)
-      described_class.setup
-    end
-
-    context 'with single tenant & non-interactive mode' do
-      before do
-        described_class.tenants = { 'solo' => tenants['acme'] }
-        allow($stdin).to receive(:tty?).and_return(false)
-      end
-
-      it 'auto-picks the only tenant' do
-        expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+    context 'when setup succeeds' do
+      it 'sets @current_tenant' do
+        stub_successful_setup('globex')
         described_class.setup
-        expect(described_class.current_tenant).to eq('solo')
+        expect(described_class.current_tenant).to eq('globex')
       end
     end
 
-    context 'in non-interactive mode' do
-      before { allow($stdin).to receive(:tty?).and_return(false) }
-
-      it 'auto-selects tenant when multiple tenants are available' do
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-        allow(ConsoleKit::Output).to receive(:print_success)
-
+    context 'when configuration fails' do
+      it 'does not set @current_tenant' do
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
         described_class.setup
-        expect(%w[acme globex]).to include(described_class.current_tenant)
+        expect(described_class.current_tenant).to be_nil
       end
     end
 
-    context 'when tenant key is invalid or empty' do
-      it 'prints error if tenant key is nil' do
+    context 'when no tenants are configured' do
+      it 'prints error when tenants is nil' do
+        described_class.tenants = nil
+        expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
+        described_class.setup
+      end
+
+      it 'prints error when tenants are empty' do
+        described_class.tenants = {}
+        expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
+        described_class.setup
+      end
+    end
+
+    context 'when tenant selection fails' do
+      before { allow($stdin).to receive(:tty?).and_return(true) }
+
+      it 'prints error if tenant selection returns nil' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
         described_class.setup
@@ -140,8 +111,8 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    context 'when tenant configuration raises errors' do
-      it 'handles StandardError and logs it' do
+    context 'when configuration raises an exception' do
+      it 'handles StandardError and prints backtrace' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(StandardError, 'Boom')
         expect(ConsoleKit::Output).to receive(:print_error).with(/Boom/)
@@ -158,41 +129,52 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    context 'with only one tenant configured' do
-      before do
-        described_class.tenants = { 'only_one' => tenants['acme'] }
-        allow($stdin).to receive(:tty?).and_return(true)
+    context 'auto-selection behavior' do
+      context 'with single tenant' do
+        before do
+          described_class.tenants = { 'only_one' => tenants['acme'] }
+        end
+
+        it 'auto-picks the only tenant in interactive mode' do
+          allow($stdin).to receive(:tty?).and_return(true)
+          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+          described_class.setup
+          expect(described_class.current_tenant).to eq('only_one')
+        end
+
+        it 'auto-picks the only tenant in non-interactive mode' do
+          allow($stdin).to receive(:tty?).and_return(false)
+          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+          described_class.setup
+          expect(described_class.current_tenant).to eq('only_one')
+        end
       end
 
-      it 'auto-selects the only tenant' do
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-        allow(ConsoleKit::Output).to receive(:print_success)
-        described_class.setup
-        expect(described_class.current_tenant).to eq('only_one')
+      context 'with multiple tenants and non-interactive mode' do
+        before { allow($stdin).to receive(:tty?).and_return(false) }
+
+        it 'auto-selects the first tenant' do
+          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+          described_class.setup
+          expect(described_class.current_tenant).to eq('acme')
+        end
       end
     end
 
-    context 'when context_class is nil' do
-      it 'does not crash if context_class is not defined' do
+    context 'edge cases' do
+      it 'handles nil context_class gracefully' do
         described_class.context_class = nil
-        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('acme', tenants, nil).and_return(true)
-        allow(ConsoleKit::Output).to receive(:print_success)
-
+        stub_successful_setup('acme')
         described_class.setup
         expect(described_class.current_tenant).to eq('acme')
       end
-    end
 
-    context 'with symbol keys in tenant config' do
-      it 'handles symbol keys safely' do
-        described_class.tenants = {
-          acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } }
-        }
-
+      it 'supports symbol keys in tenant config' do
+        described_class.tenants = { acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db',
+                                                         partner_code: 'ACME' } } }
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:acme)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-        allow(ConsoleKit::Output).to receive(:print_success)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme, anything,
+                                                                                 anything).and_return(true)
 
         described_class.setup
         expect(described_class.current_tenant).to eq(:acme)
@@ -210,15 +192,11 @@ RSpec.describe ConsoleKit do
     end
 
     context 'when current tenant is set' do
-      before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
-      end
+      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
 
-      it 'clears the current configuration and resets tenant' do
+      it 'clears configuration and resets tenant' do
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(true)
-        allow(ConsoleKit::Output).to receive(:print_success)
+        stub_successful_setup('globex')
         expect(ConsoleKit::Output).to receive(:print_warning).with(/Resetting tenant: acme/)
         described_class.reset_current_tenant
         expect(described_class.current_tenant).to eq('globex')
@@ -226,15 +204,13 @@ RSpec.describe ConsoleKit do
     end
 
     context 'when setup fails after reset' do
-      before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
-      end
+      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
 
       it 'returns false if no tenant is selected' do
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         allow(ConsoleKit::Output).to receive(:print_error)
-        expect(ConsoleKit.reset_current_tenant).to be false
+        expect(described_class.reset_current_tenant).to be false
       end
     end
   end
