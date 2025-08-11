@@ -21,5 +21,8 @@ Rails.application.config.after_initialize do
 
     # TODO: Set your context class (e.g., CurrentContext)
     config.context_class = nil
+
+    # TODO: Toggle the pretty output on/off
+    config.pretty_output = true
   end
 end

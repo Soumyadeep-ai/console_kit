@@ -4,7 +4,7 @@ module ConsoleKit
   # Railtie
   class Railtie < Rails::Railtie
     console do
-      ConsoleKit.setup
+      ConsoleKit::Setup.setup
     end
   end
 end
