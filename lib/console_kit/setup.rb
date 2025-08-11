@@ -8,27 +8,51 @@ require_relative 'output'
 module ConsoleKit
   class << self
     attr_accessor :tenants, :context_class
-    attr_reader :last_tenant
+    attr_reader :current_tenant
 
     def setup
-      return Output.print_error('No tenants configured.') if tenants.nil? || tenants.empty?
+      return Output.print_error('No tenants configured.') if no_tenants?
 
-      tenant_key = resolve_tenant_key
+      tenant_key = select_tenant_key
       return Output.print_error('No tenant selected. Loading without tenant configuration.') unless tenant_key
 
-      initialize_tenant(tenant_key)
+      configure_tenant(tenant_key)
     rescue StandardError => e
-      handle_setup_error(e)
+      handle_error(e)
     end
 
     def configure
       yield self
     end
 
+    def tenant_setup_successful?
+      !@current_tenant.nil? && !@current_tenant.to_s.empty?
+    end
+
+    def reset_current_tenant
+      return handle_reset_no_tenants if no_tenants?
+
+      handle_reset_existing_tenant if @current_tenant
+      @current_tenant = nil
+
+      setup
+      tenant_setup_successful?
+    end
+
     private
 
-    def resolve_tenant_key
-      single_tenant? || non_interactive? ? tenants.keys.first : TenantSelector.select(tenants, tenants.keys)
+    def no_tenants?
+      tenants.nil? || tenants.empty?
+    end
+
+    def select_tenant_key
+      return tenants.keys.first if auto_select_tenant?
+
+      TenantSelector.select(tenants, tenants.keys)
+    end
+
+    def auto_select_tenant?
+      single_tenant? || non_interactive?
     end
 
     def single_tenant?
@@ -39,13 +63,25 @@ module ConsoleKit
       !$stdin.tty?
     end
 
-    def initialize_tenant(tenant_key)
-      TenantConfigurator.configure_tenant(tenant_key, tenants, context_class)
-      Output.print_success("Tenant initialized: #{tenant_key}")
-      @last_tenant = tenant_key
+    def handle_reset_no_tenants
+      Output.print_warning('Cannot reset tenant: No tenants configured.')
+      false
     end
 
-    def handle_setup_error(error)
+    def handle_reset_existing_tenant
+      Output.print_warning("Resetting tenant: #{@current_tenant}")
+      TenantConfigurator.clear(context_class)
+    end
+
+    def configure_tenant(tenant_key)
+      success = TenantConfigurator.configure_tenant(tenant_key, tenants, context_class)
+      return unless success
+
+      @current_tenant = tenant_key
+      Output.print_success("Tenant initialized: #{tenant_key}")
+    end
+
+    def handle_error(error)
       Output.print_error("Error setting up tenant: #{error.message}")
       Output.print_backtrace(error)
     end
