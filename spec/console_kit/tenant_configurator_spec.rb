@@ -61,17 +61,13 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
 
     context 'when ApplicationRecord.establish_connection fails' do
-      before do
-        allow(ApplicationRecord).to receive(:establish_connection).and_raise('AR error')
-      end
+      before { allow(ApplicationRecord).to receive(:establish_connection).and_raise('AR error') }
 
       include_examples 'prints failure and backtrace'
     end
 
     context 'when Mongoid.override_client fails' do
-      before do
-        allow(Mongoid).to receive(:override_client).and_raise('Mongo error')
-      end
+      before { allow(Mongoid).to receive(:override_client).and_raise('Mongo error') }
 
       include_examples 'prints failure and backtrace'
     end
@@ -89,10 +85,9 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
 
     context 'with partial constants missing' do
-      # missing mongo_db
-      let(:tenants) do
-        { tenant_key => { constants: { shard: 'shard_acme', partner_code: 'ACME' } } }
-      end
+      # missing partner_code
+      let(:tenants) { { tenant_key => { constants: { shard: 'shard_acme' } } } }
+
       include_examples 'prints failure and backtrace'
     end
 

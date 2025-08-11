@@ -34,9 +34,8 @@ module ConsoleKit
       end
 
       def apply_tenant_configuration(context_class, constants)
-        required_keys = %i[shard mongo_db partner_code]
+        required_keys = %i[shard partner_code]
         missing_keys = required_keys.reject { |key| constants&.key?(key) }
-
         raise "Tenant constants missing keys: #{missing_keys.join(', ')}" unless missing_keys.empty?
 
         apply_context(context_class, constants)
@@ -52,6 +51,7 @@ module ConsoleKit
       def setup_database_connections(context_class)
         ApplicationRecord.establish_connection(context_class.tenant_shard.to_sym) if defined?(ApplicationRecord)
         return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
+        return if context_class.tenant_mongo_db.nil? || context_class.tenant_mongo_db.empty?
 
         Mongoid.override_client(context_class.tenant_mongo_db.to_s)
       end

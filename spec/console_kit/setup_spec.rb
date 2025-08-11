@@ -131,9 +131,7 @@ RSpec.describe ConsoleKit do
 
     context 'auto-selection behavior' do
       context 'with single tenant' do
-        before do
-          described_class.tenants = { 'only_one' => tenants['acme'] }
-        end
+        before { described_class.tenants = { 'only_one' => tenants['acme'] } }
 
         it 'auto-picks the only tenant in interactive mode' do
           allow($stdin).to receive(:tty?).and_return(true)
