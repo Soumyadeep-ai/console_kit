@@ -34,6 +34,11 @@ module ConsoleKit
       end
 
       def apply_tenant_configuration(context_class, constants)
+        required_keys = %i[shard mongo_db partner_code]
+        missing_keys = required_keys.reject { |key| constants&.key?(key) }
+
+        raise "Tenant constants missing keys: #{missing_keys.join(', ')}" unless missing_keys.empty?
+
         apply_context(context_class, constants)
         setup_database_connections(context_class)
       end
