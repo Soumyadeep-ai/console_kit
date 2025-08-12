@@ -31,11 +31,13 @@ Rails.application.config.after_initialize do
     config.pretty_output = true
 
     if config.tenants.nil?
-      warn '[ConsoleKit] Warning: `tenants` is not configured. Please set it in config/initializers/console_kit.rb'
+      warn '[ConsoleKit] Warning: `tenants` is not configured. ' \
+           'Please set it in config/initializers/console_kit.rb'
     end
 
     if config.context_class.nil?
-      warn '[ConsoleKit] Warning: `context_class` is not configured. Please set it in config/initializers/console_kit.rb'
+      warn '[ConsoleKit] Warning: `context_class` is not configured. ' \
+           'Please set it in config/initializers/console_kit.rb'
     end
   end
 end
