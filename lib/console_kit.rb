@@ -43,5 +43,13 @@ module ConsoleKit
     def context_class=(value)
       configuration.context_class = value
     end
+
+    def current_tenant
+      Setup.current_tenant
+    end
+
+    def reset_current_tenant
+      Setup.reset_current_tenant
+    end
   end
 end

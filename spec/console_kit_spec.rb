@@ -112,4 +112,42 @@ RSpec.describe ConsoleKit do
       expect(ConsoleKit.tenants).to eq(['main'])
     end
   end
+
+  describe 'delegated tenant methods' do
+    describe '.current_tenant' do
+      it 'delegates to ConsoleKit::Setup.current_tenant' do
+        expect(ConsoleKit::Setup).to receive(:current_tenant).and_return('my_tenant')
+        expect(ConsoleKit.current_tenant).to eq('my_tenant')
+      end
+
+      it 'returns nil if ConsoleKit::Setup.current_tenant is nil' do
+        expect(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+        expect(ConsoleKit.current_tenant).to be_nil
+      end
+
+      it 'returns the same value on multiple calls' do
+        expect(ConsoleKit::Setup).to receive(:current_tenant).twice.and_return('tenant1')
+        expect(ConsoleKit.current_tenant).to eq('tenant1')
+        expect(ConsoleKit.current_tenant).to eq('tenant1')
+      end
+    end
+
+    describe '.reset_current_tenant' do
+      it 'delegates to ConsoleKit::Setup.reset_current_tenant' do
+        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true)
+        expect(ConsoleKit.reset_current_tenant).to eq(true)
+      end
+
+      it 'returns false if ConsoleKit::Setup.reset_current_tenant returns false' do
+        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(false)
+        expect(ConsoleKit.reset_current_tenant).to eq(false)
+      end
+
+      it 'calls reset_current_tenant multiple times with consistent results' do
+        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).twice.and_return(true)
+        expect(ConsoleKit.reset_current_tenant).to eq(true)
+        expect(ConsoleKit.reset_current_tenant).to eq(true)
+      end
+    end
+  end
 end
