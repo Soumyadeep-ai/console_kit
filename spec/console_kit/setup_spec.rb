@@ -201,6 +201,7 @@ RSpec.describe ConsoleKit::Setup do
       it 'returns false if tenant selection returns nil' do
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
         allow(ConsoleKit::Output).to receive(:print_error)
         expect(described_class.reset_current_tenant).to be false
       end
