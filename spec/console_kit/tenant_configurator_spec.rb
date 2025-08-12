@@ -13,10 +13,10 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     stub_const('Mongoid', Class.new { def self.override_client(_arg); end })
   end
 
-  shared_examples 'prints failure and backtrace' do
-    it 'prints error and backtrace' do
-      expect(ConsoleKit::Output).to receive(:print_error).with(/Failed to configure tenant/)
-      expect(ConsoleKit::Output).to receive(:print_backtrace)
+  shared_examples 'prints configuration error' do |expected_message:, backtrace: false|
+    it 'prints expected configuration error' do
+      expect(ConsoleKit::Output).to receive(:print_error).with(a_string_matching(expected_message))
+      expect(ConsoleKit::Output).to receive(:print_backtrace) if backtrace
       subject
     end
   end
@@ -51,25 +51,25 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     context 'with missing constants' do
       let(:tenants) { { tenant_key => {} } }
 
-      include_examples 'prints failure and backtrace'
+      include_examples 'prints configuration error', expected_message: 'No configuration found for tenant'
     end
 
     context 'with nil constants' do
       let(:tenants) { { tenant_key => { constants: nil } } }
 
-      include_examples 'prints failure and backtrace'
+      include_examples 'prints configuration error', expected_message: 'No configuration found for tenant'
     end
 
     context 'when ApplicationRecord.establish_connection fails' do
       before { allow(ApplicationRecord).to receive(:establish_connection).and_raise('AR error') }
 
-      include_examples 'prints failure and backtrace'
+      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when Mongoid.override_client fails' do
       before { allow(Mongoid).to receive(:override_client).and_raise('Mongo error') }
 
-      include_examples 'prints failure and backtrace'
+      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when Mongoid does not support override_client' do
@@ -88,7 +88,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       # missing partner_code
       let(:tenants) { { tenant_key => { constants: { shard: 'shard_acme' } } } }
 
-      include_examples 'prints failure and backtrace'
+      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when ApplicationRecord is not defined' do

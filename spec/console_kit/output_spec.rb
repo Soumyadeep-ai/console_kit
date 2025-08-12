@@ -3,9 +3,7 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit::Output do
-  before do
-    ConsoleKit.configure { |c| c.pretty_output = pretty_output }
-  end
+  before { ConsoleKit.configure { |c| c.pretty_output = pretty_output } }
 
   let(:pretty_output) { true }
 
@@ -23,7 +21,6 @@ RSpec.describe ConsoleKit::Output do
         expect(output).not_to match(/\e\[[\d;]+m/)
       end
 
-      # Adjust expected message for print_header formatting
       expected_line =
         if method == :print_header
           "[ConsoleKit] \n=== #{message} ==="
@@ -39,23 +36,17 @@ RSpec.describe ConsoleKit::Output do
   end
 
   describe 'standard outputs' do
-    include_examples 'ConsoleKit output formatter', :print_success,
-                     message: 'All good', symbol: '[✓]', color_code: '1;32'
-
-    include_examples 'ConsoleKit output formatter', :print_error,
-                     message: 'Something broke', symbol: '[✗]', color_code: '1;31'
-
-    include_examples 'ConsoleKit output formatter', :print_warning,
-                     message: 'Careful now', symbol: '[!]', color_code: '1;33'
-
-    include_examples 'ConsoleKit output formatter', :print_info,
-                     message: 'Heads up', symbol: nil, color_code: nil
-
-    include_examples 'ConsoleKit output formatter', :print_prompt,
-                     message: 'Input please', symbol: nil, color_code: '1;36'
-
-    include_examples 'ConsoleKit output formatter', :print_header,
-                     message: 'Section Start', symbol: nil, color_code: '1;34'
+    include_examples 'ConsoleKit output formatter', :print_success, message: 'All good', symbol: '[✓]',
+                                                                    color_code: '1;32'
+    include_examples 'ConsoleKit output formatter', :print_error, message: 'Something broke', symbol: '[✗]',
+                                                                  color_code: '1;31'
+    include_examples 'ConsoleKit output formatter', :print_warning, message: 'Careful now', symbol: '[!]',
+                                                                    color_code: '1;33'
+    include_examples 'ConsoleKit output formatter', :print_info, message: 'Heads up', symbol: nil, color_code: nil
+    include_examples 'ConsoleKit output formatter', :print_prompt, message: 'Input please', symbol: nil,
+                                                                   color_code: '1;36'
+    include_examples 'ConsoleKit output formatter', :print_header, message: 'Section Start', symbol: nil,
+                                                                   color_code: '1;34'
   end
 
   describe '#print_backtrace' do
@@ -67,7 +58,6 @@ RSpec.describe ConsoleKit::Output do
 
     it 'prints each backtrace line' do
       output = capture_stdout { described_class.print_backtrace(exception) }
-
       expect(output).to include('lib/foo.rb:10')
       expect(output).to include('app/bar.rb:20')
 
@@ -96,9 +86,7 @@ RSpec.describe ConsoleKit::Output do
     before { allow(Time).to receive(:current).and_return(now) }
 
     it 'includes timestamp if enabled' do
-      output = capture_stdout do
-        described_class.send(:print_with, :info, 'Timed', timestamp: true)
-      end
+      output = capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
 
       expect(output).to include('[2025-08-12 15:45:12]')
       expect(output).to include('[ConsoleKit]')
@@ -109,23 +97,17 @@ RSpec.describe ConsoleKit::Output do
   describe 'pretty_output false' do
     let(:pretty_output) { false }
 
-    include_examples 'ConsoleKit output formatter', :print_success,
-                     message: 'Plain OK', symbol: '[✓]', color_code: '1;32'
-
-    include_examples 'ConsoleKit output formatter', :print_error,
-                     message: 'Plain error', symbol: '[✗]', color_code: '1;31'
-
-    include_examples 'ConsoleKit output formatter', :print_warning,
-                     message: 'Plain warning', symbol: '[!]', color_code: '1;33'
-
-    include_examples 'ConsoleKit output formatter', :print_info,
-                     message: 'Plain info', symbol: nil, color_code: nil
-
-    include_examples 'ConsoleKit output formatter', :print_prompt,
-                     message: 'No color prompt', symbol: nil, color_code: '1;36'
-
-    include_examples 'ConsoleKit output formatter', :print_header,
-                     message: 'No color header', symbol: nil, color_code: '1;34'
+    include_examples 'ConsoleKit output formatter', :print_success, message: 'Plain OK', symbol: '[✓]',
+                                                                    color_code: '1;32'
+    include_examples 'ConsoleKit output formatter', :print_error, message: 'Plain error', symbol: '[✗]',
+                                                                  color_code: '1;31'
+    include_examples 'ConsoleKit output formatter', :print_warning, message: 'Plain warning', symbol: '[!]',
+                                                                    color_code: '1;33'
+    include_examples 'ConsoleKit output formatter', :print_info, message: 'Plain info', symbol: nil, color_code: nil
+    include_examples 'ConsoleKit output formatter', :print_prompt, message: 'No color prompt', symbol: nil,
+                                                                   color_code: '1;36'
+    include_examples 'ConsoleKit output formatter', :print_header, message: 'No color header', symbol: nil,
+                                                                   color_code: '1;34'
   end
 
   describe 'ANSI output readability' do

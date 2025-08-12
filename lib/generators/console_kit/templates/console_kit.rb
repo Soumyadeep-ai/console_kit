@@ -5,15 +5,20 @@
 
 Rails.application.config.after_initialize do
   ConsoleKit.configure do |config|
-    # TODO: Set your tenants source in the following format
+    # TODO: Set your tenants source, example:
     # {
-    #   key:
-    #   {
-    #     constants:
-    #     {
-    #       shard: # Active Record Shard
-    #       mongo_db: # Mongo Shard (If Mongo Is being used)
-    #       partner_code: # If partners are needed
+    #   tenant_a: {
+    #     constants: {
+    #       shard: :shard_1,
+    #       mongo_db: 'mongo_db_1',
+    #       partner_code: 'partner_a'
+    #     }
+    #   },
+    #   tenant_b: {
+    #     constants: {
+    #       shard: :shard_2,
+    #       mongo_db: 'mongo_db_2',
+    #       partner_code: 'partner_b'
     #     }
     #   }
     # }
@@ -22,7 +27,15 @@ Rails.application.config.after_initialize do
     # TODO: Set your context class (e.g., CurrentContext)
     config.context_class = nil
 
-    # TODO: Toggle the pretty output on/off
+    # Toggle pretty output on/off (default: true)
     config.pretty_output = true
+
+    if config.tenants.nil?
+      warn '[ConsoleKit] Warning: `tenants` is not configured. Please set it in config/initializers/console_kit.rb'
+    end
+
+    if config.context_class.nil?
+      warn '[ConsoleKit] Warning: `context_class` is not configured. Please set it in config/initializers/console_kit.rb'
+    end
   end
 end

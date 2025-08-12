@@ -3,54 +3,41 @@
 module ConsoleKit
   # Handles Console outputs
   module Output
+    PREFIX = '[ConsoleKit]'
+    TYPES = {
+      error: { symbol: '[✗]', color: '1;31' },
+      success: { symbol: '[✓]', color: '1;32' },
+      warning: { symbol: '[!]', color: '1;33' },
+      prompt: { symbol: nil,   color: '1;36' },
+      header: { symbol: nil,   color: '1;34' },
+      trace: { symbol: nil, color: '0;90' },
+      info: { symbol: nil, color: nil }
+    }.freeze
+
     class << self
-      def print_error(text) = print_with(:error, text)
-      def print_success(text) = print_with(:success, text)
-      def print_warning(text) = print_with(:warning, text)
-      def print_info(text) = print_with(:info, text)
-      def print_prompt(text) = print_with(:prompt, text)
-      def print_header(text) = print_with(:header, "\n=== #{text} ===")
+      TYPES.each_key do |type|
+        define_method("print_#{type}") do |text|
+          formatted = (type == :header ? "\n=== #{text} ===" : text)
+          print_with(type, formatted)
+        end
+      end
 
       def print_backtrace(exception)
-        return unless exception&.backtrace
-
-        exception.backtrace.each { |line| print_with(:trace, "    #{line}") }
+        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}") }
       end
 
       private
 
-      PREFIX = '[ConsoleKit]'
-      SYMBOLS = {
-        error: '[✗]',
-        success: '[✓]',
-        warning: '[!]',
-        info: nil,
-        prompt: nil,
-        header: nil,
-        trace: nil
-      }.freeze
-
-      COLORS = {
-        error: '1;31', # red
-        success: '1;32',  # green
-        warning: '1;33',  # yellow
-        prompt: '1;36',  # cyan
-        header: '1;34',  # bold blue
-        trace: '0;90', # dim gray
-        info: nil # default
-      }.freeze
-
       def print_with(type, text, timestamp: false)
-        color = COLORS[type]
-        symbol = SYMBOLS[type]
-        message = build_message(text, symbol, timestamp)
-        output(message, color)
+        meta = TYPES[type]
+        message = build_message(text, meta[:symbol], timestamp)
+        output(message, meta[:color])
       end
 
       def build_message(text, symbol, timestamp)
-        time_str = timestamp ? "[#{Time.current.strftime('%Y-%m-%d %H:%M:%S')}] " : ''
-        symbol_str = symbol ? "#{symbol} " : ''
-        "#{PREFIX} #{time_str}#{symbol_str}#{text}"
+        time = timestamp ? "[#{Time.current.strftime('%Y-%m-%d %H:%M:%S')}] " : ''
+        sym = symbol ? "#{symbol} " : ''
+        "#{PREFIX} #{time}#{sym}#{text}"
       end
 
       def output(message, color)

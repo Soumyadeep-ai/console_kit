@@ -38,9 +38,7 @@ RSpec.describe ConsoleKit do
   describe '.configure' do
     it 'yields the configuration instance to the block' do
       yielded = nil
-      ConsoleKit.configure do |config|
-        yielded = config
-      end
+      ConsoleKit.configure { |config| yielded = config }
       expect(yielded).to be_a(ConsoleKit::Configuration)
     end
 
@@ -73,9 +71,7 @@ RSpec.describe ConsoleKit do
     end
 
     it 'allows setting and getting pretty_output' do
-      ConsoleKit.configure do |config|
-        config.pretty_output = true
-      end
+      ConsoleKit.configure { |config| config.pretty_output = true }
       expect(ConsoleKit.pretty_output).to eq(true)
     end
   end
@@ -151,10 +147,7 @@ RSpec.describe ConsoleKit do
     end
 
     describe 'pretty_output toggle methods' do
-      before do
-        # Reset to false before each test for consistency
-        ConsoleKit.configure { |c| c.pretty_output = false }
-      end
+      before { ConsoleKit.configure { |c| c.pretty_output = false } }
 
       it 'starts with pretty_output default as false' do
         expect(ConsoleKit.pretty_output).to eq(false)

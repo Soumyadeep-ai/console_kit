@@ -7,10 +7,13 @@ module ConsoleKit
   module TenantConfigurator
     class << self
       def configure_tenant(key, tenants, context_class)
-        config = tenants[key]
-        return missing_config_error(key) unless config
+        constants = tenants[key]&.[](:constants)
+        return missing_config_error(key) unless constants
 
-        apply_tenant_configuration(context_class, config[:constants])
+        validate_constants!(constants)
+        apply_context(context_class, constants)
+        setup_connections(context_class)
+
         Output.print_success("Tenant set to: #{key}")
         true
       rescue StandardError => e
@@ -19,33 +22,37 @@ module ConsoleKit
       end
 
       def clear(context_class)
-        context_class.tenant_shard = nil
-        context_class.tenant_mongo_db = nil
-        context_class.partner_identifier = nil
-
+        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+          context_class.public_send("#{attr}=", nil)
+        end
         Output.print_info('Tenant context has been cleared.')
       end
 
       private
+
+      def validate_constants!(constants)
+        missing = %i[shard partner_code] - constants.keys
+        raise "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
+      end
 
       def missing_config_error(key)
         Output.print_error("No configuration found for tenant: #{key}")
         false
       end
 
-      def apply_tenant_configuration(context_class, constants)
-        required_keys = %i[shard partner_code]
-        missing_keys = required_keys.reject { |key| constants&.key?(key) }
-        raise "Tenant constants missing keys: #{missing_keys.join(', ')}" unless missing_keys.empty?
-
-        apply_context(context_class, constants)
-        setup_database_connections(context_class)
+      def apply_context(ctx, constant)
+        ctx.tenant_shard = constant[:shard]
+        ctx.tenant_mongo_db = constant[:mongo_db]
+        ctx.partner_identifier = constant[:partner_code]
       end
 
-      def apply_context(context_class, constants)
-        context_class.tenant_shard = constants[:shard]
-        context_class.tenant_mongo_db = constants[:mongo_db]
-        context_class.partner_identifier = constants[:partner_code]
+      def setup_connections(ctx)
+        ApplicationRecord.establish_connection(ctx.tenant_shard.to_sym) if defined?(ApplicationRecord)
+        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
+        return if ctx.tenant_mongo_db.nil? || ctx.tenant_mongo_db.empty?
+
+        client = ctx.tenant_mongo_db.to_s
+        Mongoid.override_client(client)
       end
 
       def setup_database_connections(context_class)

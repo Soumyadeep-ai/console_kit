@@ -13,5 +13,7 @@ gem 'rspec', '~> 3.0'
 gem 'rubocop', '~> 1.21'
 
 group :test do
+  gem 'aruba'
+  gem 'generator_spec'
   gem 'rspec_junit_formatter'
 end
