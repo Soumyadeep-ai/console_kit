@@ -34,25 +34,41 @@ jobs:
           NEW_VERSION="${{ steps.version.outputs.version }}"
           SECURITY_FILE="SECURITY.md"
 
-          # Check if new version already exists
-          if grep -q "| $NEW_VERSION " "$SECURITY_FILE"; then
+          echo "New version: $NEW_VERSION"
+
+          # Exit if version already exists in any form
+          if grep -qE "^\|[[:space:]]*$NEW_VERSION[[:space:]]*\|" "$SECURITY_FILE"; then
             echo "Version $NEW_VERSION already present. Skipping update."
             exit 0
           fi
 
-          # Replace current :white_check_mark: with :x:
-          sed -i 's/:white_check_mark:/:x:/g' "$SECURITY_FILE"
-
-          # Insert new line after header
-          awk -v new_ver="$NEW_VERSION" '
-            BEGIN { added = 0 }
-            /^| Version / { print; next }
-            /^| [-]+ / { print; next }
-            /^|/ && added == 0 {
-              printf "| %s   | :white_check_mark: |\n", new_ver
-              added = 1
+          # Change current :white_check_mark: to :x: only on the supported version line
+          awk '
+            BEGIN { OFS=FS="|" }
+            /^\|[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*\|/ {
+              gsub(/^[ \t]+|[ \t]+$/, "", $2)
+              if ($3 ~ /:white_check_mark:/) $3 = " :x: "
             }
-            { print }
+            { print }' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
+
+          # Insert the new version line after the header
+          awk -v new_ver="$NEW_VERSION" '
+            BEGIN {
+              inserted = 0
+              header_seen = 0
+              dash_line_seen = 0
+            }
+            {
+              print
+              if ($0 ~ /^\|[[:space:]]*Version[[:space:]]*\|[[:space:]]*Supported[[:space:]]*\|$/) {
+                header_seen = 1
+              } else if (header_seen && $0 ~ /^\|[[:space:]]*-+/) {
+                dash_line_seen = 1
+              } else if (header_seen && dash_line_seen && !inserted) {
+                printf "| %-7s | :white_check_mark: |\n", new_ver
+                inserted = 1
+              }
+            }
           ' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
 
       - name: Commit changes
