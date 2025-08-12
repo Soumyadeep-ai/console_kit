@@ -58,7 +58,37 @@ ConsoleKit.configure do |config|
   }
 
   config.context_class = CurrentContext
+
+  # Optional: Toggle pretty CLI output
+  config.pretty_output = true
 end
+```
+
+## Console Usage
+
+When launching the Rails console, ConsoleKit will prompt you to select a tenant (if tenants are configured).
+You can also manually interact with it:
+
+### Get Current Tenant
+```ruby
+ConsoleKit.current_tenant
+# => :tenant_one
+```
+
+### Reset Current Tenant
+```ruby
+ConsoleKit.reset_current_tenant
+# => nil
+```
+
+### Manually Disable Pretty Output
+```ruby
+ConsoleKit.enable_pretty_output
+```
+
+### Manually Disable Pretty Output
+```ruby
+ConsoleKit.disable_pretty_output
 ```
 
 ## Development
@@ -69,7 +99,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/Soumyadeep-ai/console_kit. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at [Console Kit](https://github.com/Soumyadeep-ai/console_kit). This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 

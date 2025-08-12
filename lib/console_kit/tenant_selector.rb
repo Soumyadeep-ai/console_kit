@@ -9,11 +9,12 @@ module ConsoleKit
       def select(tenants, keys)
         print_tenant_selection_menu(tenants, keys)
 
-        max_attempts = 3
-        max_attempts.times do
+        3.times do |attempt|
           index = prompt_user_for_selection(keys.size)
           return nil if index.zero?
           return keys[index - 1] if index.positive?
+
+          print_tenant_selection_menu(tenants, keys) if attempt < 2
         end
 
         nil
@@ -35,7 +36,6 @@ module ConsoleKit
         Output.print_prompt("\nEnter the number of the tenant you want (or press Enter for default '1'): ")
         input = $stdin.gets&.chomp&.strip
         input = '1' if input.to_s.empty?
-
         return invalid_input_response unless valid_integer?(input)
 
         parsed_index = input.to_i
@@ -44,14 +44,8 @@ module ConsoleKit
         parsed_index
       end
 
-      def valid_integer?(input)
-        input.match?(/\A\d+\z/)
-      end
-
-      def invalid_input_response
-        Output.print_warning('Invalid input. Please enter a number.')
-        -1
-      end
+      def valid_integer?(input) = input.match?(/\A\d+\z/)
+      def invalid_input_response = Output.print_warning('Invalid input. Please enter a number.').then { - 1 }
 
       def invalid_range_response(max_index)
         Output.print_warning("Selection must be between 0 and #{max_index}.")

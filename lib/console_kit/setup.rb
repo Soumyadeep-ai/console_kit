@@ -6,46 +6,72 @@ require_relative 'output'
 
 # Core Logic for initial Setup
 module ConsoleKit
-  class << self
-    attr_accessor :tenants, :context_class
+  # Does the initial setup
+  module Setup
+    class << self
+      attr_reader :current_tenant
 
-    def setup
-      return Output.print_error('No tenants configured.') if tenants.nil? || tenants.empty?
+      def setup
+        return Output.print_error('No tenants configured.') if no_tenants?
 
-      tenant_key = resolve_tenant_key
-      return Output.print_error('No tenant selected. Loading without tenant configuration.') unless tenant_key
+        key = select_tenant_key
+        return Output.print_error('No tenant selected. Loading without tenant configuration.') unless key
 
-      initialize_tenant(tenant_key)
-    rescue StandardError => e
-      handle_setup_error(e)
-    end
+        configure(key)
+      rescue StandardError => e
+        handle_error(e)
+      end
 
-    def configure
-      yield self
-    end
+      def tenant_setup_successful? = !@current_tenant.to_s.empty?
 
-    private
+      def reset_current_tenant
+        return warn_no_tenants unless tenants?
 
-    def resolve_tenant_key
-      single_tenant? || non_interactive? ? tenants.keys.first : TenantSelector.select(tenants, tenants.keys)
-    end
+        warn_reset if @current_tenant
+        TenantConfigurator.clear(ConsoleKit.configuration.context_class) if @current_tenant
 
-    def single_tenant?
-      tenants.size == 1
-    end
+        @current_tenant = nil
+        setup
+        tenant_setup_successful?
+      end
 
-    def non_interactive?
-      !$stdin.tty?
-    end
+      private
 
-    def initialize_tenant(tenant_key)
-      TenantConfigurator.configure_tenant(tenant_key, tenants, context_class)
-      Output.print_success("Tenant initialized: #{tenant_key}")
-    end
+      def configure(key)
+        return unless TenantConfigurator.configure_tenant(key, tenants, context_class)
 
-    def handle_setup_error(error)
-      Output.print_error("Error setting up tenant: #{error.message}")
-      Output.print_backtrace(error)
+        @current_tenant = key
+        Output.print_success("Tenant initialized: #{key}")
+      end
+
+      def tenants = ConsoleKit.configuration.tenants
+      def context_class = ConsoleKit.configuration.context_class
+      def tenants? = tenants&.any?
+      def no_tenants? = !tenants?
+
+      def select_tenant_key
+        return tenants.keys.first if auto_select?
+
+        TenantSelector.select(tenants, tenants.keys)
+      end
+
+      def auto_select? = single_tenant? || non_interactive?
+      def single_tenant? = tenants.size == 1
+      def non_interactive? = !$stdin.tty?
+
+      def warn_no_tenants
+        Output.print_warning('Cannot reset tenant: No tenants configured.')
+        false
+      end
+
+      def warn_reset
+        Output.print_warning("Resetting tenant: #{@current_tenant}")
+      end
+
+      def handle_error(error)
+        Output.print_error("Error setting up tenant: #{error.message}")
+        Output.print_backtrace(error)
+      end
     end
   end
 end

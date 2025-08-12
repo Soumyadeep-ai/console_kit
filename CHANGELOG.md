@@ -6,6 +6,18 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.3] - 2025-08-12
+### Added
+- `ConsoleKit.current_tenant` method to retrieve the current tenant at runtime.
+- `ConsoleKit.reset_current_tenant` to reset tenant selection.
+- `pretty_output` configuration added with ability to manually toggle CLI verbosity.
+
+### Changed
+- Refactored internal logic for improved maintainability and future extensibility.
+- Enhanced test coverage for better reliability and edge case handling.
+
+---
+
 ## [0.1.2] - 2025-07-23
 ### Added
 - Changelog added.
@@ -38,6 +50,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+[0.1.3]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.0
