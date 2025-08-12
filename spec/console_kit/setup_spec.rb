@@ -187,11 +187,14 @@ RSpec.describe ConsoleKit::Setup do
       before { ConsoleKit::Setup.instance_variable_set(:@current_tenant, 'acme') }
 
       it 'clears and reconfigures a new tenant' do
+        allow($stdin).to receive(:tty?).and_return(true)
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        stub_successful_setup('globex')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything,
+                                                                                 anything).and_return(true)
         expect(ConsoleKit::Output).to receive(:print_warning).with(/Resetting tenant: acme/)
-        described_class.reset_current_tenant
-        expect(described_class.current_tenant).to eq('globex')
+        ConsoleKit::Setup.reset_current_tenant
+        expect(ConsoleKit::Setup.current_tenant).to eq('globex')
       end
     end
 
