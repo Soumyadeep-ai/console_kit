@@ -8,10 +8,11 @@ Once a new version is released, the previous version is branched and locked, and
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.3   | :x: |
-| 0.1.2   | :x:                |
-| 0.1.1   | :x:                |
-| 0.1.0   | :x:                |
+|0.1.3| :x: |
+| 0.1.4   | :white_check_mark: |
+|0.1.2| :x:                |
+|0.1.1| :x:                |
+|0.1.0| :x:                |
 
 ## Reporting a Vulnerability
 
