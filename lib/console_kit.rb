@@ -16,7 +16,11 @@ module ConsoleKit
     end
 
     def configuration
-      @configuration ||= Configuration.new
+      Thread.current[:console_kit_configuration] ||= Configuration.new
+    end
+
+    def reset_configuration!
+      Thread.current[:console_kit_configuration] = nil
     end
 
     # Optional: Shortcuts to access specific config items

@@ -3,69 +3,138 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit::Output do
-  it 'prints success message' do
-    expect { described_class.print_success('OK') }.to output(/OK/).to_stdout
+  before do
+    ConsoleKit.configure { |c| c.pretty_output = pretty_output }
   end
 
-  it 'prints error message' do
-    expect { described_class.print_error('Fail') }.to output(/\[✗\] Fail/).to_stdout
-  end
+  let(:pretty_output) { true }
 
-  it 'prints warning message' do
-    expect { described_class.print_warning('Careful') }.to output(/\[!\] Careful/).to_stdout
-  end
+  shared_examples 'ConsoleKit output formatter' do |method, message:, symbol:, color_code: nil|
+    it "prints #{method} with correct formatting (pretty_output: #{ConsoleKit.configuration.pretty_output})" do
+      output = capture_stdout { described_class.send(method, message) }
 
-  it 'prints backtrace lines' do
-    exception = RuntimeError.new('fail')
-    exception.set_backtrace(['line 1', 'line 2'])
-    expect do
-      described_class.print_backtrace(exception)
-    end.to output(/\e\[0;90m\[ConsoleKit\]     line 1\e\[0m\n\e\[0;90m\[ConsoleKit\]     line 2\e\[0m\n/).to_stdout
-  end
+      expect(output).to include('[ConsoleKit]')
+      expect(output).to include(symbol) if symbol
 
-  it 'prints plain info message' do
-    expect { described_class.print_info('Informing') }.to output(/\[ConsoleKit\] Informing/).to_stdout
-  end
+      if ConsoleKit.configuration.pretty_output && color_code
+        expect(output).to match(/\e\[#{color_code}m/)
+        expect(output).to match(/\e\[0m/)
+      else
+        expect(output).not_to match(/\e\[[\d;]+m/)
+      end
 
-  it 'prints header with ANSI bold blue' do
-    expect do
-      described_class.print_header('Section Start')
-    end.to output(/\e\[1;34m\[ConsoleKit\] \n=== Section Start ===\e\[0m/).to_stdout
-  end
+      # Adjust expected message for print_header formatting
+      expected_line =
+        if method == :print_header
+          "[ConsoleKit] \n=== #{message} ==="
+        else
+          line = '[ConsoleKit] '
+          line += "#{symbol} " if symbol
+          line += message
+          line
+        end
 
-  it 'prints prompt with ANSI cyan' do
-    expect do
-      described_class.print_prompt('Enter something:')
-    end.to output(/\e\[1;36m\[ConsoleKit\] Enter something:\e\[0m/).to_stdout
-  end
-
-  it 'prints without color when no color is given' do
-    expect { described_class.send(:print_message, 'No color') }.to output("[ConsoleKit] No color\n").to_stdout
-  end
-
-  it 'prints multiline backtrace aligned' do
-    exception = RuntimeError.new('Oops')
-    exception.set_backtrace(['app/models/user.rb:1', 'lib/tasks/debug.rb:42'])
-    output = capture_stdout { described_class.print_backtrace(exception) }
-    expect(output).to include('    app/models/user.rb')
-    expect(output).to include('    lib/tasks/debug.rb')
-  end
-
-  it 'outputs readable text without ANSI' do
-    output = capture_stdout { described_class.print_error('Broken') }
-    no_ansi = output.gsub(/\e\[[\d;]*m/, '')
-    expect(no_ansi).to include('[ConsoleKit] [✗] Broken')
-  end
-
-  shared_examples 'a ConsoleKit message' do |method, expected_output|
-    it "prints with method #{method}" do
-      expect { described_class.send(method, 'test') }.to output(/#{expected_output}/).to_stdout
+      expect(output).to include(expected_line)
     end
   end
 
-  include_examples 'a ConsoleKit message', :print_success, '✓'
-  include_examples 'a ConsoleKit message', :print_error, '✗'
-  include_examples 'a ConsoleKit message', :print_warning, '!'
+  describe 'standard outputs' do
+    include_examples 'ConsoleKit output formatter', :print_success,
+                     message: 'All good', symbol: '[✓]', color_code: '1;32'
+
+    include_examples 'ConsoleKit output formatter', :print_error,
+                     message: 'Something broke', symbol: '[✗]', color_code: '1;31'
+
+    include_examples 'ConsoleKit output formatter', :print_warning,
+                     message: 'Careful now', symbol: '[!]', color_code: '1;33'
+
+    include_examples 'ConsoleKit output formatter', :print_info,
+                     message: 'Heads up', symbol: nil, color_code: nil
+
+    include_examples 'ConsoleKit output formatter', :print_prompt,
+                     message: 'Input please', symbol: nil, color_code: '1;36'
+
+    include_examples 'ConsoleKit output formatter', :print_header,
+                     message: 'Section Start', symbol: nil, color_code: '1;34'
+  end
+
+  describe '#print_backtrace' do
+    let(:exception) do
+      e = RuntimeError.new('Something bad happened')
+      e.set_backtrace(['lib/foo.rb:10', 'app/bar.rb:20'])
+      e
+    end
+
+    it 'prints each backtrace line' do
+      output = capture_stdout { described_class.print_backtrace(exception) }
+
+      expect(output).to include('lib/foo.rb:10')
+      expect(output).to include('app/bar.rb:20')
+
+      if pretty_output
+        expect(output).to match(%r{\e\[0;90m\[ConsoleKit\]     lib/foo\.rb:10\e\[0m})
+      else
+        expect(output).to include('[ConsoleKit]     lib/foo.rb:10')
+        expect(output).not_to match(/\e\[/)
+      end
+    end
+
+    it 'handles nil exception gracefully' do
+      expect { described_class.print_backtrace(nil) }.not_to output.to_stdout
+    end
+
+    it 'handles exception with nil backtrace' do
+      e = RuntimeError.new('no trace')
+      e.set_backtrace(nil)
+      expect { described_class.print_backtrace(e) }.not_to output.to_stdout
+    end
+  end
+
+  describe 'timestamp support' do
+    let(:now) { Time.new(2025, 8, 12, 15, 45, 12) }
+
+    before { allow(Time).to receive(:current).and_return(now) }
+
+    it 'includes timestamp if enabled' do
+      output = capture_stdout do
+        described_class.send(:print_with, :info, 'Timed', timestamp: true)
+      end
+
+      expect(output).to include('[2025-08-12 15:45:12]')
+      expect(output).to include('[ConsoleKit]')
+      expect(output).to include('Timed')
+    end
+  end
+
+  describe 'pretty_output false' do
+    let(:pretty_output) { false }
+
+    include_examples 'ConsoleKit output formatter', :print_success,
+                     message: 'Plain OK', symbol: '[✓]', color_code: '1;32'
+
+    include_examples 'ConsoleKit output formatter', :print_error,
+                     message: 'Plain error', symbol: '[✗]', color_code: '1;31'
+
+    include_examples 'ConsoleKit output formatter', :print_warning,
+                     message: 'Plain warning', symbol: '[!]', color_code: '1;33'
+
+    include_examples 'ConsoleKit output formatter', :print_info,
+                     message: 'Plain info', symbol: nil, color_code: nil
+
+    include_examples 'ConsoleKit output formatter', :print_prompt,
+                     message: 'No color prompt', symbol: nil, color_code: '1;36'
+
+    include_examples 'ConsoleKit output formatter', :print_header,
+                     message: 'No color header', symbol: nil, color_code: '1;34'
+  end
+
+  describe 'ANSI output readability' do
+    it 'removes ANSI codes correctly from output' do
+      output = capture_stdout { described_class.print_error('Boom') }
+      clean = output.gsub(/\e\[[\d;]+m/, '')
+      expect(clean).to include('[ConsoleKit] [✗] Boom')
+    end
+  end
 
   private
 

@@ -54,11 +54,9 @@ module ConsoleKit
       end
 
       def output(message, color)
-        if ConsoleKit.configuration.pretty_output && color
-          puts "\e[#{color}m#{message}\e[0m"
-        else
-          puts message
-        end
+        return puts message unless ConsoleKit.configuration.pretty_output && color
+
+        puts "\e[#{color}m#{message}\e[0m"
       end
     end
   end
