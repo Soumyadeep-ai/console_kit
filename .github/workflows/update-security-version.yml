@@ -34,66 +34,42 @@ jobs:
           NEW_VERSION="${{ steps.version.outputs.version }}"
           SECURITY_FILE="SECURITY.md"
 
-          echo "New version: $NEW_VERSION"
+          echo "📦 New version: $NEW_VERSION"
 
-          # Extract all unique version entries (removing duplicates), update support status
           awk -v new_ver="$NEW_VERSION" '
             BEGIN {
-              header = ""
-              dash = ""
-              found_header = 0
-              found_dash = 0
-              versions[""] = ""
+              in_table = 0
+              inserted = 0
             }
-
-            # Capture header and separator
-            /^|[[:space:]]*Version[[:space:]]*\|[[:space:]]*Supported[[:space:]]*\|/ {
-              header = $0
-              found_header = 1
-              next
-            }
-            /^|[[:space:]]*-+/ && found_header && !found_dash {
-              dash = $0
-              found_dash = 1
-              next
-            }
-
-            # Capture version rows
-            /^\|/ && found_header && found_dash {
-              gsub(/\|/, "", $0)
-              split($0, cols, " ")
-              version = ""
-              for (i in cols) {
-                if (cols[i] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) {
-                  version = cols[i]
-                  break
-                }
-              }
-              if (version != "") {
-                versions[version] = ":x:"
-              }
-              next
-            }
-
             {
-              print
-            }
-
-            END {
-              # Update the latest version to be supported
-              versions[new_ver] = ":white_check_mark:"
-
-              print header
-              print dash
-
-              # Print versions in descending order (latest on top)
-              n = asorti(versions, sorted_versions, "@val_num_desc")
-              for (i = n; i >= 1; i--) {
-                v = sorted_versions[i]
-                if (v == "") continue
-                status = versions[v]
-                printf "| %-7s | %-18s |\n", v, status
+              # Start of version table
+              if ($0 ~ /^\|[[:space:]]*Version[[:space:]]*\|[[:space:]]*Supported[[:space:]]*\|[[:space:]]*$/) {
+                in_table = 1
+                print $0
+                next
               }
+
+              # Separator row
+              if (in_table == 1 && $0 ~ /^\|[[:space:]]*-+[[:space:]]*\|[[:space:]]*-+[[:space:]]*\|[[:space:]]*$/) {
+                print $0
+                if (!inserted) {
+                  printf "| %-7s | %-18s |\n", new_ver, ":white_check_mark:"
+                  inserted = 1
+                }
+                next
+              }
+
+              # Inside the table: update all rows to :x:
+              if (in_table == 1 && $0 ~ /^\|[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*\|/) {
+                match($0, /^\|[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*\|/, m)
+                if (m[1] != new_ver) {
+                  printf "| %-7s | %-18s |\n", m[1], ":x:"
+                }
+                next
+              }
+
+              # After table
+              print $0
             }
           ' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
 
