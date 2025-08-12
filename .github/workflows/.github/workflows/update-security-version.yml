@@ -1,0 +1,61 @@
+name: Update SECURITY.md with New Version
+
+on:
+  pull_request:
+    paths:
+      - 'lib/console_kit/version.rb'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-security-md:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+
+      - name: Get current version from version.rb
+        id: version
+        run: |
+          VERSION_LINE=$(grep VERSION lib/console_kit/version.rb)
+          VERSION=$(echo $VERSION_LINE | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "Detected version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update SECURITY.md
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.version }}"
+          SECURITY_FILE="SECURITY.md"
+
+          # Check if new version already exists
+          if grep -q "| $NEW_VERSION " "$SECURITY_FILE"; then
+            echo "Version $NEW_VERSION already present. Skipping update."
+            exit 0
+          fi
+
+          # Replace current :white_check_mark: with :x:
+          sed -i 's/:white_check_mark:/:x:/g' "$SECURITY_FILE"
+
+          # Insert new line after header
+          awk -v new_ver="$NEW_VERSION" '
+            BEGIN { added = 0 }
+            /^| Version / { print; next }
+            /^| [-]+ / { print; next }
+            /^|/ && added == 0 {
+              printf "| %s   | :white_check_mark: |\n", new_ver
+              added = 1
+            }
+            { print }
+          ' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(security): update SECURITY.md for version bump"
