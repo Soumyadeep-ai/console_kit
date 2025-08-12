@@ -149,5 +149,78 @@ RSpec.describe ConsoleKit do
         expect(ConsoleKit.reset_current_tenant).to eq(true)
       end
     end
+
+    describe 'pretty_output toggle methods' do
+      before do
+        # Reset to false before each test for consistency
+        ConsoleKit.configure { |c| c.pretty_output = false }
+      end
+
+      it 'starts with pretty_output default as false' do
+        expect(ConsoleKit.pretty_output).to eq(false)
+      end
+
+      context 'enabling pretty_output' do
+        it 'enables pretty_output from false to true' do
+          ConsoleKit.enable_pretty_output
+          expect(ConsoleKit.pretty_output).to be true
+        end
+
+        it 'keeps pretty_output true if already enabled' do
+          ConsoleKit.configure { |c| c.pretty_output = true }
+          ConsoleKit.enable_pretty_output
+          expect(ConsoleKit.pretty_output).to be true
+        end
+      end
+
+      context 'disabling pretty_output' do
+        before { ConsoleKit.configure { |c| c.pretty_output = true } }
+
+        it 'disables pretty_output from true to false' do
+          ConsoleKit.disable_pretty_output
+          expect(ConsoleKit.pretty_output).to be false
+        end
+
+        it 'keeps pretty_output false if already disabled' do
+          ConsoleKit.configure { |c| c.pretty_output = false }
+          ConsoleKit.disable_pretty_output
+          expect(ConsoleKit.pretty_output).to be false
+        end
+      end
+
+      context 'multiple toggles' do
+        it 'toggles pretty_output from false -> true -> false' do
+          expect(ConsoleKit.pretty_output).to be false
+          ConsoleKit.enable_pretty_output
+          expect(ConsoleKit.pretty_output).to be true
+          ConsoleKit.disable_pretty_output
+          expect(ConsoleKit.pretty_output).to be false
+        end
+
+        it 'toggles pretty_output from true -> false -> true' do
+          ConsoleKit.configure { |c| c.pretty_output = true }
+          expect(ConsoleKit.pretty_output).to be true
+          ConsoleKit.disable_pretty_output
+          expect(ConsoleKit.pretty_output).to be false
+          ConsoleKit.enable_pretty_output
+          expect(ConsoleKit.pretty_output).to be true
+        end
+      end
+
+      it 'does not affect other configuration settings' do
+        ConsoleKit.configure do |c|
+          c.tenants = %w[tenant1 tenant2]
+          c.context_class = Class.new
+        end
+
+        ConsoleKit.enable_pretty_output
+        expect(ConsoleKit.tenants).to eq(%w[tenant1 tenant2])
+        expect(ConsoleKit.context_class).not_to be_nil
+
+        ConsoleKit.disable_pretty_output
+        expect(ConsoleKit.tenants).to eq(%w[tenant1 tenant2])
+        expect(ConsoleKit.context_class).not_to be_nil
+      end
+    end
   end
 end
