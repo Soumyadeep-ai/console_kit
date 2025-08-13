@@ -7,6 +7,7 @@ require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 # Main module for console kit
 module ConsoleKit
+  # Base error class for ConsoleKit-related exceptions.
   class Error < StandardError; end
 
   class << self
