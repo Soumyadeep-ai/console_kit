@@ -2,8 +2,6 @@
 
 # Helper module to capture standard output for tests
 module OutputHelper
-  private
-
   # Captures and returns the output sent to stdout during the block execution
   def capture_stdout
     original_stdout = $stdout
@@ -13,4 +11,6 @@ module OutputHelper
   ensure
     $stdout = original_stdout
   end
+
+  module_function :capture_stdout
 end
