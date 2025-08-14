@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Stores configurations
+  # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
     attr_accessor :pretty_output, :tenants, :context_class
 
