@@ -33,9 +33,11 @@ jobs:
         run: |
           bundle exec rspec --format documentation | tee rspec_result.txt
 
-          summary=$(tail -n 20 rspec_result.txt | grep -E 'examples?,|failures?|pending?' | tr '\n' ' ')
-          passed=$(echo "$summary" | grep -oE '[0-9]+(?= examples?)')
-          failed=$(echo "$summary" | grep -oE '[0-9]+(?= failures?)')
+          summary_line=$(grep -E '[0-9]+ examples?, [0-9]+ failures?' rspec_result.txt | tail -n 1)
+
+          passed=$(echo "$summary_line" | awk '{print $1}')
+          failed=$(echo "$summary_line" | awk '{print $3}')
+          summary=$(echo "$summary_line")
 
           echo "passed=${passed}" >> $GITHUB_OUTPUT
           echo "failed=${failed}" >> $GITHUB_OUTPUT
