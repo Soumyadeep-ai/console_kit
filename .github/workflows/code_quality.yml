@@ -60,18 +60,22 @@ jobs:
       - name: Run Reek
         id: reek
         run: |
-          # Run reek, capture output even on failure
+          # Run reek and store output even if it exits non-zero
           bundle exec reek > reek_result.txt || true
 
-          # Count inspected files
+          # Count number of files inspected using status dots
           files_inspected=$(grep -o '[.S]' reek_result.txt | wc -l)
 
           # Count total warnings (indented lines)
-          total_warnings=$(grep -c '^  ' reek_result.txt || true)
+          total_warnings=$(grep -c '^  ' reek_result.txt || echo 0)
 
-          # Get top offending files (with most warnings)
-          top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
-          formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
+          # Build top offenders summary only if there are warnings
+          if [ "$total_warnings" -gt 0 ]; then
+            top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
+            formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
+          else
+            formatted_offenders="None 🎉"
+          fi
 
           echo "files_inspected=${files_inspected}" >> $GITHUB_OUTPUT
           echo "total_warnings=${total_warnings}" >> $GITHUB_OUTPUT
@@ -92,7 +96,7 @@ jobs:
 
             🔍 **RSpec**  
             Success | Failure  
-            ${{ steps.rspec.outputs.passed }}     | ${{ steps.rspec.outputs.failed }}
+            ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }}
 
             🧹 **Rubocop**  
             ${{ steps.rubocop.outputs.summary }}
