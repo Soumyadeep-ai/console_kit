@@ -5,51 +5,66 @@ require_relative 'output'
 module ConsoleKit
   # For tenant selection
   module TenantSelector
+    RETRY_LIMIT = 3
+    DEFAULT_SELECTION = '1'
+
     class << self
-      def select(tenants, keys)
-        print_tenant_selection_menu(tenants, keys)
-
-        3.times do |attempt|
-          index = prompt_user_for_selection(keys.size)
-          return nil if index.zero?
-          return keys[index - 1] if index.positive?
-
-          print_tenant_selection_menu(tenants, keys) if attempt < 2
-        end
-
-        nil
+      def select
+        attempt_selection(RETRY_LIMIT)
       end
 
       private
 
-      def print_tenant_selection_menu(tenants, keys)
+      def attempt_selection(retries_left)
+        return nil if retries_left.zero?
+
+        print_tenant_selection_menu
+        index = parse_user_selection
+        return attempt_selection(retries_left - 1) if index.nil?
+
+        resolve_selection(index)
+      end
+
+      def print_tenant_selection_menu
         Output.print_header('Multiple tenants detected. Please choose one:')
         Output.print_info('  0. Load without tenant (no tenant configuration)')
 
-        keys.each_with_index do |key, index|
-          partner = tenants.dig(key, :constants, :partner_code) || 'N/A'
-          Output.print_info("  #{index + 1}. #{key} (partner: #{partner})")
+        ConsoleKit.tenants.keys.each_with_index do |key, index|
+          Output.print_info("  #{index + 1}. #{key} (partner: #{tenant_partner(key)})")
         end
       end
 
-      def prompt_user_for_selection(max_index)
-        Output.print_prompt("\nEnter the number of the tenant you want (or press Enter for default '1'): ")
-        input = $stdin.gets&.chomp&.strip
-        input = '1' if input.to_s.empty?
-        return invalid_input_response unless valid_integer?(input)
+      def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'
 
-        parsed_index = input.to_i
-        return invalid_range_response(max_index) unless parsed_index.between?(0, max_index)
+      def parse_user_selection
+        input = read_input_with_default
+        return handle_invalid_input('Invalid input. Please enter a number.') unless valid_integer?(input)
 
-        parsed_index
+        index = input.to_i
+        unless valid_selection_index?(index)
+          return handle_invalid_input("Selection must be between 0 and #{max_index}.")
+        end
+
+        index
       end
 
-      def valid_integer?(input) = input.match?(/\A\d+\z/)
-      def invalid_input_response = Output.print_warning('Invalid input. Please enter a number.').then { - 1 }
+      def read_input_with_default
+        prompt_message = "\nEnter the number of the tenant you want " \
+                         "(or press Enter for default '#{DEFAULT_SELECTION}'): "
+        Output.print_prompt(prompt_message)
+        input = $stdin.gets&.chomp&.strip
+        input.to_s.empty? ? DEFAULT_SELECTION : input
+      end
 
-      def invalid_range_response(max_index)
-        Output.print_warning("Selection must be between 0 and #{max_index}.")
-        -1
+      def handle_invalid_input(message) = Output.print_warning(message).then { nil }
+      def valid_integer?(input) = input.match?(/\A\d+\z/)
+      def max_index = ConsoleKit.tenants.size
+      def valid_selection_index?(index) = index.between?(0, max_index)
+
+      def resolve_selection(index)
+        return nil if index.zero?
+
+        ConsoleKit.tenants.keys[index - 1]
       end
     end
   end
