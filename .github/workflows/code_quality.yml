@@ -57,39 +57,25 @@ jobs:
       ########################################
       # Run Reek and capture warning summary
       ########################################
-      - name: Debug working directory and files
-        run: |
-          pwd
-          ls -la
-          bundle exec reek --version
-          bundle exec reek
-          bundle exec reek > reek_result.txt 2> reek_err.txt || true
-          echo "--- reek_result.txt ---"
-          cat reek_result.txt
-          echo "--- reek_err.txt ---"
-          cat reek_err.txt
-          ls -la
-
       - name: Run Reek
         id: reek
         run: |
-          bundle exec reek > reek_result.txt || true
+          reek_output=$(bundle exec reek || true)
 
-          echo "Checking reek_result.txt contents:"
-          ls -l reek_result.txt
-          cat reek_result.txt
+          echo "Reek output preview:"
+          echo "$reek_output" | head -20
 
           # Count total warning lines (each starts with two spaces and a [)
-          total_warnings=$(grep -c '^  \[' reek_result.txt || echo 0)
+          total_warnings=$(echo "$reek_output" | grep -c '^  \[' || echo 0)
           total_warnings=${total_warnings:-0}
 
           # Count .rb files inspected (lines like: lib/file.rb -- X warnings)
-          files_inspected=$(grep -oE '^[^ ]+\.rb' reek_result.txt | sort -u | wc -l | tr -d '[:space:]')
+          files_inspected=$(echo "$reek_output" | grep -oE '^[^ ]+\.rb' | sort -u | wc -l | tr -d '[:space:]')
           files_inspected=${files_inspected:-0}
 
           # Extract top offenders
           if [ "$total_warnings" -gt 0 ]; then
-            top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
+            top_offenders=$(echo "$reek_output" | awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' | sort -nr | head -5)
             formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
           else
             formatted_offenders="None 🎉"
