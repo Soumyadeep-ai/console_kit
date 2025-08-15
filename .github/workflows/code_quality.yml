@@ -61,12 +61,13 @@ jobs:
         run: |
           pwd
           ls -la
-          bundle check || bundle install
           bundle exec reek --version
-          bundle exec reek || true
-          bundle exec reek > reek_result.txt || true
-          echo "Reek output:"
+          bundle exec reek
+          bundle exec reek > reek_result.txt 2> reek_err.txt || true
+          echo "--- reek_result.txt ---"
           cat reek_result.txt
+          echo "--- reek_err.txt ---"
+          cat reek_err.txt
 
       - name: Run Reek
         id: reek
