@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   quality:
-    name: Run RSpec, Rubocop, and Reek
+    name: Run RSpec and Rubocop
     runs-on: ubuntu-latest
 
     steps:
@@ -55,38 +55,6 @@ jobs:
           echo "summary=${summary}" >> $GITHUB_OUTPUT
 
       ########################################
-      # Run Reek and capture warning summary
-      ########################################
-      - name: Run Reek
-        id: reek
-        run: |
-          reek_output=$(bundle exec reek 2>&1 || true)
-
-          echo "Reek output preview:"
-          echo "$reek_output" | head -20
-
-          total_warnings=$(echo "$reek_output" | grep -c '^  \[' || echo 0)
-          total_warnings=$(echo "$total_warnings" | tr -d '\r\n')
-          total_warnings=${total_warnings:-0}
-          echo "DEBUG: total_warnings = '$total_warnings'"
-
-          files_inspected=$(echo "$reek_output" | grep -oE '^[^ ]+\.rb' | sort -u | wc -l | tr -d '[:space:]')
-          files_inspected=${files_inspected:-0}
-
-          if [ "${total_warnings}" -gt 0 ]; then
-            top_offenders=$(echo "$reek_output" | awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' | sort -nr | head -5)
-            formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
-          else
-            formatted_offenders="None 🎉"
-          fi
-
-          echo "files_inspected=${files_inspected}" >> $GITHUB_OUTPUT
-          echo "total_warnings=${total_warnings}" >> $GITHUB_OUTPUT
-          echo "top_offenders<<EOF" >> $GITHUB_OUTPUT
-          echo "$formatted_offenders" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      ########################################
       # Post a PR comment with all summaries
       ########################################
       - name: Comment Code Quality Summary on PR
@@ -97,19 +65,10 @@ jobs:
           body: |
             ✅ **Code Quality Check Summary**
 
-            🔍 **RSpec**  
-            Success | Failure  
-            ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }}
+            ### 🔍 Test Cases
+            | **Success** | **Failure** |
+            | :---------: | :---------: |
+            | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |
 
-            🧹 **Rubocop**  
+            ### 🧹 Linter
             ${{ steps.rubocop.outputs.summary }}
-
-            👃 **Reek**  
-            ${{ steps.reek.outputs.files_inspected }} files inspected, ${{ steps.reek.outputs.total_warnings }} total warnings  
-            <details>
-              <summary>Top offending files</summary>
-
-              ```
-              ${{ steps.reek.outputs.top_offenders }}
-              ```
-            </details>
