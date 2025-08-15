@@ -54,7 +54,7 @@ jobs:
       - name: Run Reek
         id: reek
         run: |
-          reek_output=$(bundle exec reek)
+          reek_output=$(bundle exec reek --no-exit-code)
           echo "$reek_output" | tee reek_result.txt
           total=$(echo "$reek_output" | grep -c '^  ')
           echo "total_warnings=${total}" >> $GITHUB_OUTPUT
