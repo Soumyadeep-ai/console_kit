@@ -62,6 +62,10 @@ jobs:
         run: |
           bundle exec reek > reek_result.txt || true
 
+          echo "Checking reek_result.txt contents:"
+          ls -l reek_result.txt
+          cat reek_result.txt
+
           # Count total warning lines (each starts with two spaces and a [)
           total_warnings=$(grep -c '^  \[' reek_result.txt || echo 0)
           total_warnings=${total_warnings:-0}
