@@ -57,6 +57,17 @@ jobs:
       ########################################
       # Run Reek and capture warning summary
       ########################################
+      - name: Debug working directory and files
+        run: |
+          pwd
+          ls -la
+          bundle check || bundle install
+          bundle exec reek --version
+          bundle exec reek || true
+          bundle exec reek > reek_result.txt || true
+          echo "Reek output:"
+          cat reek_result.txt
+
       - name: Run Reek
         id: reek
         run: |
