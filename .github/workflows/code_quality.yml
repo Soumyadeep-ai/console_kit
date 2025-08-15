@@ -64,11 +64,12 @@ jobs:
           bundle exec reek > reek_result.txt || true
 
           # Count files inspected by matching status characters (dots and S)
-          files_inspected=$(grep -o '[.S]' reek_result.txt | wc -l | tr -d '[:space:]')
+          files_inspected=$(grep -o '[.S]' reek_result.txt | wc -l | tr -d '[:space:]' | sed 's/^0*//')
+          files_inspected=${files_inspected:-0}
 
           # Count total warnings (lines starting with two spaces)
           total_warnings=$(grep -c '^  ' reek_result.txt 2>/dev/null || echo "0")
-          total_warnings=$(echo "$total_warnings" | tr -d '[:space:]')
+          total_warnings=$(echo "$total_warnings" | tr -d '[:space:]' | sed 's/^0*//')
           total_warnings=${total_warnings:-0}
 
           # If warnings exist, extract top offending files
