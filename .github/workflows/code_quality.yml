@@ -63,16 +63,16 @@ jobs:
           # Run reek and save output even if it exits non-zero
           bundle exec reek > reek_result.txt || true
 
-          # Count files inspected by matching status characters (dots and S)
-          files_inspected=$(grep -o '[.S]' reek_result.txt | wc -l | tr -d '[:space:]' | sed 's/^0*//')
+          # Extract number of files inspected from summary line
+          files_inspected=$(grep -oP '^Inspecting \K\d+(?= file\(s\):)' reek_result.txt || echo 0)
           files_inspected=${files_inspected:-0}
 
           # Count total warnings (lines starting with two spaces)
           total_warnings=$(grep -c '^  ' reek_result.txt 2>/dev/null || echo "0")
-          total_warnings=$(echo "$total_warnings" | tr -d '[:space:]' | sed 's/^0*//')
+          total_warnings=$(echo "$total_warnings" | tr -d '[:space:]')
           total_warnings=${total_warnings:-0}
 
-          # If warnings exist, extract top offending files
+          # Build top offenders summary only if there are warnings
           if [ "$total_warnings" -gt 0 ]; then
             top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
             formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
@@ -80,7 +80,6 @@ jobs:
             formatted_offenders="None 🎉"
           fi
 
-          # Output results for GitHub Actions
           echo "files_inspected=${files_inspected}" >> $GITHUB_OUTPUT
           echo "total_warnings=${total_warnings}" >> $GITHUB_OUTPUT
           echo "top_offenders<<EOF" >> $GITHUB_OUTPUT
