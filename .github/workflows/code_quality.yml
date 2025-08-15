@@ -60,21 +60,20 @@ jobs:
       - name: Run Reek
         id: reek
         run: |
-          reek_output=$(bundle exec reek || true)
+          reek_output=$(bundle exec reek 2>&1 || true)
 
           echo "Reek output preview:"
           echo "$reek_output" | head -20
 
-          # Count total warning lines (each starts with two spaces and a [)
           total_warnings=$(echo "$reek_output" | grep -c '^  \[' || echo 0)
+          total_warnings=$(echo "$total_warnings" | tr -d '\r\n')
           total_warnings=${total_warnings:-0}
+          echo "DEBUG: total_warnings = '$total_warnings'"
 
-          # Count .rb files inspected (lines like: lib/file.rb -- X warnings)
           files_inspected=$(echo "$reek_output" | grep -oE '^[^ ]+\.rb' | sort -u | wc -l | tr -d '[:space:]')
           files_inspected=${files_inspected:-0}
 
-          # Extract top offenders
-          if [ "$total_warnings" -gt 0 ]; then
+          if [ "${total_warnings}" -gt 0 ]; then
             top_offenders=$(echo "$reek_output" | awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' | sort -nr | head -5)
             formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
           else
