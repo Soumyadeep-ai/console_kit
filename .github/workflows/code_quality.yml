@@ -68,6 +68,7 @@ jobs:
           cat reek_result.txt
           echo "--- reek_err.txt ---"
           cat reek_err.txt
+          ls -la
 
       - name: Run Reek
         id: reek
