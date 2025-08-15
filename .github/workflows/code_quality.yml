@@ -62,15 +62,15 @@ jobs:
         run: |
           bundle exec reek > reek_result.txt || true
 
-          # Extract total warnings from the 2nd last line
-          total_warnings=$(tail -n 2 reek_result.txt | head -n 1 | grep -oE '[0-9]+' | head -n 1)
+          # Count total warning lines (each starts with two spaces and a [)
+          total_warnings=$(grep -c '^  \[' reek_result.txt || echo 0)
           total_warnings=${total_warnings:-0}
 
-          # Count unique .rb files (headers)
+          # Count .rb files inspected (lines like: lib/file.rb -- X warnings)
           files_inspected=$(grep -oE '^[^ ]+\.rb' reek_result.txt | sort -u | wc -l | tr -d '[:space:]')
           files_inspected=${files_inspected:-0}
 
-          # Build top offenders summary
+          # Extract top offenders
           if [ "$total_warnings" -gt 0 ]; then
             top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
             formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
@@ -104,5 +104,10 @@ jobs:
 
             👃 **Reek**  
             ${{ steps.reek.outputs.files_inspected }} files inspected, ${{ steps.reek.outputs.total_warnings }} total warnings  
-            Top offending files:  
-            ${{ steps.reek.outputs.top_offenders }}
+            <details>
+              <summary>Top offending files</summary>
+
+              ```
+              ${{ steps.reek.outputs.top_offenders }}
+              ```
+            </details>
