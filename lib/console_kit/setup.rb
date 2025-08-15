@@ -52,7 +52,7 @@ module ConsoleKit
       def select_tenant_key
         return tenants.keys.first if auto_select?
 
-        TenantSelector.select(tenants, tenants.keys)
+        TenantSelector.select
       end
 
       def auto_select? = single_tenant? || non_interactive?
