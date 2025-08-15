@@ -19,10 +19,8 @@ module ConsoleKit
         return nil if retries_left.zero?
 
         print_tenant_selection_menu
-        index = parse_user_selection
-        return attempt_selection(retries_left - 1) if index.nil?
-
-        resolve_selection(index)
+        selection = parse_user_selection
+        selection ? resolve_selection(selection) : attempt_selection(retries_left - 1)
       end
 
       def print_tenant_selection_menu
