@@ -51,25 +51,25 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     context 'with missing constants' do
       let(:tenants) { { tenant_key => {} } }
 
-      include_examples 'prints configuration error', expected_message: 'No configuration found for tenant'
+      it_behaves_like 'prints configuration error', expected_message: 'No configuration found for tenant'
     end
 
     context 'with nil constants' do
       let(:tenants) { { tenant_key => { constants: nil } } }
 
-      include_examples 'prints configuration error', expected_message: 'No configuration found for tenant'
+      it_behaves_like 'prints configuration error', expected_message: 'No configuration found for tenant'
     end
 
     context 'when ApplicationRecord.establish_connection fails' do
       before { allow(ApplicationRecord).to receive(:establish_connection).and_raise('AR error') }
 
-      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
+      it_behaves_like 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when Mongoid.override_client fails' do
       before { allow(Mongoid).to receive(:override_client).and_raise('Mongo error') }
 
-      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
+      it_behaves_like 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when Mongoid does not support override_client' do
@@ -88,7 +88,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       # missing partner_code
       let(:tenants) { { tenant_key => { constants: { shard: 'shard_acme' } } } }
 
-      include_examples 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
+      it_behaves_like 'prints configuration error', expected_message: 'Failed to configure tenant', backtrace: true
     end
 
     context 'when ApplicationRecord is not defined' do
@@ -108,7 +108,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
 
     context 'returns true on successful configuration' do
-      it { is_expected.to eq(true) }
+      it { is_expected.to be(true) }
     end
   end
 

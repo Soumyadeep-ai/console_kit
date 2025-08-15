@@ -36,17 +36,17 @@ RSpec.describe ConsoleKit::Output do
   end
 
   describe 'standard outputs' do
-    include_examples 'ConsoleKit output formatter', :print_success, message: 'All good', symbol: '[✓]',
-                                                                    color_code: '1;32'
-    include_examples 'ConsoleKit output formatter', :print_error, message: 'Something broke', symbol: '[✗]',
-                                                                  color_code: '1;31'
-    include_examples 'ConsoleKit output formatter', :print_warning, message: 'Careful now', symbol: '[!]',
-                                                                    color_code: '1;33'
-    include_examples 'ConsoleKit output formatter', :print_info, message: 'Heads up', symbol: nil, color_code: nil
-    include_examples 'ConsoleKit output formatter', :print_prompt, message: 'Input please', symbol: nil,
-                                                                   color_code: '1;36'
-    include_examples 'ConsoleKit output formatter', :print_header, message: 'Section Start', symbol: nil,
-                                                                   color_code: '1;34'
+    it_behaves_like 'ConsoleKit output formatter', :print_success, message: 'All good', symbol: '[✓]',
+                                                                   color_code: '1;32'
+    it_behaves_like 'ConsoleKit output formatter', :print_error, message: 'Something broke', symbol: '[✗]',
+                                                                 color_code: '1;31'
+    it_behaves_like 'ConsoleKit output formatter', :print_warning, message: 'Careful now', symbol: '[!]',
+                                                                   color_code: '1;33'
+    it_behaves_like 'ConsoleKit output formatter', :print_info, message: 'Heads up', symbol: nil, color_code: nil
+    it_behaves_like 'ConsoleKit output formatter', :print_prompt, message: 'Input please', symbol: nil,
+                                                                  color_code: '1;36'
+    it_behaves_like 'ConsoleKit output formatter', :print_header, message: 'Section Start', symbol: nil,
+                                                                  color_code: '1;34'
   end
 
   describe '#print_backtrace' do
@@ -97,17 +97,17 @@ RSpec.describe ConsoleKit::Output do
   describe 'pretty_output false' do
     let(:pretty_output) { false }
 
-    include_examples 'ConsoleKit output formatter', :print_success, message: 'Plain OK', symbol: '[✓]',
-                                                                    color_code: '1;32'
-    include_examples 'ConsoleKit output formatter', :print_error, message: 'Plain error', symbol: '[✗]',
-                                                                  color_code: '1;31'
-    include_examples 'ConsoleKit output formatter', :print_warning, message: 'Plain warning', symbol: '[!]',
-                                                                    color_code: '1;33'
-    include_examples 'ConsoleKit output formatter', :print_info, message: 'Plain info', symbol: nil, color_code: nil
-    include_examples 'ConsoleKit output formatter', :print_prompt, message: 'No color prompt', symbol: nil,
-                                                                   color_code: '1;36'
-    include_examples 'ConsoleKit output formatter', :print_header, message: 'No color header', symbol: nil,
-                                                                   color_code: '1;34'
+    it_behaves_like 'ConsoleKit output formatter', :print_success, message: 'Plain OK', symbol: '[✓]',
+                                                                   color_code: '1;32'
+    it_behaves_like 'ConsoleKit output formatter', :print_error, message: 'Plain error', symbol: '[✗]',
+                                                                 color_code: '1;31'
+    it_behaves_like 'ConsoleKit output formatter', :print_warning, message: 'Plain warning', symbol: '[!]',
+                                                                   color_code: '1;33'
+    it_behaves_like 'ConsoleKit output formatter', :print_info, message: 'Plain info', symbol: nil, color_code: nil
+    it_behaves_like 'ConsoleKit output formatter', :print_prompt, message: 'No color prompt', symbol: nil,
+                                                                  color_code: '1;36'
+    it_behaves_like 'ConsoleKit output formatter', :print_header, message: 'No color header', symbol: nil,
+                                                                  color_code: '1;34'
   end
 
   describe 'ANSI output readability' do

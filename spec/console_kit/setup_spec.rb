@@ -30,8 +30,8 @@ RSpec.describe ConsoleKit::Setup do
   shared_examples 'a successful tenant setup' do |tenant|
     it "sets current_tenant to #{tenant}" do
       stub_successful_setup(tenant)
-      ConsoleKit::Setup.setup
-      expect(ConsoleKit::Setup.current_tenant).to eq(tenant)
+      described_class.setup
+      expect(described_class.current_tenant).to eq(tenant)
     end
   end
 
@@ -40,24 +40,24 @@ RSpec.describe ConsoleKit::Setup do
       config.tenants = tenants
       config.context_class = context_class
     end
-    ConsoleKit::Setup.instance_variable_set(:@current_tenant, nil)
+    described_class.instance_variable_set(:@current_tenant, nil)
     allow(ConsoleKit::Output).to receive(:print_success)
   end
 
   describe '.tenant_setup_successful?' do
     it 'returns true if current_tenant is set' do
-      ConsoleKit::Setup.instance_variable_set(:@current_tenant, 'acme')
+      described_class.instance_variable_set(:@current_tenant, 'acme')
       expect(described_class.tenant_setup_successful?).to be true
     end
 
     it 'returns false if current_tenant is nil' do
-      ConsoleKit::Setup.instance_variable_set(:@current_tenant, nil)
+      described_class.instance_variable_set(:@current_tenant, nil)
       expect(described_class.tenant_setup_successful?).to be false
     end
   end
 
   describe '.setup' do
-    include_examples 'a successful tenant setup', 'acme'
+    it_behaves_like 'a successful tenant setup', 'acme'
 
     context 'with successful tenant setup' do
       it 'sets current_tenant correctly' do
@@ -187,7 +187,7 @@ RSpec.describe ConsoleKit::Setup do
     end
 
     context 'when a tenant is already set' do
-      before { ConsoleKit::Setup.instance_variable_set(:@current_tenant, 'acme') }
+      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
 
       it 'clears and reconfigures a new tenant' do
         allow($stdin).to receive(:tty?).and_return(true)
@@ -196,13 +196,13 @@ RSpec.describe ConsoleKit::Setup do
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything,
                                                                                  anything).and_return(true)
         expect(ConsoleKit::Output).to receive(:print_warning).with(/Resetting tenant: acme/)
-        ConsoleKit::Setup.reset_current_tenant
-        expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+        described_class.reset_current_tenant
+        expect(described_class.current_tenant).to eq('globex')
       end
     end
 
     context 'when setup fails during reset' do
-      before { ConsoleKit::Setup.instance_variable_set(:@current_tenant, 'acme') }
+      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
 
       it 'returns false if tenant selection returns nil' do
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)

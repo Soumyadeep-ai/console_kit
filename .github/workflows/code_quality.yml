@@ -51,8 +51,19 @@ jobs:
         run: |
           rubo_output=$(bundle exec rubocop || true)
           echo "$rubo_output" | tee rubocop_result.txt
+
           summary=$(echo "$rubo_output" | grep 'files inspected')
+          total_offenses=$(echo "$summary" | grep -oE '[0-9]+ offenses?' | awk '{print $1}')
+
+          # Get top 5 offending files (sorted by frequency)
+          top_offenders=$(grep -E '^\S+\.rb' rubocop_result.txt | cut -d: -f1 | sort | uniq -c | sort -nr | head -5)
+          formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " offenses"}')
+
           echo "summary=${summary}" >> $GITHUB_OUTPUT
+          echo "total_offenses=${total_offenses}" >> $GITHUB_OUTPUT
+          echo "top_offenders<<EOF" >> $GITHUB_OUTPUT
+          echo "$formatted_offenders" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       ########################################
       # Post a PR comment with all summaries
@@ -71,4 +82,13 @@ jobs:
             | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |
 
             ### 🧹 Linter
-            ${{ steps.rubocop.outputs.summary }}
+            - ${{ steps.rubocop.outputs.summary }}
+            - Total offenses: **${{ steps.rubocop.outputs.total_offenses }}**
+
+            <details>
+              <summary>Top offending files</summary>
+
+              ```
+              ${{ steps.rubocop.outputs.top_offenders }}
+              ```
+            </details>
