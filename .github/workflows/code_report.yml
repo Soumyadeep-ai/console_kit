@@ -35,8 +35,8 @@ jobs:
         id: rspec_summary
         run: |
           summary=$(tail -n 20 rspec_result.txt | grep -E 'examples?,|failures?|pending?' | tr '\n' ' ')
-          passed=$(echo "$summary" | grep -oE '[0-9]+(?= examples?)')
-          failed=$(echo "$summary" | grep -oE '[0-9]+(?= failures?)')
+          passed=$(echo "$summary" | awk '{ for(i=1;i<=NF;i++) if($i ~ /examples?/) print $(i-1) }')
+          failed=$(echo "$summary" | awk '{ for(i=1;i<=NF;i++) if($i ~ /failures?/) print $(i-1) }')
           echo "passed=${passed}" >> $GITHUB_OUTPUT
           echo "failed=${failed}" >> $GITHUB_OUTPUT
           echo "summary=${summary}" >> $GITHUB_OUTPUT
