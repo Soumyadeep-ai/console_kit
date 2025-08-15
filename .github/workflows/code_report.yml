@@ -54,9 +54,15 @@ jobs:
       - name: Run Reek
         id: reek
         run: |
-          reek_output=$(bundle exec reek || true)
-          echo "$reek_output" | tee reek_result.txt
-          total=$(echo "$reek_output" | grep -c '^  ')
+          # Run reek and allow failure, output is stored in a file
+          bundle exec reek > reek_result.txt || true
+
+          # Read file contents into variable (now safe)
+          reek_output=$(cat reek_result.txt)
+
+          # Count how many lines match code smell format (indented lines)
+          total=$(grep -c '^  ' reek_result.txt || true)
+
           echo "total_warnings=${total}" >> $GITHUB_OUTPUT
 
       # Comment on PR
