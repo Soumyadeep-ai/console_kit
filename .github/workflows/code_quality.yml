@@ -1,0 +1,101 @@
+name: Code Quality Check
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  quality:
+    name: Run RSpec, Rubocop, and Reek
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.4.4
+
+      - name: Install dependencies
+        run: bundle install
+
+      ########################################
+      # Run RSpec and capture summary
+      ########################################
+      - name: Run RSpec
+        id: rspec
+        run: |
+          bundle exec rspec --format documentation | tee rspec_result.txt
+
+          summary=$(tail -n 20 rspec_result.txt | grep -E 'examples?,|failures?|pending?' | tr '\n' ' ')
+          passed=$(echo "$summary" | grep -oE '[0-9]+(?= examples?)')
+          failed=$(echo "$summary" | grep -oE '[0-9]+(?= failures?)')
+
+          echo "passed=${passed}" >> $GITHUB_OUTPUT
+          echo "failed=${failed}" >> $GITHUB_OUTPUT
+          echo "summary=${summary}" >> $GITHUB_OUTPUT
+
+      ########################################
+      # Run Rubocop and capture summary
+      ########################################
+      - name: Run Rubocop
+        id: rubocop
+        run: |
+          rubo_output=$(bundle exec rubocop || true)
+          echo "$rubo_output" | tee rubocop_result.txt
+          summary=$(echo "$rubo_output" | grep 'files inspected')
+          echo "summary=${summary}" >> $GITHUB_OUTPUT
+
+      ########################################
+      # Run Reek and capture warning summary
+      ########################################
+      - name: Run Reek
+        id: reek
+        run: |
+          # Run reek, capture output even on failure
+          bundle exec reek > reek_result.txt || true
+
+          # Count inspected files
+          files_inspected=$(grep -o '[.S]' reek_result.txt | wc -l)
+
+          # Count total warnings (indented lines)
+          total_warnings=$(grep -c '^  ' reek_result.txt || true)
+
+          # Get top offending files (with most warnings)
+          top_offenders=$(awk '/\.rb --/ { file=$1 } /^  \[/{ count[file]++ } END { for (f in count) print count[f], f }' reek_result.txt | sort -nr | head -5)
+          formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " warnings"}')
+
+          echo "files_inspected=${files_inspected}" >> $GITHUB_OUTPUT
+          echo "total_warnings=${total_warnings}" >> $GITHUB_OUTPUT
+          echo "top_offenders<<EOF" >> $GITHUB_OUTPUT
+          echo "$formatted_offenders" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      ########################################
+      # Post a PR comment with all summaries
+      ########################################
+      - name: Comment Code Quality Summary on PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ✅ **Code Quality Check Summary**
+
+            🔍 **RSpec**  
+            Success | Failure  
+            ${{ steps.rspec.outputs.passed }}     | ${{ steps.rspec.outputs.failed }}
+
+            🧹 **Rubocop**  
+            ${{ steps.rubocop.outputs.summary }}
+
+            👃 **Reek**  
+            ${{ steps.reek.outputs.files_inspected }} files inspected, ${{ steps.reek.outputs.total_warnings }} total warnings  
+            Top offending files:  
+            ${{ steps.reek.outputs.top_offenders }}
