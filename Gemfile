@@ -6,11 +6,13 @@ source 'https://rubygems.org'
 gemspec
 
 gem 'irb'
-gem 'rake', '~> 13.0'
+gem 'rake', '~> 13.3'
 
-gem 'rspec', '~> 3.0'
-
-gem 'rubocop', '~> 1.21'
+group :development, :test do
+  gem 'reek', '~> 6.5'
+  gem 'rspec', '~> 3.13'
+  gem 'rubocop', '~> 1.79'
+end
 
 group :test do
   gem 'aruba'
