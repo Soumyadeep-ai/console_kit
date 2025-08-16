@@ -32,7 +32,6 @@ module ConsoleKit
 
         @current_tenant = nil
         setup
-        tenant_setup_successful?
       end
 
       private
@@ -52,21 +51,14 @@ module ConsoleKit
       def select_tenant_key
         return tenants.keys.first if auto_select?
 
-        TenantSelector.select(tenants, tenants.keys)
+        TenantSelector.select
       end
 
       def auto_select? = single_tenant? || non_interactive?
       def single_tenant? = tenants.size == 1
       def non_interactive? = !$stdin.tty?
-
-      def warn_no_tenants
-        Output.print_warning('Cannot reset tenant: No tenants configured.')
-        false
-      end
-
-      def warn_reset
-        Output.print_warning("Resetting tenant: #{@current_tenant}")
-      end
+      def warn_no_tenants = Output.print_warning('Cannot reset tenant: No tenants configured.')
+      def warn_reset = Output.print_warning("Resetting tenant: #{@current_tenant}")
 
       def handle_error(error)
         Output.print_error("Error setting up tenant: #{error.message}")
