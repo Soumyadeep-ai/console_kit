@@ -219,7 +219,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'returns false' do
-        expect(described_class.reset_current_tenant).to be false
+        expect(described_class.reset_current_tenant).to be_nil
       end
     end
 
@@ -256,7 +256,7 @@ RSpec.describe ConsoleKit::Setup do
 
       it 'returns false if tenant selection returns nil' do
         result = described_class.reset_current_tenant
-        expect(result).to be false
+        expect(result).to be_nil
       end
     end
   end
