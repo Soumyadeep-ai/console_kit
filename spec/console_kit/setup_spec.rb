@@ -79,14 +79,16 @@ RSpec.describe ConsoleKit::Setup do
     context 'when no tenants are configured' do
       it 'prints an error when tenants are nil' do
         ConsoleKit.configure { |c| c.tenants = nil }
-        expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
+        allow(ConsoleKit::Output).to receive(:print_error)
         described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/No tenants configured/)
       end
 
       it 'prints an error when tenants are empty' do
         ConsoleKit.configure { |c| c.tenants = {} }
-        expect(ConsoleKit::Output).to receive(:print_error).with(/No tenants configured/)
+        allow(ConsoleKit::Output).to receive(:print_error)
         described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/No tenants configured/)
       end
     end
 
@@ -94,83 +96,110 @@ RSpec.describe ConsoleKit::Setup do
       before { allow($stdin).to receive(:tty?).and_return(true) }
 
       it 'prints error if tenant selection returns nil' do
+        allow(ConsoleKit::Output).to receive(:print_error)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-        expect(ConsoleKit::Output).to receive(:print_error).with(/No tenant selected/)
         described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/No tenant selected/)
       end
 
       it 'prints error if tenant selection returns empty string' do
+        allow(ConsoleKit::Output).to receive(:print_error)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('')
-        expect(ConsoleKit::Output).to receive(:print_error).with(/No configuration found for tenant:/)
         described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/No configuration found for tenant:/)
       end
     end
 
-    context 'when configure_tenant raises an error' do
-      it 'prints the error and backtrace for StandardError' do
+    context 'when configure_tenant raises StandardError' do
+      before do
+        allow(ConsoleKit::Output).to receive(:print_error)
+        allow(ConsoleKit::Output).to receive(:print_backtrace)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(StandardError, 'Boom')
-        expect(ConsoleKit::Output).to receive(:print_error).with(/Boom/)
-        expect(ConsoleKit::Output).to receive(:print_backtrace)
         described_class.setup
       end
 
-      it 'prints the error and backtrace for RuntimeError' do
+      it 'prints the error message' do
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/Boom/)
+      end
+
+      it 'prints the backtrace' do
+        expect(ConsoleKit::Output).to have_received(:print_backtrace)
+      end
+    end
+
+    context 'when configure_tenant raises RuntimeError' do
+      before do
+        allow(ConsoleKit::Output).to receive(:print_error)
+        allow(ConsoleKit::Output).to receive(:print_backtrace)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(RuntimeError, 'Unexpected error')
-        expect(ConsoleKit::Output).to receive(:print_error).with(/Unexpected error/)
-        expect(ConsoleKit::Output).to receive(:print_backtrace)
         described_class.setup
       end
-    end
 
-    context 'auto-selection behavior' do
-      context 'with single tenant' do
-        before { ConsoleKit.configure { |c| c.tenants = { 'only_one' => tenants['acme'] } } }
-
-        it 'auto-selects the only tenant in interactive mode' do
-          allow($stdin).to receive(:tty?).and_return(true)
-          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-          described_class.setup
-          expect(described_class.current_tenant).to eq('only_one')
-        end
-
-        it 'auto-selects the only tenant in non-interactive mode' do
-          allow($stdin).to receive(:tty?).and_return(false)
-          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-          described_class.setup
-          expect(described_class.current_tenant).to eq('only_one')
-        end
+      it 'prints the error message' do
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/Unexpected error/)
       end
 
-      context 'with multiple tenants in non-interactive mode' do
-        before { allow($stdin).to receive(:tty?).and_return(false) }
-
-        it 'auto-selects the first tenant' do
-          expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-          described_class.setup
-          expect(described_class.current_tenant).to eq('acme')
-        end
+      it 'prints the backtrace' do
+        expect(ConsoleKit::Output).to have_received(:print_backtrace)
       end
     end
 
-    context 'edge cases' do
+    context 'when auto-selecting tenants with a single tenant' do
+      before { ConsoleKit.configure { |c| c.tenants = { 'only_one' => tenants['acme'] } } }
+
+      it 'auto-selects the only tenant in interactive mode' do
+        allow($stdin).to receive(:tty?).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+
+        described_class.setup
+
+        expect(described_class.current_tenant).to eq('only_one')
+      end
+
+      it 'auto-selects the only tenant in non-interactive mode' do
+        allow($stdin).to receive(:tty?).and_return(false)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+
+        described_class.setup
+
+        expect(described_class.current_tenant).to eq('only_one')
+      end
+    end
+
+    context 'when auto-selecting tenants with multiple tenants in non-interactive mode' do
+      before { allow($stdin).to receive(:tty?).and_return(false) }
+
+      it 'auto-selects the first tenant' do
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
+
+        described_class.setup
+
+        expect(described_class.current_tenant).to eq('acme')
+      end
+    end
+
+    context 'when handling edge cases' do
       it 'handles nil context_class gracefully' do
         ConsoleKit.configure { |c| c.context_class = nil }
         stub_successful_setup('acme')
         described_class.setup
         expect(described_class.current_tenant).to eq('acme')
       end
+    end
 
-      it 'supports symbol keys in tenant config' do
+    context 'when handling edge cases with symbol keys in tenant config' do
+      before do
         ConsoleKit.configure do |c|
           c.tenants = { acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } } }
         end
-
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:acme)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme, anything,
                                                                                  anything).and_return(true)
+      end
 
+      it 'sets up tenant with symbol keys' do
         described_class.setup
         expect(described_class.current_tenant).to eq(:acme)
       end
@@ -179,37 +208,55 @@ RSpec.describe ConsoleKit::Setup do
 
   describe '.reset_current_tenant' do
     context 'when no tenants are configured' do
-      it 'prints a warning and returns false' do
+      before do
         ConsoleKit.configure { |c| c.tenants = nil }
-        expect(ConsoleKit::Output).to receive(:print_warning).with(/Cannot reset tenant/)
+        allow(ConsoleKit::Output).to receive(:print_warning)
+      end
+
+      it 'prints a warning' do
+        described_class.reset_current_tenant
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(/Cannot reset tenant/)
+      end
+
+      it 'returns false' do
         expect(described_class.reset_current_tenant).to be false
       end
     end
 
     context 'when a tenant is already set' do
-      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
-
-      it 'clears and reconfigures a new tenant' do
+      before do
+        described_class.instance_variable_set(:@current_tenant, 'acme')
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything,
                                                                                  anything).and_return(true)
-        expect(ConsoleKit::Output).to receive(:print_warning).with(/Resetting tenant: acme/)
+        allow(ConsoleKit::Output).to receive(:print_warning)
+      end
+
+      it 'prints a reset warning' do
+        described_class.reset_current_tenant
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(/Resetting tenant: acme/)
+      end
+
+      it 'sets current_tenant to the new tenant' do
         described_class.reset_current_tenant
         expect(described_class.current_tenant).to eq('globex')
       end
     end
 
     context 'when setup fails during reset' do
-      before { described_class.instance_variable_set(:@current_tenant, 'acme') }
-
-      it 'returns false if tenant selection returns nil' do
+      before do
+        described_class.instance_variable_set(:@current_tenant, 'acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
         allow(ConsoleKit::Output).to receive(:print_error)
-        expect(described_class.reset_current_tenant).to be false
+      end
+
+      it 'returns false if tenant selection returns nil' do
+        result = described_class.reset_current_tenant
+        expect(result).to be false
       end
     end
   end
