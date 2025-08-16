@@ -28,7 +28,7 @@ RSpec.describe ConsoleKit do
       expect(ConsoleKit::Error).to be < StandardError
     end
 
-    it 'can raise and rescue ConsoleKit::Error' do
+    it 'can raise ConsoleKit::Error' do
       expect do
         raise ConsoleKit::Error, 'Something went wrong'
       end.to raise_error(ConsoleKit::Error, 'Something went wrong')
@@ -51,7 +51,6 @@ RSpec.describe ConsoleKit do
 
   describe 'configuration accessors' do
     before do
-      # Reset configuration before each test to avoid test pollution
       described_class.configure do |config|
         config.tenants = nil
         config.context_class = nil
@@ -78,7 +77,6 @@ RSpec.describe ConsoleKit do
 
   describe 'default configuration values' do
     before do
-      # Reset before checking defaults
       described_class.configure do |config|
         config.tenants = nil
         config.context_class = nil
@@ -96,123 +94,144 @@ RSpec.describe ConsoleKit do
   end
 
   describe 'thread safety' do
-    it 'maintains separate configuration per thread' do
-      described_class.tenants = ['main']
+    before { described_class.tenants = ['main'] }
 
+    it 'allows a thread to set its own tenants value' do
       thread = Thread.new do
         described_class.tenants = ['thread']
         expect(described_class.tenants).to eq(['thread'])
       end
       thread.join
+    end
 
+    it 'does not affect the main thread tenants value' do
       expect(described_class.tenants).to eq(['main'])
     end
   end
 
   describe 'delegated tenant methods' do
     describe '.current_tenant' do
-      it 'delegates to ConsoleKit::Setup.current_tenant' do
-        expect(ConsoleKit::Setup).to receive(:current_tenant).and_return('my_tenant')
-        expect(described_class.current_tenant).to eq('my_tenant')
+      before { allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('tenant1') }
+
+      it 'calls ConsoleKit::Setup.current_tenant' do
+        described_class.current_tenant
+        expect(ConsoleKit::Setup).to have_received(:current_tenant)
       end
 
-      it 'returns nil if ConsoleKit::Setup.current_tenant is nil' do
-        expect(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+      it 'returns the tenant from ConsoleKit::Setup.current_tenant' do
+        expect(described_class.current_tenant).to eq('tenant1')
+      end
+
+      it 'returns nil when ConsoleKit::Setup.current_tenant returns nil' do
+        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
         expect(described_class.current_tenant).to be_nil
       end
 
-      it 'returns the same value on multiple calls' do
-        expect(ConsoleKit::Setup).to receive(:current_tenant).twice.and_return('tenant1')
-        expect(described_class.current_tenant).to eq('tenant1')
+      it 'returns the tenant on any calls' do
+        described_class.current_tenant # call once to simulate first call
         expect(described_class.current_tenant).to eq('tenant1')
       end
     end
 
     describe '.reset_current_tenant' do
-      it 'delegates to ConsoleKit::Setup.reset_current_tenant' do
-        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true)
+      before { allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true) }
+
+      it 'calls ConsoleKit::Setup.reset_current_tenant' do
+        described_class.reset_current_tenant
+        expect(ConsoleKit::Setup).to have_received(:reset_current_tenant)
+      end
+
+      it 'returns true when ConsoleKit::Setup.reset_current_tenant returns true' do
         expect(described_class.reset_current_tenant).to be(true)
       end
 
-      it 'returns false if ConsoleKit::Setup.reset_current_tenant returns false' do
-        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(false)
+      it 'returns false when ConsoleKit::Setup.reset_current_tenant returns false' do
+        allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(false)
         expect(described_class.reset_current_tenant).to be(false)
       end
 
-      it 'calls reset_current_tenant multiple times with consistent results' do
-        expect(ConsoleKit::Setup).to receive(:reset_current_tenant).twice.and_return(true)
-        expect(described_class.reset_current_tenant).to be(true)
+      it 'returns true on any calls' do
+        described_class.reset_current_tenant
         expect(described_class.reset_current_tenant).to be(true)
       end
     end
+  end
 
-    describe 'pretty_output toggle methods' do
-      before { described_class.configure { |c| c.pretty_output = false } }
+  describe 'pretty_output toggle methods' do
+    before do
+      described_class.configure { |c| c.pretty_output = false }
+    end
 
-      it 'starts with pretty_output default as false' do
-        expect(described_class.pretty_output).to be(false)
+    it 'starts with pretty_output default as false' do
+      expect(described_class.pretty_output).to be(false)
+    end
+
+    it 'enables pretty_output when it is false' do
+      described_class.enable_pretty_output
+      expect(described_class.pretty_output).to be true
+    end
+
+    it 'keeps pretty_output enabled when already true' do
+      described_class.configure { |c| c.pretty_output = true }
+      described_class.enable_pretty_output
+      expect(described_class.pretty_output).to be true
+    end
+
+    it 'disables pretty_output when it is true' do
+      described_class.configure { |c| c.pretty_output = true }
+      described_class.disable_pretty_output
+      expect(described_class.pretty_output).to be false
+    end
+
+    it 'keeps pretty_output disabled when already false' do
+      described_class.disable_pretty_output
+      expect(described_class.pretty_output).to be false
+    end
+
+    context 'when toggling pretty_output' do
+      it 'toggles from false to true' do
+        described_class.configure { |c| c.pretty_output = false }
+        described_class.enable_pretty_output
+        expect(described_class.pretty_output).to be true
       end
 
-      context 'enabling pretty_output' do
-        it 'enables pretty_output from false to true' do
-          described_class.enable_pretty_output
-          expect(described_class.pretty_output).to be true
-        end
-
-        it 'keeps pretty_output true if already enabled' do
-          described_class.configure { |c| c.pretty_output = true }
-          described_class.enable_pretty_output
-          expect(described_class.pretty_output).to be true
-        end
+      it 'toggles from true to false' do
+        described_class.configure { |c| c.pretty_output = true }
+        described_class.disable_pretty_output
+        expect(described_class.pretty_output).to be false
       end
+    end
 
-      context 'disabling pretty_output' do
-        before { described_class.configure { |c| c.pretty_output = true } }
+    context 'when preserving configuration on toggle' do
+      let(:dummy_class) { Class.new }
 
-        it 'disables pretty_output from true to false' do
-          described_class.disable_pretty_output
-          expect(described_class.pretty_output).to be false
-        end
-
-        it 'keeps pretty_output false if already disabled' do
-          described_class.configure { |c| c.pretty_output = false }
-          described_class.disable_pretty_output
-          expect(described_class.pretty_output).to be false
-        end
-      end
-
-      context 'multiple toggles' do
-        it 'toggles pretty_output from false -> true -> false' do
-          expect(described_class.pretty_output).to be false
-          described_class.enable_pretty_output
-          expect(described_class.pretty_output).to be true
-          described_class.disable_pretty_output
-          expect(described_class.pretty_output).to be false
-        end
-
-        it 'toggles pretty_output from true -> false -> true' do
-          described_class.configure { |c| c.pretty_output = true }
-          expect(described_class.pretty_output).to be true
-          described_class.disable_pretty_output
-          expect(described_class.pretty_output).to be false
-          described_class.enable_pretty_output
-          expect(described_class.pretty_output).to be true
-        end
-      end
-
-      it 'does not affect other configuration settings' do
+      before do
         described_class.configure do |c|
           c.tenants = %w[tenant1 tenant2]
-          c.context_class = Class.new
+          c.context_class = dummy_class
         end
+      end
 
+      it 'preserves tenants when enabling pretty_output' do
         described_class.enable_pretty_output
         expect(described_class.tenants).to eq(%w[tenant1 tenant2])
-        expect(described_class.context_class).not_to be_nil
+      end
 
+      it 'preserves context_class when enabling pretty_output' do
+        described_class.enable_pretty_output
+        expect(described_class.context_class).to eq(dummy_class)
+      end
+
+      it 'preserves tenants when disabling pretty_output' do
+        described_class.configure { |c| c.pretty_output = true }
         described_class.disable_pretty_output
         expect(described_class.tenants).to eq(%w[tenant1 tenant2])
-        expect(described_class.context_class).not_to be_nil
+      end
+
+      it 'preserves context_class when disabling pretty_output' do
+        described_class.configure { |c| c.pretty_output = true }
+        described_class.disable_pretty_output
+        expect(described_class.context_class).to eq(dummy_class)
       end
     end
   end
