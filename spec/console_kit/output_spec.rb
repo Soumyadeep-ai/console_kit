@@ -100,6 +100,7 @@ RSpec.describe ConsoleKit::Output do
 
   describe 'timestamp support' do
     let(:now) { Time.new(2025, 8, 12, 15, 45, 12) }
+
     before { allow(Time).to receive(:current).and_return(now) }
 
     it 'includes timestamp when enabled' do

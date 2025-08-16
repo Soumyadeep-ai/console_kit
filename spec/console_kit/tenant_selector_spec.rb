@@ -50,28 +50,35 @@ RSpec.describe ConsoleKit::TenantSelector do
 
       it 'reprints the menu after invalid inputs before final retry' do
         allow($stdin).to receive(:gets).and_return("bad\n", "nope\n", "0\n")
+        allow(ConsoleKit::Output).to receive(:print_header)
 
-        allow(ConsoleKit::Output).to receive(:print_info)
-        expect(ConsoleKit::Output).to receive(:print_header).exactly(3).times # once + 2 retries
         described_class.select
+
+        expect(ConsoleKit::Output).to have_received(:print_header).exactly(3).times
       end
 
       it 'warns about input selection being out of range' do
         allow($stdin).to receive(:gets).and_return("9\n", "1\n")
-        expect(ConsoleKit::Output).to receive(:print_warning).with('Selection must be between 0 and 2.')
+        allow(ConsoleKit::Output).to receive(:print_warning)
+
         described_class.select
+
+        expect(ConsoleKit::Output).to have_received(:print_warning).with('Selection must be between 0 and 2.')
       end
     end
 
-    context 'prompt behavior' do
+    context 'when prompting the user' do
       it 'calls print_prompt when reading input' do
         allow($stdin).to receive(:gets).and_return("\n")
-        expect(ConsoleKit::Output).to receive(:print_prompt)
+        allow(ConsoleKit::Output).to receive(:print_prompt)
+
         described_class.select
+
+        expect(ConsoleKit::Output).to have_received(:print_prompt)
       end
     end
 
-    context 'edge cases' do
+    context 'when handling edge cases' do
       it 'selects correctly when only one tenant exists' do
         single_tenant = { 'gamma' => { constants: { partner_code: 'GAMMA' } } }
         allow(ConsoleKit).to receive(:tenants).and_return(single_tenant)
@@ -88,14 +95,23 @@ RSpec.describe ConsoleKit::TenantSelector do
   end
 
   describe 'input validation' do
-    it 'returns false for non-digit inputs' do
+    it 'returns false for non-digit input "bad"' do
       expect(described_class.send(:valid_integer?, 'bad')).to be false
+    end
+
+    it 'returns false for mixed input "123abc"' do
       expect(described_class.send(:valid_integer?, '123abc')).to be false
+    end
+
+    it 'returns false for empty input' do
       expect(described_class.send(:valid_integer?, '')).to be false
     end
 
-    it 'returns true for valid digit strings' do
+    it 'returns true for "0"' do
       expect(described_class.send(:valid_integer?, '0')).to be true
+    end
+
+    it 'returns true for "15"' do
       expect(described_class.send(:valid_integer?, '15')).to be true
     end
   end
