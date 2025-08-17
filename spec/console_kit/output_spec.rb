@@ -66,10 +66,10 @@ RSpec.describe ConsoleKit::Output do
 
     def expect_backtrace_formatting(output)
       if pretty_output
-        expect(output).to match(%r{\e\[0;90m\[ConsoleKit\]     lib/foo\.rb:10\e\[0m})
+        expect(output).to match(%r{\e\[0;90m\[ConsoleKit\] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]     lib/foo\.rb:10\e\[0m})
       else
         expect(output).to satisfy do |out|
-          out.include?('[ConsoleKit]     lib/foo.rb:10') && out !~ /\e\[/
+          out.include?('[ConsoleKit] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]    lib/foo.rb:10') && out !~ /\e\[/
         end
       end
     end

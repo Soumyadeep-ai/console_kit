@@ -22,8 +22,9 @@ module ConsoleKit
         end
       end
 
-      def print_backtrace(exception, timestamp: false)
-        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", timestamp) }
+      # Backtrace prints always with timestamp, no param
+      def print_backtrace(exception)
+        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true) }
       end
 
       private
@@ -38,13 +39,9 @@ module ConsoleKit
         "#{PREFIX} #{timestamp_prefix(timestamp)}#{symbol_prefix(symbol)}#{text}"
       end
 
-      def timestamp_prefix(timestamp)
-        timestamp ? "[#{Time.current.strftime('%Y-%m-%d %H:%M:%S')}] " : ''
-      end
-
-      def symbol_prefix(symbol)
-        symbol ? "#{symbol} " : ''
-      end
+      def prefix_for(value) = value ? yield(value) : ''
+      def timestamp_prefix(timestamp) = prefix_for(timestamp) { Time.current.strftime('[%Y-%m-%d %H:%M:%S] ') }
+      def symbol_prefix(symbol) = prefix_for(symbol) { |sym| "#{sym} " }
 
       def output(message, color)
         return puts message unless ConsoleKit.configuration.pretty_output && color
