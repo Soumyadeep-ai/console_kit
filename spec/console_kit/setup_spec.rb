@@ -23,8 +23,11 @@ RSpec.describe ConsoleKit::Setup do
 
   def stub_successful_setup(tenant)
     allow(ConsoleKit::TenantSelector).to receive(:select).and_return(tenant)
-    allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(tenant, anything, anything)
-    allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
+
+    allow(ConsoleKit::TenantConfigurator).tap do |configurator|
+      configurator.to receive(:configure_tenant).with(tenant, anything, anything)
+      configurator.to receive(:configuration_success).and_return(true)
+    end
   end
 
   shared_examples 'a successful tenant setup' do |tenant|

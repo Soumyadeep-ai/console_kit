@@ -18,9 +18,6 @@ RSpec.configure do |config|
 
   config.include GeneratorSpec::TestCase, type: :generator
 
-  # Include OutputHelper globally
-  config.include OutputHelper
-
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end

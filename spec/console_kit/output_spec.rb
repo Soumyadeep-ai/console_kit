@@ -8,40 +8,31 @@ RSpec.describe ConsoleKit::Output do
   let(:pretty_output) { true }
 
   shared_examples 'ConsoleKit output formatter' do |method, message:, symbol:, color_code: nil|
-    def format_expected_line(method, message, symbol)
-      return "[ConsoleKit] \n=== #{message} ===" if method == :print_header
-
-      line = '[ConsoleKit] '
-      line += "#{symbol} " if symbol
-      line + message
-    end
-
     def expect_color(output, code)
       if ConsoleKit.configuration.pretty_output && code
-        expect(output).to match(/\e\[#{code}m/)
-        expect(output).to match(/\e\[0m/)
+        expect(output).to match(/\e\[#{code}m.*\e\[0m/m)
       else
         expect(output).not_to match(/\e\[[\d;]+m/)
       end
     end
 
     it "includes [ConsoleKit] tag in #{method} output" do
-      output = OutputHelper.capture_stdout { described_class.send(method, message) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect(output).to include('[ConsoleKit]')
     end
 
     it "includes symbol in #{method} output if provided" do
-      output = OutputHelper.capture_stdout { described_class.send(method, message) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect(output).to include(symbol) if symbol
     end
 
     it "includes formatted message for #{method}" do
-      output = OutputHelper.capture_stdout { described_class.send(method, message) }
-      expect(output).to include(format_expected_line(method, message, symbol))
+      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
+      expect(output).to include(OutputSpecHelper.format_expected_line(method, message, symbol))
     end
 
     it "handles ANSI color for #{method}" do
-      output = OutputHelper.capture_stdout { described_class.send(method, message) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect_color(output, color_code)
     end
   end
@@ -68,21 +59,23 @@ RSpec.describe ConsoleKit::Output do
     end
 
     def expect_backtrace_lines(output)
-      expect(output).to include('lib/foo.rb:10')
-      expect(output).to include('app/bar.rb:20')
+      ['lib/foo.rb:10', 'app/bar.rb:20'].each do |line|
+        expect(output).to include(line)
+      end
     end
 
     def expect_backtrace_formatting(output)
       if pretty_output
         expect(output).to match(%r{\e\[0;90m\[ConsoleKit\]     lib/foo\.rb:10\e\[0m})
       else
-        expect(output).to include('[ConsoleKit]     lib/foo.rb:10')
-        expect(output).not_to match(/\e\[/)
+        expect(output).to satisfy do |out|
+          out.include?('[ConsoleKit]     lib/foo.rb:10') && out !~ /\e\[/
+        end
       end
     end
 
     it 'prints backtrace with correct format' do
-      output = OutputHelper.capture_stdout { described_class.print_backtrace(exception) }
+      output = OutputSpecHelper.capture_stdout { described_class.print_backtrace(exception) }
       expect_backtrace_lines(output)
       expect_backtrace_formatting(output)
     end
@@ -104,17 +97,17 @@ RSpec.describe ConsoleKit::Output do
     before { allow(Time).to receive(:current).and_return(now) }
 
     it 'includes timestamp when enabled' do
-      output = OutputHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
       expect(output).to include('[2025-08-12 15:45:12]')
     end
 
     it 'includes ConsoleKit tag when timestamp is enabled' do
-      output = OutputHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
       expect(output).to include('[ConsoleKit]')
     end
 
     it 'includes message when timestamp is enabled' do
-      output = OutputHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
       expect(output).to include('Timed')
     end
   end
@@ -137,7 +130,7 @@ RSpec.describe ConsoleKit::Output do
 
   describe 'ANSI output readability' do
     it 'removes ANSI codes from output' do
-      output = OutputHelper.capture_stdout { described_class.print_error('Boom') }
+      output = OutputSpecHelper.capture_stdout { described_class.print_error('Boom') }
       clean = output.gsub(/\e\[[\d;]+m/, '')
       expect(clean).to include('[ConsoleKit] [✗] Boom')
     end
