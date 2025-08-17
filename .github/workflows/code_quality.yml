@@ -65,6 +65,44 @@ jobs:
           echo "$formatted_offenders" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      ############################################
+      # Generate comment body with all summaries
+      ############################################
+      - name: Generate comment body
+        id: generate_comment
+        run: |
+          body="✅ **Code Quality Check Summary**
+
+          ### 🔍 Test Cases
+          | **Success** | **Failure** |
+          | :---------: | :---------: |
+          | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |"
+
+          if [ "${{ steps.rubocop.outputs.total_offenses }}" -gt 0 ]; then
+            body="$body
+
+          ### 🧹 Linter
+          - ${{ steps.rubocop.outputs.summary }}
+          - Total offenses: **${{ steps.rubocop.outputs.total_offenses }}**
+
+          <details>
+            <summary>Top offending files</summary>
+
+            \`\`\`
+          ${{ steps.rubocop.outputs.top_offenders }}
+          \`\`\`
+          </details>"
+          else
+            body="$body
+
+          ### 🧹 Linter
+          - ${{ steps.rubocop.outputs.summary }}"
+          fi
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$body" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       ########################################
       # Post a PR comment with all summaries
       ########################################
@@ -73,22 +111,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            ✅ **Code Quality Check Summary**
-
-            ### 🔍 Test Cases
-            | **Success** | **Failure** |
-            | :---------: | :---------: |
-            | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |
-
-            ### 🧹 Linter
-            - ${{ steps.rubocop.outputs.summary }}
-            - Total offenses: **${{ steps.rubocop.outputs.total_offenses }}**
-
-            <details>
-              <summary>Top offending files</summary>
-
-              ```
-              ${{ steps.rubocop.outputs.top_offenders }}
-              ```
-            </details>
+          body: ${{ steps.generate_comment.outputs.body }}
