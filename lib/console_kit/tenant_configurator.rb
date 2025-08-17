@@ -12,14 +12,9 @@ module ConsoleKit
         constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
         return missing_config_error(key) unless constants
 
-        validate_constants!(constants)
-        apply_context(constants)
-        setup_connections
-        Output.print_success("Tenant set to: #{key}")
-        @configuration_success = true
+        perform_configuration(key, constants)
       rescue StandardError => e
         handle_error(e, key)
-        @configuration_success = false
       end
 
       def clear
@@ -42,24 +37,50 @@ module ConsoleKit
         Output.print_error("No configuration found for tenant: #{key}")
       end
 
+      def perform_configuration(key, constants)
+        validate_constants!(constants)
+        apply_context(constants)
+        configure_success(key)
+      end
+
       def apply_context(constant)
         ctx = ConsoleKit.configuration.context_class
         ctx.tenant_shard = constant[:shard]
         ctx.tenant_mongo_db = constant[:mongo_db]
         ctx.partner_identifier = constant[:partner_code]
+
+        setup_connections
       end
 
       def setup_connections
-        ctx = ConsoleKit.configuration.context_class
-        ApplicationRecord.establish_connection(ctx.tenant_shard.to_sym) if defined?(ApplicationRecord)
-        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
-        return if ctx.tenant_mongo_db.nil? || ctx.tenant_mongo_db.empty?
+        establish_sql_connection
+        establish_mongo_connection
+      end
 
-        client = ctx.tenant_mongo_db.to_s
-        Mongoid.override_client(client)
+      def establish_sql_connection
+        return unless defined?(ApplicationRecord)
+
+        ApplicationRecord.establish_connection(ConsoleKit.configuration.context_class.tenant_shard.to_sym)
+      end
+
+      def establish_mongo_connection
+        return unless defined?(Mongoid)
+
+        mongo_db = ConsoleKit.configuration.context_class.tenant_mongo_db.to_s
+        return if mongo_db.empty?
+
+        Mongoid.override_client(mongo_db)
+      rescue NoMethodError
+        Output.print_warning('Mongoid.override_client is not defined.')
+      end
+
+      def configure_success(key)
+        Output.print_success("Tenant set to: #{key}")
+        @configuration_success = true
       end
 
       def handle_error(error, key)
+        @configuration_success = false
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
       end

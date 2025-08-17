@@ -58,6 +58,10 @@ RSpec.describe ConsoleKit::Output do
       e
     end
 
+    let(:log_line_colour_regex) do
+      %r{\e\[0;90m\[ConsoleKit\] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]     lib/foo\.rb:10\e\[0m}
+    end
+
     def expect_backtrace_lines(output)
       ['lib/foo.rb:10', 'app/bar.rb:20'].each do |line|
         expect(output).to include(line)
@@ -66,7 +70,7 @@ RSpec.describe ConsoleKit::Output do
 
     def expect_backtrace_formatting(output)
       if pretty_output
-        expect(output).to match(%r{\e\[0;90m\[ConsoleKit\] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]     lib/foo\.rb:10\e\[0m})
+        expect(output).to match(log_line_colour_regex)
       else
         expect(output).to satisfy do |out|
           out.include?('[ConsoleKit] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]    lib/foo.rb:10') && out !~ /\e\[/

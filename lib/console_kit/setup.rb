@@ -11,17 +11,7 @@ module ConsoleKit
     class << self
       attr_reader :current_tenant
 
-      def setup
-        return Output.print_error('No tenants configured.') if no_tenants?
-
-        key = select_tenant_key
-        return Output.print_error('No tenant selected. Loading without tenant configuration.') unless key
-
-        configure(key)
-      rescue StandardError => e
-        handle_error(e)
-      end
-
+      def setup = run_setup
       def tenant_setup_successful? = !@current_tenant.to_s.empty?
 
       def reset_current_tenant
@@ -36,6 +26,21 @@ module ConsoleKit
 
       private
 
+      def run_setup
+        return Output.print_error('No tenants configured.') if no_tenants?
+
+        select_and_configure
+      rescue StandardError => e
+        handle_error(e)
+      end
+
+      def select_and_configure
+        key = select_tenant_key
+        return Output.print_error('No tenant selected. Loading without tenant configuration.') unless key
+
+        configure(key)
+      end
+
       def configure(key)
         TenantConfigurator.configure_tenant(key)
         return unless TenantConfigurator.configuration_success
@@ -48,13 +53,7 @@ module ConsoleKit
       def context_class = ConsoleKit.configuration.context_class
       def tenants? = tenants&.any?
       def no_tenants? = !tenants?
-
-      def select_tenant_key
-        return tenants.keys.first if auto_select?
-
-        TenantSelector.select
-      end
-
+      def select_tenant_key = auto_select? ? tenants.keys.first : TenantSelector.select
       def auto_select? = single_tenant? || non_interactive?
       def single_tenant? = tenants.size == 1
       def non_interactive? = !$stdin.tty?
