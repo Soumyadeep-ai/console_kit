@@ -9,10 +9,12 @@ RSpec.describe ConsoleKit::Output do
 
   shared_examples 'ConsoleKit output formatter' do |method, message:, symbol:, color_code: nil|
     def expect_color(output, code)
+      expectation = expect(output)
+
       if ConsoleKit.configuration.pretty_output && code
-        expect(output).to match(/\e\[#{code}m.*\e\[0m/m)
+        expectation.to match(/\e\[#{code}m.*\e\[0m/m)
       else
-        expect(output).not_to match(/\e\[[\d;]+m/)
+        expectation.not_to match(/\e\[[\d;]+m/)
       end
     end
 
@@ -69,10 +71,12 @@ RSpec.describe ConsoleKit::Output do
     end
 
     def expect_backtrace_formatting(output)
+      expectation = expect(output)
+
       if pretty_output
-        expect(output).to match(log_line_colour_regex)
+        expectation.to match(log_line_colour_regex)
       else
-        expect(output).to satisfy do |out|
+        expectation.to satisfy do |out|
           out.include?('[ConsoleKit] \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]    lib/foo.rb:10') && out !~ /\e\[/
         end
       end
