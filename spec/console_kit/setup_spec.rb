@@ -23,8 +23,8 @@ RSpec.describe ConsoleKit::Setup do
 
   def stub_successful_setup(tenant)
     allow(ConsoleKit::TenantSelector).to receive(:select).and_return(tenant)
-    allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(tenant, anything,
-                                                                             anything).and_return(true)
+    allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(tenant, anything, anything)
+    allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
   end
 
   shared_examples 'a successful tenant setup' do |tenant|
@@ -70,7 +70,8 @@ RSpec.describe ConsoleKit::Setup do
     context 'when configuration fails' do
       it 'does not set current_tenant' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(false)
         described_class.setup
         expect(described_class.current_tenant).to be_nil
       end
@@ -195,8 +196,8 @@ RSpec.describe ConsoleKit::Setup do
           c.tenants = { acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } } }
         end
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:acme)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme, anything,
-                                                                                 anything).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme, anything, anything)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
       end
 
       it 'sets up tenant with symbol keys' do
@@ -229,8 +230,7 @@ RSpec.describe ConsoleKit::Setup do
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything,
-                                                                                 anything).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything, anything)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
 
@@ -240,6 +240,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'sets current_tenant to the new tenant' do
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         described_class.reset_current_tenant
         expect(described_class.current_tenant).to eq('globex')
       end

@@ -37,7 +37,8 @@ module ConsoleKit
       private
 
       def configure(key)
-        return unless TenantConfigurator.configure_tenant(key, tenants, context_class)
+        TenantConfigurator.configure_tenant(key, tenants, context_class)
+        return unless TenantConfigurator.configuration_success
 
         @current_tenant = key
         Output.print_success("Tenant initialized: #{key}")

@@ -6,6 +6,8 @@ module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
     class << self
+      attr_reader :configuration_success
+
       def configure_tenant(key, tenants, context_class)
         constants = tenants[key]&.[](:constants)
         return missing_config_error(key) unless constants
@@ -15,13 +17,14 @@ module ConsoleKit
         setup_connections(context_class)
 
         Output.print_success("Tenant set to: #{key}")
-        true
+        @configuration_success = true
       rescue StandardError => e
         handle_error(e, key)
-        false
+        @configuration_success = false
       end
 
       def clear(context_class)
+        @configuration_success = false
         %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
           context_class.public_send("#{attr}=", nil)
         end
@@ -36,8 +39,8 @@ module ConsoleKit
       end
 
       def missing_config_error(key)
+        @configuration_success = false
         Output.print_error("No configuration found for tenant: #{key}")
-        false
       end
 
       def apply_context(ctx, constant)
@@ -53,14 +56,6 @@ module ConsoleKit
 
         client = ctx.tenant_mongo_db.to_s
         Mongoid.override_client(client)
-      end
-
-      def setup_database_connections(context_class)
-        ApplicationRecord.establish_connection(context_class.tenant_shard.to_sym) if defined?(ApplicationRecord)
-        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
-        return if context_class.tenant_mongo_db.nil? || context_class.tenant_mongo_db.empty?
-
-        Mongoid.override_client(context_class.tenant_mongo_db.to_s)
       end
 
       def handle_error(error, key)
