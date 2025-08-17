@@ -28,7 +28,7 @@ module ConsoleKit
         return warn_no_tenants unless tenants?
 
         warn_reset if @current_tenant
-        TenantConfigurator.clear(ConsoleKit.configuration.context_class) if @current_tenant
+        TenantConfigurator.clear if @current_tenant
 
         @current_tenant = nil
         setup
@@ -37,7 +37,7 @@ module ConsoleKit
       private
 
       def configure(key)
-        TenantConfigurator.configure_tenant(key, tenants, context_class)
+        TenantConfigurator.configure_tenant(key)
         return unless TenantConfigurator.configuration_success
 
         @current_tenant = key

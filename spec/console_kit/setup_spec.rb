@@ -25,7 +25,7 @@ RSpec.describe ConsoleKit::Setup do
     allow(ConsoleKit::TenantSelector).to receive(:select).and_return(tenant)
 
     allow(ConsoleKit::TenantConfigurator).tap do |configurator|
-      configurator.to receive(:configure_tenant).with(tenant, anything, anything)
+      configurator.to receive(:configure_tenant).with(tenant)
       configurator.to receive(:configuration_success).and_return(true)
     end
   end
@@ -97,20 +97,23 @@ RSpec.describe ConsoleKit::Setup do
     end
 
     context 'when tenant selection fails' do
-      before { allow($stdin).to receive(:tty?).and_return(true) }
+      before do
+        allow($stdin).to receive(:tty?).and_return(true)
+        allow(ConsoleKit::Output).to receive(:print_error)
+      end
 
       it 'prints error if tenant selection returns nil' do
-        allow(ConsoleKit::Output).to receive(:print_error)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         described_class.setup
         expect(ConsoleKit::Output).to have_received(:print_error).with(/No tenant selected/)
       end
 
       it 'prints error if tenant selection returns empty string' do
-        allow(ConsoleKit::Output).to receive(:print_error)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('').and_raise(ArgumentError,
+                                                                                               'Invalid tenant')
         described_class.setup
-        expect(ConsoleKit::Output).to have_received(:print_error).with(/No configuration found for tenant:/)
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/Invalid tenant/)
       end
     end
 
@@ -155,31 +158,32 @@ RSpec.describe ConsoleKit::Setup do
 
       it 'auto-selects the only tenant in interactive mode' do
         allow($stdin).to receive(:tty?).and_return(true)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         described_class.setup
-
         expect(described_class.current_tenant).to eq('only_one')
       end
 
       it 'auto-selects the only tenant in non-interactive mode' do
         allow($stdin).to receive(:tty?).and_return(false)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         described_class.setup
-
         expect(described_class.current_tenant).to eq('only_one')
       end
     end
 
     context 'when auto-selecting tenants with multiple tenants in non-interactive mode' do
-      before { allow($stdin).to receive(:tty?).and_return(false) }
+      before do
+        allow($stdin).to receive(:tty?).and_return(false)
+        allow(ConsoleKit::TenantConfigurator).tap do |configurator|
+          configurator.to receive(:configure_tenant).with('acme')
+          configurator.to receive(:configuration_success).and_return(true)
+        end
+      end
 
       it 'auto-selects the first tenant' do
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_call_original
-
         described_class.setup
-
         expect(described_class.current_tenant).to eq('acme')
       end
     end
@@ -199,7 +203,7 @@ RSpec.describe ConsoleKit::Setup do
           c.tenants = { acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } } }
         end
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:acme)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme, anything, anything)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme)
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
       end
 
@@ -222,7 +226,7 @@ RSpec.describe ConsoleKit::Setup do
         expect(ConsoleKit::Output).to have_received(:print_warning).with(/Cannot reset tenant/)
       end
 
-      it 'returns false' do
+      it 'returns nil' do
         expect(described_class.reset_current_tenant).to be_nil
       end
     end
@@ -233,7 +237,8 @@ RSpec.describe ConsoleKit::Setup do
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex', anything, anything)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex')
+        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
 
@@ -243,7 +248,6 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'sets current_tenant to the new tenant' do
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         described_class.reset_current_tenant
         expect(described_class.current_tenant).to eq('globex')
       end
@@ -254,11 +258,11 @@ RSpec.describe ConsoleKit::Setup do
         described_class.instance_variable_set(:@current_tenant, 'acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
         allow(ConsoleKit::Output).to receive(:print_error)
       end
 
-      it 'returns false if tenant selection returns nil' do
+      it 'returns nil if tenant selection returns nil' do
         result = described_class.reset_current_tenant
         expect(result).to be_nil
       end
