@@ -1,0 +1,114 @@
+name: Code Quality Check
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  quality:
+    name: Run RSpec and Rubocop
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.4.4
+
+      - name: Install dependencies
+        run: bundle install
+
+      ########################################
+      # Run RSpec and capture summary
+      ########################################
+      - name: Run RSpec
+        id: rspec
+        run: |
+          bundle exec rspec --format documentation | tee rspec_result.txt
+
+          summary_line=$(grep -E '[0-9]+ examples?, [0-9]+ failures?' rspec_result.txt | tail -n 1)
+
+          passed=$(echo "$summary_line" | awk '{print $1}')
+          failed=$(echo "$summary_line" | awk '{print $3}')
+          summary=$(echo "$summary_line")
+
+          echo "passed=${passed}" >> $GITHUB_OUTPUT
+          echo "failed=${failed}" >> $GITHUB_OUTPUT
+          echo "summary=${summary}" >> $GITHUB_OUTPUT
+
+      ########################################
+      # Run Rubocop and capture summary
+      ########################################
+      - name: Run Rubocop
+        id: rubocop
+        run: |
+          rubo_output=$(bundle exec rubocop || true)
+          echo "$rubo_output" | tee rubocop_result.txt
+
+          summary=$(echo "$rubo_output" | grep 'files inspected')
+          total_offenses=$(echo "$summary" | grep -oE '[0-9]+ offenses?' | awk '{print $1}')
+
+          # Get top 5 offending files (sorted by frequency)
+          top_offenders=$(grep -E '^\S+\.rb' rubocop_result.txt | cut -d: -f1 | sort | uniq -c | sort -nr | head -5)
+          formatted_offenders=$(echo "$top_offenders" | awk '{print "- `" $2 "`: " $1 " offenses"}')
+
+          echo "summary=${summary}" >> $GITHUB_OUTPUT
+          echo "total_offenses=${total_offenses}" >> $GITHUB_OUTPUT
+          echo "top_offenders<<EOF" >> $GITHUB_OUTPUT
+          echo "$formatted_offenders" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      ############################################
+      # Generate comment body with all summaries
+      ############################################
+      - name: Generate comment body
+        id: generate_comment
+        run: |
+          body="✅ **Code Quality Check Summary**
+
+          ### 🔍 Test Cases
+          | **Success** | **Failure** |
+          | :---------: | :---------: |
+          | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |"
+
+          if [ "${{ steps.rubocop.outputs.total_offenses }}" -gt 0 ]; then
+            body="$body
+
+          ### 🧹 Linter
+          - ${{ steps.rubocop.outputs.summary }}
+          - Total offenses: **${{ steps.rubocop.outputs.total_offenses }}**
+
+          <details>
+            <summary>Top offending files</summary>
+
+            \`\`\`
+          ${{ steps.rubocop.outputs.top_offenders }}
+          \`\`\`
+          </details>"
+          else
+            body="$body
+
+          ### 🧹 Linter
+          - ${{ steps.rubocop.outputs.summary }}"
+          fi
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$body" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      ########################################
+      # Post a PR comment with all summaries
+      ########################################
+      - name: Comment Code Quality Summary on PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.generate_comment.outputs.body }}

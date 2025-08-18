@@ -16,29 +16,32 @@ module ConsoleKit
 
     class << self
       TYPES.each_key do |type|
-        define_method("print_#{type}") do |text|
+        define_method("print_#{type}") do |text, timestamp: false|
           formatted = (type == :header ? "\n=== #{text} ===" : text)
-          print_with(type, formatted)
+          print_with(type, formatted, timestamp)
         end
       end
 
+      # Backtrace prints always with timestamp, no param
       def print_backtrace(exception)
-        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}") }
+        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true) }
       end
 
       private
 
-      def print_with(type, text, timestamp: false)
-        meta = TYPES[type]
+      def print_with(type, text, timestamp)
+        meta = TYPES.fetch(type)
         message = build_message(text, meta[:symbol], timestamp)
         output(message, meta[:color])
       end
 
       def build_message(text, symbol, timestamp)
-        time = timestamp ? "[#{Time.current.strftime('%Y-%m-%d %H:%M:%S')}] " : ''
-        sym = symbol ? "#{symbol} " : ''
-        "#{PREFIX} #{time}#{sym}#{text}"
+        "#{PREFIX} #{timestamp_prefix(timestamp)}#{symbol_prefix(symbol)}#{text}"
       end
+
+      def prefix_for(value) = value ? yield(value) : ''
+      def timestamp_prefix(timestamp) = prefix_for(timestamp) { Time.current.strftime('[%Y-%m-%d %H:%M:%S] ') }
+      def symbol_prefix(symbol) = prefix_for(symbol) { |sym| "#{sym} " }
 
       def output(message, color)
         return puts message unless ConsoleKit.configuration.pretty_output && color
