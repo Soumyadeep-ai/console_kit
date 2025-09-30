@@ -9,17 +9,15 @@ module ConsoleKit
     class ConnectionManager
       class << self
         def available_handlers(context)
-          handler_classes.map do |klass|
+          handler_classes.filter_map do |klass|
             handler = klass.new(context)
-            handler.available? ? handler : nil
-          end.compact
+            handler if handler.available?
+          end
         end
 
         private
 
-        def handler_classes
-          ConsoleKit::Connections.constants.map { |const| ConsoleKit::Connections.const_get(const) }.select { |const| const.is_a?(Class) && const < BaseConnectionHandler }
-        end
+        def handler_classes = BaseConnectionHandler.descendants
       end
     end
   end

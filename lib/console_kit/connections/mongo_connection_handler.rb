@@ -12,18 +12,15 @@ module ConsoleKit
       def_delegator :@context, :tenant_mongo_db
 
       def connect
-        mongo_db = tenant_mongo_db
-        return if mongo_db.strip.empty?
+        return if tenant_mongo_db.blank?
 
-        Output.print_info("Switching to MongoDB client: #{mongo_db}")
-        Mongoid.override_client(mongo_db)
+        Output.print_info("Switching to MongoDB client: #{tenant_mongo_db}")
+        Mongoid.override_client(tenant_mongo_db)
       rescue NoMethodError
         Output.print_warning('Mongoid.override_client is not defined.')
       end
 
-      def available?
-        defined?(Mongoid)
-      end
+      def available? = defined?(Mongoid)
     end
   end
 end

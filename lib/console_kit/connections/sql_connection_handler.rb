@@ -18,9 +18,7 @@ module ConsoleKit
         ApplicationRecord.establish_connection(tenant_shard.to_sym)
       end
 
-      def available?
-        defined?(ApplicationRecord)
-      end
+      def available? = defined?(ApplicationRecord)
     end
   end
 end
