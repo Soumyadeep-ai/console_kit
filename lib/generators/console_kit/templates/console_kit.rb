@@ -30,6 +30,9 @@ Rails.application.config.after_initialize do
     # Toggle pretty output on/off (default: true)
     config.pretty_output = true
 
+    # Enable secure login for console access
+    config.secure_login = false
+
     if config.tenants.nil?
       warn '[ConsoleKit] Warning: `tenants` is not configured. ' \
            'Please set it in config/initializers/console_kit.rb'
