@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+      
+      - name: Pull latest changes with rebase
+        run: git pull --rebase origin ${{ github.head_ref }}
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -76,9 +79,6 @@ jobs:
               print $0
             }
           ' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
-
-      - name: Pull latest changes to avoid non-fast-forward error
-        run: git pull --rebase origin ${{ github.head_ref }}
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v6
