@@ -9,12 +9,19 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: pr-version-update-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   update-security-md:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+      
+      - name: Pull latest changes with rebase
+        run: git pull --rebase origin ${{ github.head_ref }}
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -77,3 +84,6 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: "chore(security): update SECURITY.md for version bump"
+          commit_user_name: github-actions[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          push_options: '--force-with-lease'

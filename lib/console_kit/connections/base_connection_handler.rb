@@ -1,0 +1,18 @@
+# frozen_string_literal: true
+
+module ConsoleKit
+  module Connections
+    # Parent class for connection handlers
+    class BaseConnectionHandler
+      attr_reader :context
+
+      def initialize(context) = @context = context
+
+      def connect
+        raise NotImplementedError, "#{self.class} must implement #connect"
+      end
+
+      def available? = false
+    end
+  end
+end

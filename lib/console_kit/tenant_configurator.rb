@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'output'
+require_relative 'connections/connection_manager'
 
 module ConsoleKit
   # For tenant configuration
@@ -49,29 +50,11 @@ module ConsoleKit
         ctx.tenant_mongo_db = constant[:mongo_db]
         ctx.partner_identifier = constant[:partner_code]
 
-        setup_connections
+        setup_connections(ctx)
       end
 
-      def setup_connections
-        establish_sql_connection
-        establish_mongo_connection
-      end
-
-      def establish_sql_connection
-        return unless defined?(ApplicationRecord)
-
-        ApplicationRecord.establish_connection(ConsoleKit.configuration.context_class.tenant_shard.to_sym)
-      end
-
-      def establish_mongo_connection
-        return unless defined?(Mongoid)
-
-        mongo_db = ConsoleKit.configuration.context_class.tenant_mongo_db.to_s
-        return if mongo_db.empty?
-
-        Mongoid.override_client(mongo_db)
-      rescue NoMethodError
-        Output.print_warning('Mongoid.override_client is not defined.')
+      def setup_connections(context)
+        ConsoleKit::Connections::ConnectionManager.available_handlers(context).each(&:connect)
       end
 
       def configure_success(key)

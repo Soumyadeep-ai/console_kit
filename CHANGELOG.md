@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.4] - 2025-09-30
+### Added
+- Minor Fixes and Improvements
+
+---
+
 ## [0.1.3] - 2025-08-12
 ### Added
 - `ConsoleKit.current_tenant` method to retrieve the current tenant at runtime.
@@ -50,6 +56,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+[0.1.4]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.1
