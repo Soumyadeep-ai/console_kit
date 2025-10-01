@@ -12,18 +12,18 @@ module ConsoleKit
       CREDENTIALS_FILE = Rails.root.join('.console_credentials.json')
 
       def verify_secure_login_enabled
-        unless ConsoleKit.configuration.secure_login
-          say_status :skipped, 'Secure login is disabled in console_kit.rb. Enable it to use this feature.', :yellow
-          exit
-        end
+        return if ConsoleKit.configuration.secure_login
+
+        say_status :skipped, 'Secure login is disabled in console_kit.rb. Enable it to use this feature.', :yellow
+        exit
       end
 
       def create_credentials_file
         if File.exist?(CREDENTIALS_FILE)
-          say_status :skipped, ".console_credentials.json already exists", :yellow
+          say_status :skipped, '.console_credentials.json already exists', :yellow
         else
           create_default_admin_user
-          say_status :created, ".console_credentials.json created with default admin user", :green
+          say_status :created, '.console_credentials.json created with default admin user', :green
         end
       end
 
@@ -32,11 +32,11 @@ module ConsoleKit
         return unless File.exist?(gitignore_path)
 
         lines = File.read(gitignore_path).split("\n")
-        unless lines.include?('.console_credentials.json')
+        if lines.include?('.console_credentials.json')
+          say_status :skipped, '.console_credentials.json already in .gitignore', :yellow
+        else
           File.open(gitignore_path, 'a') { |f| f.puts "\n.console_credentials.json" }
           say_status :modified, '.gitignore updated to exclude .console_credentials.json', :green
-        else
-          say_status :skipped, '.console_credentials.json already in .gitignore', :yellow
         end
       end
 
@@ -45,17 +45,15 @@ module ConsoleKit
       def create_default_admin_user
         password_digest = BCrypt::Password.create('password@1234')
 
-        admin_user = {
-          username: 'admin',
-          email: 'admin@admin.com',
+        initial_user = {
+          username: 'initial_user',
+          email: 'initial_user@initial_user.com',
           password: password_digest,
-          role: 'admin',
+          role: 'initial_user',
           permissions: {}
         }
 
-        File.open(CREDENTIALS_FILE, 'w') do |f|
-          f.write(JSON.pretty_generate({ 'admin' => admin_user }))
-        end
+        File.write(CREDENTIALS_FILE, JSON.pretty_generate({ 'initial_user' => initial_user }))
       end
     end
   end

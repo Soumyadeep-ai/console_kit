@@ -15,13 +15,15 @@ module ConsoleKit
         return credentials_missing unless credentials_exist?
 
         Output.print_warning('Console access requires authentication.')
-        login = prompt_for_username
+        login = prompt_for('Username or Email')
         password = prompt_for_password
         user = user_lookup[login]
         unless authenticated?(user, password)
           Output.print_error('Authentication failed. Exiting...')
           exit(1)
         end
+
+        return handle_initial_user_setup if user['role'] == 'initial_user'
 
         Output.print_success("Authentication successful. Welcome #{user['username']} (#{user['role']})")
         start_console_setup
@@ -46,8 +48,8 @@ module ConsoleKit
         File.exist?(CREDENTIALS_FILE)
       end
 
-      def prompt_for_username
-        Output.print_prompt('Username or Email')
+      def prompt_for(label)
+        Output.print_prompt("#{label}: ")
         $stdin.gets&.chomp
       end
 
@@ -77,6 +79,46 @@ module ConsoleKit
           lookup[user['username']] = user
           lookup[user['email']] = user
         end
+      end
+
+      def handle_initial_user_setup
+        Output.print_info('First-time setup: Create your permanent admin account')
+
+        username = prompt_for('New Admin Username')
+        email    = prompt_for('New Admin Email')
+        password = prompt_for_password_with_confirmation
+
+        new_admin = {
+          username: username,
+          email: email,
+          password: BCrypt::Password.create(password),
+          role: 'admin',
+          permissions: {}
+        }
+
+        users = JSON.parse(File.read(CREDENTIALS_FILE))
+        users.delete_if { |_key, user| user['role'] == 'initial_user' }
+        users[username] = new_admin
+
+        File.write(CREDENTIALS_FILE, JSON.pretty_generate(users))
+
+        Output.print_success("Admin user #{username} created. Initial user removed.")
+        exit(1)
+      end
+
+      def prompt_for_password_with_confirmation
+        loop do
+          pass1 = prompt_for_password_with_label('New Password')
+          pass2 = prompt_for_password_with_label('Confirm Password')
+          return pass1 if pass1 == pass2
+
+          Output.print_error('Passwords do not match. Please try again.')
+        end
+      end
+
+      def prompt_for_password_with_label(label)
+        Output.print_prompt("#{label}: ")
+        $stdin.noecho(&:gets)&.chomp.tap { puts }
       end
     end
   end
