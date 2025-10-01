@@ -1,10 +1,5 @@
 # frozen_string_literal: true
 
-require 'rails/generators'
-require 'rails/generators/base'
-require 'json'
-require 'bcrypt'
-
 module ConsoleKit
   module Generators
     # Sets up console credentials if secure_login is enabled
@@ -47,7 +42,7 @@ module ConsoleKit
 
         initial_user = {
           username: 'initial_user',
-          email: 'initial_user@initial_user.com',
+          email: '',
           password: password_digest,
           role: 'initial_user',
           permissions: {}

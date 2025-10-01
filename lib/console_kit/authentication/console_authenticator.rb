@@ -28,12 +28,10 @@ module ConsoleKit
           exit(1)
         end
 
-        if user.initial_user?
-          InitialUserSetup.new(store).run
-        else
-          Output.print_success("Authentication successful. Welcome #{user.username} (#{user.role})")
-          ConsoleKit::Setup.setup
-        end
+        return InitialUserSetup.new(store).run if user.initial_user?
+
+        Output.print_success("Authentication successful. Welcome #{user.username} (#{user.role})")
+        ConsoleKit::Setup.setup
       end
 
       private
