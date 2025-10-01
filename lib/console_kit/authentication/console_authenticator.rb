@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'io/console'
-require 'digest'
+require 'bcrypt'
 require 'json'
 require_relative '../output'
 
@@ -11,33 +11,43 @@ module ConsoleKit
       CREDENTIALS_FILE = File.expand_path('.console_credentials.json', Dir.pwd)
 
       def authenticate!
-        unless credentials_exist?
-          Output.print_error("Credentials file not found at #{CREDENTIALS_FILE}")
-          exit(1)
-        end
+        return bypass_authentication unless ConsoleKit.configuration.secure_login
+        return credentials_missing unless credentials_exist?
 
         Output.print_warning('Console access requires authentication.')
-        login = prompt_for('Username or Email')
+        login = prompt_for_username
         password = prompt_for_password
-
         user = user_lookup[login]
-        unless user && valid_password?(user, password)
+        unless authenticated?(user, password)
           Output.print_error('Authentication failed. Exiting...')
           exit(1)
         end
 
         Output.print_success("Authentication successful. Welcome #{user['username']} (#{user['role']})")
-        ConsoleKit::Setup.setup
+        start_console_setup
       end
 
       private
+
+      def bypass_authentication
+        start_console_setup
+      end
+
+      def start_console_setup
+        ConsoleKit::Setup.setup
+      end
+
+      def credentials_missing
+        Output.print_error("Credentials file not found at #{CREDENTIALS_FILE}")
+        exit(1)
+      end
 
       def credentials_exist?
         File.exist?(CREDENTIALS_FILE)
       end
 
-      def prompt_for(label)
-        Output.print_prompt("#{label}: ")
+      def prompt_for_username
+        Output.print_prompt('Username or Email')
         $stdin.gets&.chomp
       end
 
@@ -46,9 +56,15 @@ module ConsoleKit
         $stdin.noecho(&:gets)&.chomp.tap { puts }
       end
 
-      def valid_password?(user, password)
-        hashed_input = Digest::SHA256.hexdigest(password)
-        hashed_input == user['password']
+      def authenticated?(user, password)
+        return false unless user && user['password']
+
+        begin
+          bcrypt_password = BCrypt::Password.new(user['password'])
+          bcrypt_password == password
+        rescue BCrypt::Errors::InvalidHash
+          false
+        end
       end
 
       def user_lookup
@@ -56,8 +72,8 @@ module ConsoleKit
       end
 
       def load_users
-        raw_users = JSON.parse(File.read(CREDENTIALS_FILE))
-        raw_users.each_with_object({}) do |(_key, user), lookup|
+        users = JSON.parse(File.read(CREDENTIALS_FILE))
+        users.each_with_object({}) do |(_key, user), lookup|
           lookup[user['username']] = user
           lookup[user['email']] = user
         end

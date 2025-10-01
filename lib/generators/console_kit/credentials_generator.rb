@@ -3,7 +3,7 @@
 require 'rails/generators'
 require 'rails/generators/base'
 require 'json'
-require 'digest'
+require 'bcrypt'
 
 module ConsoleKit
   module Generators
@@ -43,10 +43,12 @@ module ConsoleKit
       private
 
       def create_default_admin_user
+        password_digest = BCrypt::Password.create('password@1234')
+
         admin_user = {
           username: 'admin',
           email: 'admin@admin.com',
-          password: Digest::SHA256.hexdigest('password@1234'),
+          password: password_digest,
           role: 'admin',
           permissions: {}
         }
