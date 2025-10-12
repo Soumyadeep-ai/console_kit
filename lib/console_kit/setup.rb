@@ -27,6 +27,7 @@ module ConsoleKit
       private
 
       def run_setup
+        return if tenant_setup_successful?
         return Output.print_error('No tenants configured.') if no_tenants?
 
         select_and_configure
