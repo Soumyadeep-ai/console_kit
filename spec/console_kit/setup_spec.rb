@@ -271,6 +271,7 @@ RSpec.describe ConsoleKit::Setup do
   describe '.reset_current_tenant' do
     context 'when no tenants are configured' do
       before do
+        allow($stdin).to receive(:tty?).and_return(true)
         ConsoleKit.configure { |c| c.tenants = nil }
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
@@ -320,6 +321,7 @@ RSpec.describe ConsoleKit::Setup do
     context 'when setup fails during reset' do
       before do
         described_class.current_tenant = 'acme'
+        allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)

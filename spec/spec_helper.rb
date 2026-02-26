@@ -25,4 +25,10 @@ RSpec.configure do |config|
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = true
   end
+
+  config.after do
+    Thread.current[:console_kit_configuration] = nil
+    Thread.current[:console_kit_current_tenant] = nil
+    Thread.current[:console_kit_configuration_success] = nil
+  end
 end
