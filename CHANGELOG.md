@@ -13,10 +13,10 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - **Silent Re-application:** Re-applying tenant configuration (on reload) is now completely silent.
 - **Comprehensive Validation:** Added `validate!` to ensure `tenants` and `context_class` are correctly set before startup.
 - **Thread-Local Safety:** Restored thread-local storage for configuration and current tenant state to ensure isolation in multi-threaded environments.
-- **Enhanced Testing:** Test suite expanded to 261 examples with 100% coverage of new architectural changes.
+- **Enhanced Testing:** Test suite expanded to 260 examples with 100% coverage of new architectural changes.
 
 ### Changed
-- **Architectural Refactor:** Improved dynamic constant resolution to support Rails reloads while maintaining thread isolation.
+- **Architectural Refactor:** Improved dynamic constant resolution to support Rails reloads while maintaining thread isolation. Added support for namespaced class strings (e.g., `MyModule::ApplicationRecord`).
 - **Robust Handler Discovery:** Replaced `descendants` with an explicit registry pattern in `BaseConnectionHandler` to support lazy-loading environments.
 - **Improved Input Handling:** `TenantSelector` now correctly handles EOF (`Ctrl+D`) as an abort signal.
 - **Cleaner API:** Replaced metaprogrammed accessors with explicit, searchable methods.
