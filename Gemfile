@@ -10,8 +10,8 @@ gem 'rake', '~> 13.3'
 
 group :development, :test do
   gem 'reek', '~> 6.5'
-  gem 'rspec', '~> 3.4'
-  gem 'rubocop', '~> 1.81'
+  gem 'rspec', '~> 3.13'
+  gem 'rubocop', '~> 1.85'
   gem 'rubocop-rake'
   gem 'rubocop-rspec'
 end

@@ -222,6 +222,13 @@ RSpec.describe ConsoleKit::Output do
       result = described_class.silence { 'hello' }
       expect(result).to eq('hello')
     end
+
+    it 'is thread-safe' do
+      described_class.silent = false
+      Thread.new { described_class.silence { sleep 0.1 } }
+      sleep 0.05
+      expect(described_class.silent).to be_falsey
+    end
   end
 
   describe 'message building' do
