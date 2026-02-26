@@ -12,20 +12,9 @@ module ConsoleKit
       @sql_base_class = 'ApplicationRecord'
     end
 
-    def pretty_output = @pretty_output
-    def pretty_output=(val)
-      @pretty_output = val
-    end
+    attr_accessor :pretty_output, :tenants, :sql_base_class
 
-    def tenants = @tenants
-    def tenants=(val)
-      @tenants = val
-    end
-
-    def sql_base_class = @sql_base_class
-    def sql_base_class=(val)
-      @sql_base_class = val
-    end
+    attr_writer :context_class
 
     def context_class
       case @context_class
@@ -34,10 +23,6 @@ module ConsoleKit
       else
         @context_class
       end
-    end
-
-    def context_class=(val)
-      @context_class = val
     end
 
     def validate

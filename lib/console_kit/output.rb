@@ -15,10 +15,7 @@ module ConsoleKit
     }.freeze
 
     class << self
-      def silent = @silent
-      def silent=(val)
-        @silent = val
-      end
+      attr_accessor :silent
 
       def silence
         old_silent = @silent
