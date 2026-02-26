@@ -24,11 +24,13 @@ module ConsoleKit
 
       def base_class
         sql_base_class_name.to_s.constantize
+      rescue NameError
+        raise Error, "ConsoleKit: sql_base_class '#{sql_base_class_name}' could not be found."
       end
 
       def base_class_defined?
         klass_name = sql_base_class_name
-        klass_name.present? && Object.const_defined?(klass_name)
+        klass_name.present? && Object.const_defined?(klass_name, false)
       end
 
       def sql_base_class_name

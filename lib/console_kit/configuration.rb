@@ -18,10 +18,8 @@ module ConsoleKit
 
     def context_class
       case @context_class
-      when String, Symbol
-        @context_class.to_s.constantize
-      else
-        @context_class
+      when String, Symbol then resolve_context_class
+      else @context_class
       end
     end
 
@@ -35,6 +33,15 @@ module ConsoleKit
     def validate!
       raise Error, 'ConsoleKit: `tenants` is not configured.' if Array(@tenants).empty?
       raise Error, 'ConsoleKit: `context_class` is not configured.' unless @context_class
+    end
+
+    private
+
+    def resolve_context_class
+      @context_class.to_s.constantize
+    rescue NameError
+      raise Error, "ConsoleKit: context_class '#{@context_class}' could not be found. " \
+                   'Ensure the class is defined before configuration is accessed.'
     end
   end
 end

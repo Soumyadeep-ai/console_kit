@@ -9,24 +9,28 @@ module ConsoleKit
   # Does the initial setup
   module Setup
     class << self
-      attr_reader :current_tenant
+      def current_tenant = Thread.current[:console_kit_current_tenant]
+
+      def current_tenant=(val)
+        Thread.current[:console_kit_current_tenant] = val
+      end
 
       def setup = run_setup
-      def tenant_setup_successful? = !@current_tenant.to_s.empty?
+      def tenant_setup_successful? = !current_tenant.to_s.empty?
 
       def reapply
         return unless tenant_setup_successful?
 
-        Output.silence { TenantConfigurator.configure_tenant(@current_tenant) }
+        Output.silence { TenantConfigurator.configure_tenant(current_tenant) }
       end
 
       def reset_current_tenant
         return warn_no_tenants unless tenants?
 
-        warn_reset if @current_tenant
-        TenantConfigurator.clear if @current_tenant
+        warn_reset if current_tenant
+        TenantConfigurator.clear if current_tenant
 
-        @current_tenant = nil
+        self.current_tenant = nil
         setup
       end
 
@@ -53,7 +57,7 @@ module ConsoleKit
         TenantConfigurator.configure_tenant(key)
         return unless TenantConfigurator.configuration_success
 
-        @current_tenant = key
+        self.current_tenant = key
         Output.print_success("Tenant initialized: #{key}")
       end
 
@@ -66,7 +70,7 @@ module ConsoleKit
       def single_tenant? = tenants.size == 1
       def non_interactive? = !$stdin.tty?
       def warn_no_tenants = Output.print_warning('Cannot reset tenant: No tenants configured.')
-      def warn_reset = Output.print_warning("Resetting tenant: #{@current_tenant}")
+      def warn_reset = Output.print_warning("Resetting tenant: #{current_tenant}")
 
       def handle_error(error)
         Output.print_error("Error setting up tenant: #{error.message}")

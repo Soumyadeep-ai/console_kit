@@ -19,6 +19,9 @@ module Rails
     end
 
     def self.console(&block) = @console_block = block
+    class << self
+      attr_reader :console_block
+    end
   end
 end
 
@@ -32,6 +35,18 @@ RSpec.describe ConsoleKit::Railtie do
 
   it 'inherits from Rails::Railtie' do
     expect(described_class).to be < Rails::Railtie
+  end
+
+  describe 'console hook' do
+    it 'registers a console block' do
+      expect(described_class.console_block).to be_a(Proc)
+    end
+
+    it 'calls Setup.setup when the console block is executed' do
+      allow(ConsoleKit::Setup).to receive(:setup)
+      described_class.console_block.call
+      expect(ConsoleKit::Setup).to have_received(:setup)
+    end
   end
 
   describe 'to_prepare hook' do

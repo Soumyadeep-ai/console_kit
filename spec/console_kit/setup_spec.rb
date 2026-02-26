@@ -43,18 +43,18 @@ RSpec.describe ConsoleKit::Setup do
       config.tenants = tenants
       config.context_class = context_class
     end
-    described_class.instance_variable_set(:@current_tenant, nil)
+    described_class.current_tenant = nil
     allow(ConsoleKit::Output).to receive(:print_success)
   end
 
   describe '.tenant_setup_successful?' do
     it 'returns true if current_tenant is set' do
-      described_class.instance_variable_set(:@current_tenant, 'acme')
+      described_class.current_tenant = 'acme'
       expect(described_class.tenant_setup_successful?).to be true
     end
 
     it 'returns false if current_tenant is nil' do
-      described_class.instance_variable_set(:@current_tenant, nil)
+      described_class.current_tenant = nil
       expect(described_class.tenant_setup_successful?).to be false
     end
   end
@@ -239,7 +239,7 @@ RSpec.describe ConsoleKit::Setup do
   describe '.reapply' do
     context 'when a tenant is already setup' do
       before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
+        described_class.current_tenant = 'acme'
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('acme')
       end
 
@@ -257,7 +257,7 @@ RSpec.describe ConsoleKit::Setup do
 
     context 'when no tenant is setup' do
       before do
-        described_class.instance_variable_set(:@current_tenant, nil)
+        described_class.current_tenant = nil
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
       end
 
@@ -287,7 +287,7 @@ RSpec.describe ConsoleKit::Setup do
 
     context 'when a tenant is already set' do
       before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
+        described_class.current_tenant = 'acme'
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
@@ -319,7 +319,7 @@ RSpec.describe ConsoleKit::Setup do
 
     context 'when setup fails during reset' do
       before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
+        described_class.current_tenant = 'acme'
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
@@ -360,15 +360,15 @@ RSpec.describe ConsoleKit::Setup do
         expect(config.context_class).to eq(klass)
       end
 
-      it 'raises NameError if the string context_class does not exist' do
+      it 'raises ConsoleKit::Error if the string context_class does not exist' do
         config.context_class = 'NonExistentContextClass'
-        expect { config.context_class }.to raise_error(NameError)
+        expect { config.context_class }.to raise_error(ConsoleKit::Error, /could not be found/)
       end
     end
 
     describe '.reapply silence' do
       before do
-        described_class.instance_variable_set(:@current_tenant, 'acme')
+        described_class.current_tenant = 'acme'
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise('Boom')
         allow(ConsoleKit::Output).to receive(:silence).and_call_original
         begin

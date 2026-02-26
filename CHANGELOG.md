@@ -6,23 +6,24 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.2.0] - 2026-03-01
+## [1.0.0] - 2026-03-01
 ### Added
 - **Rails `reload!` support:** `context_class` is now resolved dynamically (using strings/symbols) and automatically reapplied via Rails `to_prepare` hook.
 - **Configurable SQL Base Class:** Added `sql_base_class` to configuration (defaults to `ApplicationRecord`).
 - **Silent Re-application:** Re-applying tenant configuration (on reload) is now completely silent.
 - **Comprehensive Validation:** Added `validate!` to ensure `tenants` and `context_class` are correctly set before startup.
-- **Enhanced Testing:** Test suite expanded to 259 examples with 100% coverage of new architectural changes.
+- **Thread-Local Safety:** Restored thread-local storage for configuration and current tenant state to ensure isolation in multi-threaded environments.
+- **Enhanced Testing:** Test suite expanded to 260 examples with 100% coverage of new architectural changes.
 
 ### Changed
-- **Architectural Refactor:** Moved configuration from `Thread.current` to module-level state for global process consistency.
+- **Architectural Refactor:** Improved dynamic constant resolution to support Rails reloads while maintaining thread isolation.
 - **Robust Handler Discovery:** Replaced `descendants` with an explicit registry pattern in `BaseConnectionHandler` to support lazy-loading environments.
 - **Improved Input Handling:** `TenantSelector` now correctly handles EOF (`Ctrl+D`) as an abort signal.
 - **Cleaner API:** Replaced metaprogrammed accessors with explicit, searchable methods.
 
 ### Fixed
 - Fixed a bug where `context_class` state was lost after code reloads in the console.
-- Fixed potential race conditions and inconsistencies in multi-threaded environments.
+- Fixed potential race conditions by restoring thread-local storage.
 - Resolved all RuboCop and Reek code quality warnings.
 
 ---
@@ -83,7 +84,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-[0.2.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.2.0
+[1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.3

@@ -7,7 +7,11 @@ module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
     class << self
-      attr_reader :configuration_success
+      def configuration_success = Thread.current[:console_kit_configuration_success]
+
+      def configuration_success=(val)
+        Thread.current[:console_kit_configuration_success] = val
+      end
 
       def configure_tenant(key)
         constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
@@ -19,7 +23,7 @@ module ConsoleKit
       end
 
       def clear
-        @configuration_success = false
+        self.configuration_success = false
         ctx = ConsoleKit.configuration.context_class
         return unless ctx
 
@@ -41,7 +45,7 @@ module ConsoleKit
       end
 
       def missing_config_error(key)
-        @configuration_success = false
+        self.configuration_success = false
         Output.print_error("No configuration found for tenant: #{key}")
       end
 
@@ -79,11 +83,11 @@ module ConsoleKit
 
       def configure_success(key)
         Output.print_success("Tenant set to: #{key}")
-        @configuration_success = true
+        self.configuration_success = true
       end
 
       def handle_error(error, key)
-        @configuration_success = false
+        self.configuration_success = false
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
       end
