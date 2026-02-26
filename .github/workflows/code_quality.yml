@@ -71,15 +71,14 @@ jobs:
       - name: Generate comment body
         id: generate_comment
         run: |
-          body="✅ **Code Quality Check Summary**
+          if [ "${{ steps.rubocop.outputs.total_offenses }}" -gt 0 ]; then
+            cat <<EOF > comment_body.md
+          ✅ **Code Quality Check Summary**
 
           ### 🔍 Test Cases
           | **Success** | **Failure** |
           | :---------: | :---------: |
-          | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |"
-
-          if [ "${{ steps.rubocop.outputs.total_offenses }}" -gt 0 ]; then
-            body="$body
+          | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |
 
           ### 🧹 Linter
           - ${{ steps.rubocop.outputs.summary }}
@@ -91,17 +90,27 @@ jobs:
             \`\`\`
           ${{ steps.rubocop.outputs.top_offenders }}
           \`\`\`
-          </details>"
+          </details>
+          EOF
           else
-            body="$body
+            cat <<EOF > comment_body.md
+          ✅ **Code Quality Check Summary**
+
+          ### 🔍 Test Cases
+          | **Success** | **Failure** |
+          | :---------: | :---------: |
+          | ${{ steps.rspec.outputs.passed }} | ${{ steps.rspec.outputs.failed }} |
 
           ### 🧹 Linter
-          - ${{ steps.rubocop.outputs.summary }}"
+          - ${{ steps.rubocop.outputs.summary }}
+          EOF
           fi
 
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$body" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "body<<EOF"
+            cat comment_body.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       ########################################
       # Post a PR comment with all summaries
