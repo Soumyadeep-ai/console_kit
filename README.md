@@ -3,7 +3,7 @@
 ![Gem Version](https://img.shields.io/gem/v/console_kit.svg)
 ![Gem Downloads](https://img.shields.io/gem/dt/console_kit.svg)
 ![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/release.yml/badge.svg)
-![License](https://img.shields.io/github/license/Soumyadeep-ai/console_kit)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Ruby](https://img.shields.io/badge/ruby-%3E=3.1.0-red)
 
 A simple and flexible multi-tenant console setup toolkit for Rails applications.
@@ -81,7 +81,7 @@ ConsoleKit.reset_current_tenant
 # => nil
 ```
 
-### Manually Disable Pretty Output
+### Manually Enable Pretty Output
 ```ruby
 ConsoleKit.enable_pretty_output
 ```
