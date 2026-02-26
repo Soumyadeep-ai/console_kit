@@ -307,15 +307,13 @@ RSpec.describe ConsoleKit::Setup do
         expect(described_class.current_tenant).to eq('globex')
       end
 
+      # rubocop:disable RSpec/MultipleExpectations, RSpec/MessageSpies
       it 'clears the old tenant configuration before setting the new one' do
+        expect(ConsoleKit::TenantConfigurator).to receive(:clear).ordered
+        expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex').ordered
         described_class.reset_current_tenant
-        expect(ConsoleKit::TenantConfigurator).to have_received(:clear).ordered
       end
-
-      it 'configures the new tenant after clearing' do
-        described_class.reset_current_tenant
-        expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('globex').ordered
-      end
+      # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
     end
 
     context 'when setup fails during reset' do

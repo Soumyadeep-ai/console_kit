@@ -2,49 +2,53 @@
 
 require 'spec_helper'
 
-# Define Rails mock globally for this spec
-module Rails
-  # Mock Railtie for testing
-  class Railtie
-    def self.config
-      @config ||= begin
-        c = Class.new do
-          attr_accessor :to_prepare_blocks
+RSpec.describe 'ConsoleKit::Railtie' do
+  before do
+    # Mock Rails and Railtie
+    stub_const('Rails', Module.new)
+    stub_const('Rails::Railtie', Class.new do
+      def self.config
+        @config ||= begin
+          c = Class.new do
+            attr_accessor :to_prepare_blocks
 
-          def initialize = @to_prepare_blocks = []
-          def to_prepare(&block) = @to_prepare_blocks << block
+            def initialize = @to_prepare_blocks = []
+            def to_prepare(&block) = @to_prepare_blocks << block
+          end
+          c.new
         end
-        c.new
       end
-    end
 
-    def self.console(&block) = @console_block = block
-    class << self
-      attr_reader :console_block
-    end
+      def self.console(&block)
+        @console_block = block
+      end
+
+      class << self
+        attr_reader :console_block
+      end
+    end)
+
+    # Use stub_const to manage ConsoleKit::Railtie
+    stub_const('ConsoleKit::Railtie', Class.new(Rails::Railtie))
+    load File.expand_path('../../lib/console_kit/railtie.rb', __dir__)
   end
-end
 
-# Load the railtie
-require_relative '../../lib/console_kit/railtie'
-
-RSpec.describe ConsoleKit::Railtie do
   it 'defines Railtie' do
-    expect(defined?(described_class)).to be_truthy
+    expect(defined?(ConsoleKit::Railtie)).to be_truthy
   end
 
   it 'inherits from Rails::Railtie' do
-    expect(described_class).to be < Rails::Railtie
+    expect(ConsoleKit::Railtie).to be < Rails::Railtie
   end
 
   describe 'console hook' do
     it 'registers a console block' do
-      expect(described_class.console_block).to be_a(Proc)
+      expect(ConsoleKit::Railtie.console_block).to be_a(Proc)
     end
 
     it 'calls Setup.setup when the console block is executed' do
       allow(ConsoleKit::Setup).to receive(:setup)
-      described_class.console_block.call
+      ConsoleKit::Railtie.console_block.call
       expect(ConsoleKit::Setup).to have_received(:setup)
     end
   end
@@ -55,7 +59,7 @@ RSpec.describe ConsoleKit::Railtie do
       allow(ConsoleKit::Setup).to receive(:reapply)
 
       # Manually trigger the to_prepare blocks
-      described_class.config.to_prepare_blocks.each(&:call)
+      ConsoleKit::Railtie.config.to_prepare_blocks.each(&:call)
 
       expect(ConsoleKit::Setup).to have_received(:reapply)
     end
@@ -64,7 +68,7 @@ RSpec.describe ConsoleKit::Railtie do
       hide_const('Rails::Console')
       allow(ConsoleKit::Setup).to receive(:reapply)
 
-      described_class.config.to_prepare_blocks.each(&:call)
+      ConsoleKit::Railtie.config.to_prepare_blocks.each(&:call)
 
       expect(ConsoleKit::Setup).not_to have_received(:reapply)
     end
