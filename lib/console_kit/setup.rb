@@ -14,6 +14,12 @@ module ConsoleKit
       def setup = run_setup
       def tenant_setup_successful? = !@current_tenant.to_s.empty?
 
+      def reapply
+        return unless tenant_setup_successful?
+
+        Output.silence { TenantConfigurator.configure_tenant(@current_tenant) }
+      end
+
       def reset_current_tenant
         return warn_no_tenants unless tenants?
 
@@ -28,7 +34,8 @@ module ConsoleKit
 
       def run_setup
         return if tenant_setup_successful?
-        return Output.print_error('No tenants configured.') if no_tenants?
+
+        ConsoleKit.configuration.validate!
 
         select_and_configure
       rescue StandardError => e

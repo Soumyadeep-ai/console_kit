@@ -94,18 +94,12 @@ RSpec.describe ConsoleKit do
   end
 
   describe 'thread safety' do
-    before { described_class.tenants = ['main'] }
-
-    it 'allows a thread to set its own tenants value' do
-      thread = Thread.new do
+    it 'shares configuration across threads' do
+      described_class.tenants = ['main']
+      Thread.new do
         described_class.tenants = ['thread']
-        expect(described_class.tenants).to eq(['thread'])
-      end
-      thread.join
-    end
-
-    it 'does not affect the main thread tenants value' do
-      expect(described_class.tenants).to eq(['main'])
+      end.join
+      expect(described_class.tenants).to eq(['thread'])
     end
   end
 

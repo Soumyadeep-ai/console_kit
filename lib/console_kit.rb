@@ -13,12 +13,25 @@ module ConsoleKit
   class << self
     def configure = yield(configuration)
 
-    def configuration = Thread.current[:console_kit_configuration] ||= Configuration.new
-    def reset_configuration! = Thread.current[:console_kit_configuration] = nil
+    def configuration = @configuration ||= Configuration.new
+    def reset_configuration! = @configuration = nil
 
-    %i[pretty_output tenants context_class].each do |name|
-      define_method(name) { configuration.public_send(name) }
-      define_method("#{name}=") { |val| configuration.public_send("#{name}=", val) }
+    def pretty_output = configuration.pretty_output
+
+    def pretty_output=(val)
+      configuration.pretty_output = val
+    end
+
+    def tenants = configuration.tenants
+
+    def tenants=(val)
+      configuration.tenants = val
+    end
+
+    def context_class = configuration.context_class
+
+    def context_class=(val)
+      configuration.context_class = val
     end
 
     def current_tenant = Setup.current_tenant

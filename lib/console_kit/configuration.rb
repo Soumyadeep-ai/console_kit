@@ -1,18 +1,55 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/string/inflections'
+
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
-    attr_reader :pretty_output, :tenants, :context_class
-
-    def initialize(tenants: nil, context_class: nil)
+    def initialize
       @pretty_output = true
-      @tenants = tenants
-      @context_class = context_class
+      @tenants = nil
+      @context_class = nil
+      @sql_base_class = 'ApplicationRecord'
     end
 
-    %i[pretty_output tenants context_class].each do |attr|
-      define_method("#{attr}=") { |value| instance_variable_set("@#{attr}", value) }
+    def pretty_output = @pretty_output
+    def pretty_output=(val)
+      @pretty_output = val
+    end
+
+    def tenants = @tenants
+    def tenants=(val)
+      @tenants = val
+    end
+
+    def sql_base_class = @sql_base_class
+    def sql_base_class=(val)
+      @sql_base_class = val
+    end
+
+    def context_class
+      case @context_class
+      when String, Symbol
+        @context_class.to_s.constantize
+      else
+        @context_class
+      end
+    end
+
+    def context_class=(val)
+      @context_class = val
+    end
+
+    def validate
+      validate!
+      true
+    rescue Error
+      false
+    end
+
+    def validate!
+      raise Error, 'ConsoleKit: `tenants` is not configured.' if Array(@tenants).empty?
+      raise Error, 'ConsoleKit: `context_class` is not configured.' unless @context_class
     end
   end
 end

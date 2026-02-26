@@ -26,6 +26,11 @@ RSpec.describe ConsoleKit::TenantSelector do
         expect(described_class.select).to be_nil
       end
 
+      it 'returns nil and aborts if input is nil (EOF)' do
+        allow($stdin).to receive(:gets).and_return(nil)
+        expect(described_class.select).to be_nil
+      end
+
       it 'defaults to "1" if input is empty' do
         allow($stdin).to receive(:gets).and_return("\n")
         expect(described_class.select).to eq('alpha')

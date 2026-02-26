@@ -14,11 +14,30 @@ module ConsoleKit
       def connect
         return if tenant_shard.blank?
 
-        Output.print_info("Establishing SQL connection to shard: #{tenant_shard}")
-        ApplicationRecord.establish_connection(tenant_shard.to_sym)
+        Output.print_info("Establishing SQL connection to shard: #{tenant_shard} via #{base_class}")
+        base_class.establish_connection(tenant_shard.to_sym)
       end
 
-      def available? = defined?(ApplicationRecord)
+      def available? = base_class_defined?
+
+      private
+
+      def base_class
+        sql_base_class_name.to_s.constantize
+      end
+
+      def base_class_defined?
+        klass_name = sql_base_class_name
+        klass_name.present? && Object.const_defined?(klass_name)
+      end
+
+      def sql_base_class_name
+        current_config.sql_base_class
+      end
+
+      def current_config
+        ConsoleKit.configuration
+      end
     end
   end
 end

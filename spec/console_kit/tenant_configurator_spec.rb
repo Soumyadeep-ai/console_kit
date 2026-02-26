@@ -202,5 +202,46 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       expect { described_class.clear }.not_to raise_error
       described_class.clear
     end
+
+    context 'when context_class is not set' do
+      before { allow(ConsoleKit.configuration).to receive(:context_class).and_return(nil) }
+
+      it 'does not raise error' do
+        expect { described_class.clear }.not_to raise_error
+      end
+    end
+  end
+
+  describe '.validate_constants!' do
+    it 'raises error if any required constant is missing' do
+      constants = { mongo_db: 'db' } # missing shard, partner_code
+      expect { described_class.send(:validate_constants!, constants) }
+        .to raise_error(ConsoleKit::Error, /missing keys: shard, partner_code/)
+    end
+
+    it 'does not raise error if all required constants are present' do
+      constants = { shard: 'shard', mongo_db: 'db', partner_code: 'code' }
+      expect { described_class.send(:validate_constants!, constants) }.not_to raise_error
+    end
+  end
+
+  describe '.validate_context_interface!' do
+    let(:valid_ctx) do
+      Class.new do
+        def self.tenant_shard=(_val); end
+        def self.tenant_mongo_db=(_val); end
+        def self.partner_identifier=(_val); end
+      end
+    end
+
+    it 'raises error if context class is missing required setters' do
+      invalid_ctx = Class.new # No setters
+      expect { described_class.send(:validate_context_interface!, invalid_ctx) }
+        .to raise_error(ConsoleKit::Error, /does not implement the required interface/i)
+    end
+
+    it 'does not raise error if context class has all required setters' do
+      expect { described_class.send(:validate_context_interface!, valid_ctx) }.not_to raise_error
+    end
   end
 end

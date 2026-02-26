@@ -15,8 +15,23 @@ module ConsoleKit
     }.freeze
 
     class << self
+      def silent = @silent
+      def silent=(val)
+        @silent = val
+      end
+
+      def silence
+        old_silent = @silent
+        @silent = true
+        yield
+      ensure
+        @silent = old_silent
+      end
+
       TYPES.each_key do |type|
         define_method("print_#{type}") do |text, timestamp: false|
+          return if @silent
+
           formatted = (type == :header ? "\n=== #{text} ===" : text)
           print_with(type, formatted, timestamp)
         end
@@ -24,6 +39,8 @@ module ConsoleKit
 
       # Backtrace prints always with timestamp, no param
       def print_backtrace(exception)
+        return if @silent
+
         exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true) }
       end
 

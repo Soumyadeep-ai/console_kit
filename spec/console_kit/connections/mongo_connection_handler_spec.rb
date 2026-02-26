@@ -61,5 +61,16 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     it 'returns true when Mongoid is defined' do
       expect(handler).to be_available
     end
+
+    it 'returns false when Mongoid is not defined' do
+      hide_const('Mongoid')
+      expect(handler).not_to be_available
+    end
+  end
+
+  describe 'delegation' do
+    it 'delegates tenant_mongo_db to context' do
+      expect(handler.tenant_mongo_db).to eq('mongo_foo')
+    end
   end
 end

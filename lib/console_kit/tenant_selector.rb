@@ -19,7 +19,13 @@ module ConsoleKit
         return nil if retries_left.zero?
 
         print_tenant_selection_menu
+        process_selection(retries_left)
+      end
+
+      def process_selection(retries_left)
         selection = parse_user_selection
+        return nil if selection == :abort
+
         selection ? resolve_selection(selection) : attempt_selection(retries_left - 1)
       end
 
@@ -30,15 +36,20 @@ module ConsoleKit
         ConsoleKit.tenants.keys.each_with_index do |key, index|
           Output.print_info("  #{index + 1}. #{key} (partner: #{tenant_partner(key)})")
         end
+        Output.print_info(' (Ctrl+D to abort and load without tenant)')
       end
 
       def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'
 
       def parse_user_selection
         input = read_input_with_default
+        return :abort if input == :abort
         return handle_invalid_input('Invalid input. Please enter a number.') unless valid_integer?(input)
 
-        index = input.to_i
+        validate_index_range(input.to_i)
+      end
+
+      def validate_index_range(index)
         unless valid_selection_index?(index)
           return handle_invalid_input("Selection must be between 0 and #{max_index}.")
         end
@@ -47,11 +58,16 @@ module ConsoleKit
       end
 
       def read_input_with_default
-        prompt_message = "\nEnter the number of the tenant you want " \
-                         "(or press Enter for default '#{DEFAULT_SELECTION}'): "
-        Output.print_prompt(prompt_message)
-        input = $stdin.gets&.chomp&.strip
-        input.to_s.empty? ? DEFAULT_SELECTION : input
+        Output.print_prompt("\nEnter the number of the tenant you want " \
+                            "(or press Enter for default '#{DEFAULT_SELECTION}'): ")
+
+        raw_input = $stdin.gets
+        raw_input ? normalize_input(raw_input) : :abort
+      end
+
+      def normalize_input(raw_input)
+        input = raw_input.chomp.strip
+        input.empty? ? DEFAULT_SELECTION : input
       end
 
       def handle_invalid_input(message) = Output.print_warning(message).then { nil }

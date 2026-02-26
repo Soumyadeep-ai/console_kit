@@ -42,5 +42,20 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     it 'excludes unavailable handlers' do
       expect(handlers.map(&:class)).not_to include(DummyHandlerB)
     end
+
+    it 'passes the context to initialized handlers' do
+      expect(handlers.first.context).to eq(context)
+    end
+
+    it 'returns an empty array if no handlers are available' do
+      allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([DummyHandlerB])
+      expect(described_class.available_handlers(context)).to be_empty
+    end
+  end
+
+  describe '.handler_classes' do
+    it 'returns the classes from the BaseConnectionHandler registry' do
+      expect(described_class.send(:handler_classes)).to eq(ConsoleKit::Connections::BaseConnectionHandler.registry)
+    end
   end
 end

@@ -17,7 +17,7 @@ module ConsoleKit
 
         private
 
-        def handler_classes = BaseConnectionHandler.descendants
+        def handler_classes = BaseConnectionHandler.registry
       end
     end
   end

@@ -20,17 +20,24 @@ module ConsoleKit
 
       def clear
         @configuration_success = false
-        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
-          ConsoleKit.configuration.context_class.public_send("#{attr}=", nil)
-        end
+        ctx = ConsoleKit.configuration.context_class
+        return unless ctx
+
+        reset_context_attributes(ctx)
         Output.print_info('Tenant context has been cleared.')
       end
 
       private
 
+      def reset_context_attributes(ctx)
+        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+          ctx.public_send("#{attr}=", nil)
+        end
+      end
+
       def validate_constants!(constants)
         missing = %i[shard partner_code] - constants.keys
-        raise "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
+        raise Error, "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
       end
 
       def missing_config_error(key)
@@ -44,13 +51,26 @@ module ConsoleKit
         configure_success(key)
       end
 
+      def validate_context_interface!(ctx)
+        missing = %i[tenant_shard= tenant_mongo_db= partner_identifier=].reject { |s| ctx.respond_to?(s) }
+        return if missing.empty?
+
+        raise Error, "Context class #{ctx} does not implement the required interface. " \
+                     "Missing setters: #{missing.join(', ')}"
+      end
+
       def apply_context(constant)
         ctx = ConsoleKit.configuration.context_class
+        validate_context_interface!(ctx)
+
+        assign_context_attributes(ctx, constant)
+        setup_connections(ctx)
+      end
+
+      def assign_context_attributes(ctx, constant)
         ctx.tenant_shard = constant[:shard]
         ctx.tenant_mongo_db = constant[:mongo_db]
         ctx.partner_identifier = constant[:partner_code]
-
-        setup_connections(ctx)
       end
 
       def setup_connections(context)
