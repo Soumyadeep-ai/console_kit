@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.2.0] - 2026-02-27
+## [0.2.0] - 2026-03-01
 ### Added
 - **Rails `reload!` support:** `context_class` is now resolved dynamically (using strings/symbols) and automatically reapplied via Rails `to_prepare` hook.
 - **Configurable SQL Base Class:** Added `sql_base_class` to configuration (defaults to `ApplicationRecord`).
