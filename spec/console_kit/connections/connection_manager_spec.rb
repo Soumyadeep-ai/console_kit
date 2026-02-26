@@ -2,30 +2,34 @@
 
 require 'spec_helper'
 
-# Dummy context class to use with verifying double
-class DummyContext
-  def tenant_shard; end
-  def tenant_mongo_db; end
-end
-
-# Dummy handler classes outside `before` block to avoid leaky constant issues
-class DummyHandlerA < ConsoleKit::Connections::BaseConnectionHandler
-  def connect; end
-  def available? = true
-end
-
-# Dummy handler classes outside `before` block to avoid leaky constant issues
-class DummyHandlerB < ConsoleKit::Connections::BaseConnectionHandler
-  def connect; end
-  def available? = false
-end
-
 RSpec.describe ConsoleKit::Connections::ConnectionManager do
-  let(:context) { instance_double(DummyContext) }
+  let(:dummy_context_class) do
+    Class.new do
+      def tenant_shard; end
+      def tenant_mongo_db; end
+    end
+  end
+
+  let(:dummy_handler_a) do
+    Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+      def connect; end
+      def available? = true
+    end
+  end
+
+  let(:dummy_handler_b) do
+    Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+      def connect; end
+      def available? = false
+    end
+  end
+
+  let(:context) { instance_double(dummy_context_class) }
 
   before do
-    stub_const('ConsoleKit::Connections::DummyHandlerA', DummyHandlerA)
-    stub_const('ConsoleKit::Connections::DummyHandlerB', DummyHandlerB)
+    stub_const('DummyContext', dummy_context_class)
+    stub_const('ConsoleKit::Connections::DummyHandlerA', dummy_handler_a)
+    stub_const('ConsoleKit::Connections::DummyHandlerB', dummy_handler_b)
   end
 
   describe '.available_handlers' do
@@ -36,11 +40,11 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     end
 
     it 'includes available handlers' do
-      expect(handlers.map(&:class)).to include(DummyHandlerA)
+      expect(handlers.map(&:class)).to include(dummy_handler_a)
     end
 
     it 'excludes unavailable handlers' do
-      expect(handlers.map(&:class)).not_to include(DummyHandlerB)
+      expect(handlers.map(&:class)).not_to include(dummy_handler_b)
     end
 
     it 'passes the context to initialized handlers' do
@@ -48,7 +52,7 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     end
 
     it 'returns an empty array if no handlers are available' do
-      allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([DummyHandlerB])
+      allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([dummy_handler_b])
       expect(described_class.available_handlers(context)).to be_empty
     end
   end
