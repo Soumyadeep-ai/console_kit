@@ -96,6 +96,32 @@ RSpec.describe ConsoleKit::Setup do
       end
     end
 
+    context 'when tenant selection is none or aborted' do
+      before do
+        allow($stdin).to receive(:tty?).and_return(true)
+        allow(ConsoleKit::Output).to receive(:print_info)
+        allow(Kernel).to receive(:exit)
+      end
+
+      it 'calls Kernel.exit if tenant selection returns :exit' do
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:exit)
+        described_class.setup
+        expect(Kernel).to have_received(:exit)
+      end
+
+      it 'prints info if tenant selection returns :none' do
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:none)
+        described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_info).with(/No tenant selected/)
+      end
+
+      it 'prints info if tenant selection returns :abort' do
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:abort)
+        described_class.setup
+        expect(ConsoleKit::Output).to have_received(:print_info).with(/No tenant selected/)
+      end
+    end
+
     context 'when tenant selection fails' do
       before do
         allow($stdin).to receive(:tty?).and_return(true)
@@ -105,7 +131,7 @@ RSpec.describe ConsoleKit::Setup do
       it 'prints error if tenant selection returns nil' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
         described_class.setup
-        expect(ConsoleKit::Output).to have_received(:print_error).with(/No tenant selected/)
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/Tenant selection failed/)
       end
 
       it 'prints error if tenant selection returns empty string' do
@@ -316,22 +342,22 @@ RSpec.describe ConsoleKit::Setup do
       # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
     end
 
-    context 'when setup fails during reset' do
+    context 'when setup fails or none selected during reset' do
       before do
         described_class.current_tenant = 'acme'
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:none)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
-        allow(ConsoleKit::Output).to receive(:print_error)
+        allow(ConsoleKit::Output).to receive(:print_info)
       end
 
-      it 'clears current_tenant when selection returns nil' do
+      it 'clears current_tenant when selection returns :none' do
         described_class.reset_current_tenant
         expect(described_class.current_tenant).to be_nil
       end
 
-      it 'returns nil if tenant selection returns nil' do
+      it 'returns nil if tenant selection returns :none' do
         result = described_class.reset_current_tenant
         expect(result).to be_nil
       end

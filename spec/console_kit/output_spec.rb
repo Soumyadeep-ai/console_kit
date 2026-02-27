@@ -105,17 +105,17 @@ RSpec.describe ConsoleKit::Output do
     before { allow(Time).to receive(:current).and_return(now) }
 
     it 'includes timestamp when enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('[2025-08-12 15:45:12]')
     end
 
     it 'includes ConsoleKit tag when timestamp is enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('[ConsoleKit]')
     end
 
     it 'includes message when timestamp is enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('Timed')
     end
   end

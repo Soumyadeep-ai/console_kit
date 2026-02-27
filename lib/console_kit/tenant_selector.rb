@@ -24,19 +24,26 @@ module ConsoleKit
 
       def process_selection(retries_left)
         selection = parse_user_selection
-        return nil if selection == :abort
+        return :abort if selection == :abort
 
-        selection ? resolve_selection(selection) : attempt_selection(retries_left - 1)
+        if selection
+          selection.is_a?(Integer) ? resolve_selection(selection) : selection
+        else
+          attempt_selection(retries_left - 1)
+        end
       end
 
       def print_tenant_selection_menu
         Output.print_header('Multiple tenants detected. Please choose one:')
-        Output.print_info('  0. Load without tenant (no tenant configuration)')
-
+        
+        items = []
+        items << '0. Skip (load without tenant configuration)'
+        
         ConsoleKit.tenants.keys.each_with_index do |key, index|
-          Output.print_info("  #{index + 1}. #{key} (partner: #{tenant_partner(key)})")
+          items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
         end
-        Output.print_info(' (Ctrl+D to abort and load without tenant)')
+        
+        Output.print_list(items)
       end
 
       def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'
@@ -44,9 +51,20 @@ module ConsoleKit
       def parse_user_selection
         input = read_input_with_default
         return :abort if input == :abort
-        return handle_invalid_input('Invalid input. Please enter a number.') unless valid_integer?(input)
+        return :exit if %w[exit quit].include?(input.downcase)
+        
+        if valid_integer?(input)
+          validate_index_range(input.to_i)
+        else
+          find_tenant_by_name(input)
+        end
+      end
 
-        validate_index_range(input.to_i)
+      def find_tenant_by_name(input)
+        match = ConsoleKit.tenants.keys.find { |k| k.to_s.casecmp(input).zero? }
+        return match if match
+
+        handle_invalid_input("Invalid selection: '#{input}'. Please enter a number or tenant name.")
       end
 
       def validate_index_range(index)
@@ -58,8 +76,7 @@ module ConsoleKit
       end
 
       def read_input_with_default
-        Output.print_prompt("\nEnter the number of the tenant you want " \
-                            "(or press Enter for default '#{DEFAULT_SELECTION}'): ")
+        Output.print_prompt("Selection (number or name) [#{DEFAULT_SELECTION}]: ")
 
         raw_input = $stdin.gets
         raw_input ? normalize_input(raw_input) : :abort
@@ -76,7 +93,7 @@ module ConsoleKit
       def valid_selection_index?(index) = index.between?(0, max_index)
 
       def resolve_selection(index)
-        return nil if index.zero?
+        return :none if index.zero?
 
         ConsoleKit.tenants.keys[index - 1]
       end

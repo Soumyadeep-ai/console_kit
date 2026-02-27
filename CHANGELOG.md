@@ -83,6 +83,16 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ---
 
 ## [Unreleased]
+### Added
+- **Name-based selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
+- **Session Termination:** Support for `exit` or `quit` commands at the selection prompt to immediately terminate the console session.
+- **Enhanced Output API:** Added `Output.print_list` and `Output.print_raw` for cleaner, less repetitive terminal output.
+- **Skip Option:** Added an explicit "Skip" option (0) to load without tenant configuration.
+
+### Changed
+- **Improved UX:** Redesigned the tenant selection menu for better readability, removing the redundant `[ConsoleKit]` prefix from list items.
+- **Interactive Prompts:** Selection prompts now keep the cursor on the same line for a more natural CLI experience.
+- **Refined Messaging:** Differentiated between intentional "Skip/Abort" actions and actual selection failures.
 
 [1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5
