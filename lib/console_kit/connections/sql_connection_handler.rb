@@ -33,13 +33,8 @@ module ConsoleKit
         sql_base_class_name.present? && !sql_base_class_name.to_s.safe_constantize.nil?
       end
 
-      def sql_base_class_name
-        current_config.sql_base_class
-      end
-
-      def current_config
-        ConsoleKit.configuration
-      end
+      def sql_base_class_name = current_config.sql_base_class
+      def current_config = ConsoleKit.configuration
     end
   end
 end

@@ -5,16 +5,15 @@ require 'active_support/core_ext/string/inflections'
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
+    attr_accessor :pretty_output, :tenants, :sql_base_class
+    attr_writer :context_class
+
     def initialize
       @pretty_output = true
       @tenants = nil
       @context_class = nil
       @sql_base_class = 'ApplicationRecord'
     end
-
-    attr_accessor :pretty_output, :tenants, :sql_base_class
-
-    attr_writer :context_class
 
     def context_class
       case @context_class

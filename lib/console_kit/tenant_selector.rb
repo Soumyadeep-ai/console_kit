@@ -9,9 +9,7 @@ module ConsoleKit
     DEFAULT_SELECTION = '1'
 
     class << self
-      def select
-        attempt_selection(RETRY_LIMIT)
-      end
+      def select = attempt_selection(RETRY_LIMIT)
 
       private
 
@@ -25,12 +23,9 @@ module ConsoleKit
       def process_selection(retries_left)
         selection = parse_user_selection
         return :abort if selection == :abort
+        return attempt_selection(retries_left - 1) unless selection
 
-        if selection
-          selection.is_a?(Integer) ? resolve_selection(selection) : selection
-        else
-          attempt_selection(retries_left - 1)
-        end
+        selection.is_a?(Integer) ? resolve_selection(selection) : selection
       end
 
       def print_tenant_selection_menu
@@ -52,12 +47,9 @@ module ConsoleKit
         input = read_input_with_default
         return :abort if input == :abort
         return :exit if %w[exit quit].include?(input.downcase)
+        return find_tenant_by_name(input) unless valid_integer?(input)
 
-        if valid_integer?(input)
-          validate_index_range(input.to_i)
-        else
-          find_tenant_by_name(input)
-        end
+        validate_index_range(input.to_i)
       end
 
       def find_tenant_by_name(input)

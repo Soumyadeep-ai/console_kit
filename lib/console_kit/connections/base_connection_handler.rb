@@ -18,11 +18,7 @@ module ConsoleKit
       attr_reader :context
 
       def initialize(context) = @context = context
-
-      def connect
-        raise NotImplementedError, "#{self.class} must implement #connect"
-      end
-
+      def connect = raise NotImplementedError, "#{self.class} must implement #connect"
       def available? = false
     end
   end
