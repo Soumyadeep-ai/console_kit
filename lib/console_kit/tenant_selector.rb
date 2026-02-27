@@ -35,14 +35,14 @@ module ConsoleKit
 
       def print_tenant_selection_menu
         Output.print_header('Multiple tenants detected. Please choose one:')
-        
+
         items = []
         items << '0. Skip (load without tenant configuration)'
-        
+
         ConsoleKit.tenants.keys.each_with_index do |key, index|
           items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
         end
-        
+
         Output.print_list(items)
       end
 
@@ -52,7 +52,7 @@ module ConsoleKit
         input = read_input_with_default
         return :abort if input == :abort
         return :exit if %w[exit quit].include?(input.downcase)
-        
+
         if valid_integer?(input)
           validate_index_range(input.to_i)
         else
