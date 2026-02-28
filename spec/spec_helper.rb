@@ -27,8 +27,7 @@ RSpec.configure do |config|
   end
 
   config.after do
-    Thread.current[:console_kit_configuration] = nil
-    Thread.current[:console_kit_current_tenant] = nil
-    Thread.current[:console_kit_configuration_success] = nil
+    ConsoleKit.reset_configuration!
+    Thread.current[:console_kit_silent] = nil
   end
 end

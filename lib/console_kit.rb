@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/object/blank'
+require 'active_support/core_ext/object/inclusion'
+require 'active_support/core_ext/string/inflections'
+
 require_relative 'console_kit/version'
 require_relative 'console_kit/configuration'
 require_relative 'console_kit/setup'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
-# Main module for console kit
+# Main module for ConsoleKit
 module ConsoleKit
   # Base error class for ConsoleKit-related exceptions.
   class Error < StandardError; end
@@ -13,7 +17,12 @@ module ConsoleKit
   class << self
     def configure = yield(configuration)
     def configuration = @configuration ||= Configuration.new
-    def reset_configuration! = @configuration = nil
+
+    def reset_configuration!
+      @configuration = nil
+      Setup.current_tenant = nil
+      TenantConfigurator.configuration_success = false
+    end
     def pretty_output = configuration.pretty_output
 
     def pretty_output=(val)

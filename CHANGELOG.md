@@ -8,7 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] - 2026-03-01
 ### Added
-- **Persistent Session State:** Tenant selection and configuration now persist across the entire console session, including across multiple threads.
+- **Global Configuration Persistence:** ConsoleKit settings now persist across the entire session and across multiple threads.
+- **Isolated Tenant Selection:** Each thread maintains its own tenant selection for safety, while sharing the global configuration.
 - **Seamless Rails Reloading:** Full support for Rails `reload!`; your selected tenant and context are now automatically preserved after code reloads.
 - **Reliable Tenant Switching:** Switching or clearing tenants now correctly resets all database connections (SQL and MongoDB) to their default state.
 - **Flexible Tenant Selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.

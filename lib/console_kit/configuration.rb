@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'active_support/core_ext/string/inflections'
-
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration

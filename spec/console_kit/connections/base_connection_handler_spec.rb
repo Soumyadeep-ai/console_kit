@@ -48,16 +48,15 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
 
   describe 'subclassing behavior' do
     it 'registers subclasses automatically upon definition' do
-      new_handler = Class.new(described_class)
-      expect(described_class.registry).to include(new_handler)
+      stub_const('MyNewHandler', Class.new(described_class))
+      expect(described_class.registry).to include(MyNewHandler)
     end
 
-    it 'preserves the order of registration' do
-      # NOTE: registry is a class instance variable
-      count = described_class.registry.size
-      sub1 = Class.new(described_class)
-      sub2 = Class.new(described_class)
-      expect(described_class.registry[count..(count + 1)]).to eq([sub1, sub2])
+    it 'includes the known handlers' do
+      expect(described_class.registry).to include(
+        ConsoleKit::Connections::MongoConnectionHandler,
+        ConsoleKit::Connections::SqlConnectionHandler
+      )
     end
   end
 end

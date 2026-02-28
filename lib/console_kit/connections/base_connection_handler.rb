@@ -1,18 +1,13 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/class/subclasses'
+
 module ConsoleKit
   module Connections
     # Parent class for connection handlers
     class BaseConnectionHandler
-      @registry = []
-
       class << self
-        def registry = @registry ||= []
-
-        def inherited(subclass)
-          super
-          registry << subclass
-        end
+        def registry = descendants
       end
 
       attr_reader :context
