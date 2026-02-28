@@ -6,28 +6,27 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.0.0] - 2026-02-28
+## [1.0.0] - 2026-03-01
 ### Added
-- **Rails `reload!` support:** `context_class` is now resolved dynamically and automatically reapplied via Rails `to_prepare` hook, ensuring tenant state persists after code changes.
-- **Process-Global Configuration:** Moved configuration storage to class-level variables to ensure settings persist across threads within a console session while maintaining thread-local tenant context.
-- **Explicit Connection Resetting:** Added logic to reset ActiveRecord and Mongoid connections to their default states when clearing or switching tenants.
-- **Name-based selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
-- **Session Termination:** Support for `exit` or `quit` commands at the selection prompt to immediately terminate the console session.
-- **Skip Option:** Added an explicit "Skip" option (0) to load without tenant configuration.
-- **Comprehensive Validation:** Added strict interface validation for `context_class` (both getters and setters) and type validation for the `tenants` configuration hash.
-- **Configurable SQL Base Class:** Added `sql_base_class` configuration option (defaults to `ApplicationRecord`).
-- **Enhanced Testing:** Expanded test suite to 271 examples with 100% coverage of new architectural changes and edge cases.
+- **Persistent Session State:** Tenant selection and configuration now persist across the entire console session, including across multiple threads.
+- **Seamless Rails Reloading:** Full support for Rails `reload!`; your selected tenant and context are now automatically preserved after code reloads.
+- **Reliable Tenant Switching:** Switching or clearing tenants now correctly resets all database connections (SQL and MongoDB) to their default state.
+- **Flexible Tenant Selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
+- **Session Control:** Added support for `exit` or `quit` commands directly at the selection prompt to terminate the console session.
+- **Safe Mode:** Added a "Skip" option (0) to load the console without any tenant configuration.
+- **Improved Configuration Validation:** Enhanced startup checks to provide clearer feedback if the configuration or context class is incorrectly defined.
+- **Custom SQL Base Class:** New configuration option to specify a custom base class for SQL connections.
 
 ### Changed
-- **Architectural Refactor:** Improved dynamic constant resolution and moved to an explicit registry pattern for connection handlers to support lazy-loading environments.
-- **Improved UX:** Redesigned the tenant selection menu for better readability and refined terminal output.
-- **Robust Input Handling:** `TenantSelector` now correctly handles EOF (`Ctrl+D`) and invalid inputs with a retry mechanism.
+- **Modernized CLI Interface:** Redesigned the tenant selection menu and prompts for a cleaner, more intuitive user experience.
+- **Enhanced Error Feedback:** Improved messaging for invalid selections and missing configurations.
+- **Optimized Performance:** Refactored internal discovery and configuration logic for better reliability in large applications.
 
 ### Fixed
-- Fixed state loss of `context_class` after Rails code reloads.
-- Fixed a critical edge case where database connections remained tied to previous tenants after context clearing.
-- Resolved all RuboCop offenses and addressed major Reek code smells.
-- Fixed missing `ActiveSupport` dependency for time-based output features.
+- Fixed a bug where tenant context was lost after running `reload!` in the Rails console.
+- Fixed an issue where database connections could remain tied to a previous tenant after the context was cleared.
+- Resolved all stability and code quality warnings.
+- Fixed timestamp formatting in console output.
 
 ---
 
