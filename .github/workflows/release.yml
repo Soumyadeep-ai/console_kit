@@ -3,35 +3,49 @@ name: Release to RubyGems
 on:
   push:
     tags:
-      - "v*.*.*" # e.g. v0.1.0
+      - "v*.*.*"
 
 permissions:
-  contents: read
+  contents: write # Needed to create GitHub Release
+  id-token: write # Needed for Trusted Publishing to RubyGems
 
 jobs:
-  release:
+  test:
+    name: Verify Stability
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
+      - uses: actions/checkout@v6
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.4.4
+          ruby-version: "3.4.4"
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rspec
 
-      - name: Install dependencies
-        run: bundle install
+  release:
+    name: Build & Publish
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4.4"
+          bundler-cache: true
 
       - name: Build gem
         run: gem build console_kit.gemspec
 
-      - name: Push to RubyGems
-        env:
-          RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
-        run: |
-          mkdir -p ~/.gem
-          echo -e "---\n:rubygems_api_key: $RUBYGEMS_API_KEY" > ~/.gem/credentials
-          chmod 0600 ~/.gem/credentials
-          gem push console_kit-*.gem
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: console_kit-*.gem
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Publish to RubyGems
+        uses: rubygems/release-gem@v1
