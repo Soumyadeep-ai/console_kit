@@ -6,25 +6,28 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.0.0] - 2026-03-01
+## [1.0.0] - 2026-02-28
 ### Added
-- **Rails `reload!` support:** `context_class` is now resolved dynamically (using strings/symbols) and automatically reapplied via Rails `to_prepare` hook.
-- **Configurable SQL Base Class:** Added `sql_base_class` to configuration (defaults to `ApplicationRecord`).
-- **Silent Re-application:** Re-applying tenant configuration (on reload) is now completely silent.
-- **Comprehensive Validation:** Added `validate!` to ensure `tenants` and `context_class` are correctly set before startup.
-- **Thread-Local Safety:** Restored thread-local storage for configuration and current tenant state to ensure isolation in multi-threaded environments.
-- **Enhanced Testing:** Test suite expanded to 268 examples with 100% coverage of new architectural changes.
+- **Rails `reload!` support:** `context_class` is now resolved dynamically and automatically reapplied via Rails `to_prepare` hook, ensuring tenant state persists after code changes.
+- **Process-Global Configuration:** Moved configuration storage to class-level variables to ensure settings persist across threads within a console session while maintaining thread-local tenant context.
+- **Explicit Connection Resetting:** Added logic to reset ActiveRecord and Mongoid connections to their default states when clearing or switching tenants.
+- **Name-based selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
+- **Session Termination:** Support for `exit` or `quit` commands at the selection prompt to immediately terminate the console session.
+- **Skip Option:** Added an explicit "Skip" option (0) to load without tenant configuration.
+- **Comprehensive Validation:** Added strict interface validation for `context_class` (both getters and setters) and type validation for the `tenants` configuration hash.
+- **Configurable SQL Base Class:** Added `sql_base_class` configuration option (defaults to `ApplicationRecord`).
+- **Enhanced Testing:** Expanded test suite to 271 examples with 100% coverage of new architectural changes and edge cases.
 
 ### Changed
-- **Architectural Refactor:** Improved dynamic constant resolution to support Rails reloads while maintaining thread isolation. Added support for namespaced class strings (e.g., `MyModule::ApplicationRecord`).
-- **Robust Handler Discovery:** Replaced `descendants` with an explicit registry pattern in `BaseConnectionHandler` to support lazy-loading environments.
-- **Improved Input Handling:** `TenantSelector` now correctly handles EOF (`Ctrl+D`) as an abort signal.
-- **Cleaner API:** Replaced metaprogrammed accessors with explicit, searchable methods.
+- **Architectural Refactor:** Improved dynamic constant resolution and moved to an explicit registry pattern for connection handlers to support lazy-loading environments.
+- **Improved UX:** Redesigned the tenant selection menu for better readability and refined terminal output.
+- **Robust Input Handling:** `TenantSelector` now correctly handles EOF (`Ctrl+D`) and invalid inputs with a retry mechanism.
 
 ### Fixed
-- Fixed a bug where `context_class` state was lost after code reloads in the console.
-- Fixed potential race conditions by restoring thread-local storage.
-- Resolved all RuboCop and Reek code quality warnings.
+- Fixed state loss of `context_class` after Rails code reloads.
+- Fixed a critical edge case where database connections remained tied to previous tenants after context clearing.
+- Resolved all RuboCop offenses and addressed major Reek code smells.
+- Fixed missing `ActiveSupport` dependency for time-based output features.
 
 ---
 
@@ -79,20 +82,6 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant selection via CLI.
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
-
----
-
-## [Unreleased]
-### Added
-- **Name-based selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
-- **Session Termination:** Support for `exit` or `quit` commands at the selection prompt to immediately terminate the console session.
-- **Enhanced Output API:** Added `Output.print_list` and `Output.print_raw` for cleaner, less repetitive terminal output.
-- **Skip Option:** Added an explicit "Skip" option (0) to load without tenant configuration.
-
-### Changed
-- **Improved UX:** Redesigned the tenant selection menu for better readability, removing the redundant `[ConsoleKit]` prefix from list items.
-- **Interactive Prompts:** Selection prompts now keep the cursor on the same line for a more natural CLI experience.
-- **Refined Messaging:** Differentiated between intentional "Skip/Abort" actions and actual selection failures.
 
 [1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5
