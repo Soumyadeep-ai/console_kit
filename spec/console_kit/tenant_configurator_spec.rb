@@ -176,11 +176,23 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       context_class.tenant_mongo_db = 'some_db'
       context_class.partner_identifier = 'some_partner'
       allow(ConsoleKit::Output).to receive(:print_info)
+      allow(ApplicationRecord).to receive(:establish_connection)
+      allow(Mongoid).to receive(:override_client)
     end
 
     it 'prints info about clearing' do
       described_class.clear
       expect(ConsoleKit::Output).to have_received(:print_info).with('Tenant context has been cleared.')
+    end
+
+    it 'resets ActiveRecord connection' do
+      described_class.clear
+      expect(ApplicationRecord).to have_received(:establish_connection).with(nil)
+    end
+
+    it 'resets Mongoid client override' do
+      described_class.clear
+      expect(Mongoid).to have_received(:override_client).with(nil)
     end
 
     it 'resets tenant_shard to nil' do
@@ -228,19 +240,19 @@ RSpec.describe ConsoleKit::TenantConfigurator do
   describe '.validate_context_interface!' do
     let(:valid_ctx) do
       Class.new do
-        def self.tenant_shard=(_val); end
-        def self.tenant_mongo_db=(_val); end
-        def self.partner_identifier=(_val); end
+        class << self
+          attr_accessor :tenant_shard, :tenant_mongo_db, :partner_identifier
+        end
       end
     end
 
-    it 'raises error if context class is missing required setters' do
-      invalid_ctx = Class.new # No setters
+    it 'raises error if context class is missing required methods' do
+      invalid_ctx = Class.new # No methods
       expect { described_class.send(:validate_context_interface!, invalid_ctx) }
         .to raise_error(ConsoleKit::Error, /does not implement the required interface/i)
     end
 
-    it 'does not raise error if context class has all required setters' do
+    it 'does not raise error if context class has all required methods' do
       expect { described_class.send(:validate_context_interface!, valid_ctx) }.not_to raise_error
     end
   end

@@ -49,9 +49,9 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     context 'when tenant_shard is nil' do
       let(:context) { instance_double(DummyContext, tenant_shard: nil) }
 
-      it 'does not call establish_connection' do
+      it 'calls establish_connection with nil' do
         handler.connect
-        expect(ApplicationRecord).not_to have_received(:establish_connection)
+        expect(ApplicationRecord).to have_received(:establish_connection).with(nil)
       end
     end
 

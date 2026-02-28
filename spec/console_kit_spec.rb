@@ -94,10 +94,16 @@ RSpec.describe ConsoleKit do
   end
 
   describe 'thread safety' do
-    it 'isolates configuration across threads' do
-      described_class.tenants = ['main']
-      Thread.new { described_class.tenants = ['thread'] }.join
-      expect(described_class.tenants).to eq(['main'])
+    it 'shares configuration across threads' do
+      described_class.tenants = { 'main' => {} }
+      Thread.new { described_class.tenants = { 'thread' => {} } }.join
+      expect(described_class.tenants).to eq({ 'thread' => {} })
+    end
+
+    it 'isolates current_tenant across threads' do
+      ConsoleKit::Setup.current_tenant = 'main'
+      Thread.new { ConsoleKit::Setup.current_tenant = 'thread' }.join
+      expect(ConsoleKit::Setup.current_tenant).to eq('main')
     end
   end
 

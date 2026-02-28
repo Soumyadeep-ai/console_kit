@@ -12,13 +12,14 @@ module ConsoleKit
       def_delegator :@context, :tenant_shard
 
       def connect
-        return if tenant_shard.blank?
+        shard = tenant_shard.presence&.to_sym
+        msg = shard ? "Establishing SQL connection to shard: #{shard}" : 'Resetting SQL connection to default'
 
-        Output.print_info("Establishing SQL connection to shard: #{tenant_shard} via #{base_class}")
-        base_class.establish_connection(tenant_shard.to_sym)
+        Output.print_info("#{msg} via #{base_class}")
+        base_class.establish_connection(shard)
       end
 
-      def available? = base_class_defined?
+      def available? = sql_base_class_name.to_s.safe_constantize.present?
 
       private
 
@@ -29,12 +30,7 @@ module ConsoleKit
         raise Error, "ConsoleKit: sql_base_class '#{sql_base_class_name}' could not be found."
       end
 
-      def base_class_defined?
-        sql_base_class_name.present? && !sql_base_class_name.to_s.safe_constantize.nil?
-      end
-
-      def sql_base_class_name = current_config.sql_base_class
-      def current_config = ConsoleKit.configuration
+      def sql_base_class_name = ConsoleKit.configuration.sql_base_class
     end
   end
 end

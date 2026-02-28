@@ -48,21 +48,27 @@ module ConsoleKit
 
       def select_and_configure
         key = select_tenant_key
-        return handle_selection_result(key) if %i[exit abort none].include?(key) || key.nil?
+        return handle_selection_result(key) if %i[exit abort none].include?(key) || key.blank?
 
         configure(key)
       end
 
       def handle_selection_result(key)
+        exit_on_key(key) if key == :exit
+
         case key
-        when :exit
-          Output.print_info('Exiting console...')
-          Kernel.exit
         when :abort, :none
           Output.print_info('No tenant selected. Loading without tenant configuration.')
-        when nil
+        when nil, ''
           Output.print_error('Tenant selection failed. Loading without tenant configuration.')
         end
+      end
+
+      def exit_on_key(key)
+        return unless key == :exit
+
+        Output.print_info('Exiting console...')
+        Kernel.exit
       end
 
       def configure(key)

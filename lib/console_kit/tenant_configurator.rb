@@ -23,15 +23,20 @@ module ConsoleKit
       end
 
       def clear
-        self.configuration_success = false
         ctx = ConsoleKit.configuration.context_class
         return unless ctx
 
-        reset_context_attributes(ctx)
+        reset_tenant(ctx)
         Output.print_info('Tenant context has been cleared.')
       end
 
       private
+
+      def reset_tenant(ctx)
+        self.configuration_success = false
+        reset_context_attributes(ctx)
+        setup_connections(ctx)
+      end
 
       def reset_context_attributes(ctx)
         %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
@@ -56,11 +61,16 @@ module ConsoleKit
       end
 
       def validate_context_interface!(ctx)
-        missing = %i[tenant_shard= tenant_mongo_db= partner_identifier=].reject { |s| ctx.respond_to?(s) }
+        missing = required_interface_methods.reject { |s| ctx.respond_to?(s) }
         return if missing.empty?
 
         raise Error, "Context class #{ctx} does not implement the required interface. " \
-                     "Missing setters: #{missing.join(', ')}"
+                     "Missing methods: #{missing.join(', ')}"
+      end
+
+      def required_interface_methods
+        attributes = %i[tenant_shard tenant_mongo_db partner_identifier]
+        attributes + attributes.map { |a| "#{a}=" }
       end
 
       def apply_context(constant)

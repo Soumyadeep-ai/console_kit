@@ -30,8 +30,9 @@ module ConsoleKit
     end
 
     def validate!
-      raise Error, 'ConsoleKit: `tenants` is not configured.' if @tenants.nil? || @tenants.empty?
-      raise Error, 'ConsoleKit: `context_class` is not configured.' unless @context_class
+      raise Error, 'ConsoleKit: `tenants` is not configured.' if @tenants.blank?
+      raise Error, 'ConsoleKit: `tenants` must be a Hash.' unless @tenants.is_a?(Hash)
+      raise Error, 'ConsoleKit: `context_class` is not configured.' if @context_class.blank?
     end
 
     private

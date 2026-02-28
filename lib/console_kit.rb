@@ -12,8 +12,8 @@ module ConsoleKit
 
   class << self
     def configure = yield(configuration)
-    def configuration = Thread.current[:console_kit_configuration] ||= Configuration.new
-    def reset_configuration! = Thread.current[:console_kit_configuration] = nil
+    def configuration = @configuration ||= Configuration.new
+    def reset_configuration! = @configuration = nil
     def pretty_output = configuration.pretty_output
 
     def pretty_output=(val)

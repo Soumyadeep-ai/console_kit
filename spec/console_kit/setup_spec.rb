@@ -136,10 +136,8 @@ RSpec.describe ConsoleKit::Setup do
 
       it 'prints error if tenant selection returns empty string' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('').and_raise(ArgumentError,
-                                                                                               'Invalid tenant')
         described_class.setup
-        expect(ConsoleKit::Output).to have_received(:print_error).with(/Invalid tenant/)
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/Tenant selection failed/)
       end
     end
 
