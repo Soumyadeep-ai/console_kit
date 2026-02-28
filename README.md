@@ -66,7 +66,13 @@ end
 
 ## Console Usage
 
-When launching the Rails console, ConsoleKit will prompt you to select a tenant (if tenants are configured).
+When launching the Rails console, ConsoleKit will prompt you to select a tenant (if multiple tenants are configured).
+
+### Selection Options:
+- **Number or Name:** Select a tenant by its index or name (case-insensitive).
+- **0 (Skip):** Load the console without any tenant configuration.
+- **exit / quit:** Immediately terminate the console session.
+
 You can also manually interact with it:
 
 ### Get Current Tenant
