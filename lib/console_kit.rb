@@ -23,6 +23,7 @@ module ConsoleKit
       Setup.current_tenant = nil
       TenantConfigurator.configuration_success = false
     end
+
     def pretty_output = configuration.pretty_output
 
     def pretty_output=(val)
