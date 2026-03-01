@@ -7,7 +7,11 @@ module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
     class << self
-      attr_reader :configuration_success
+      def configuration_success = Thread.current[:console_kit_configuration_success]
+
+      def configuration_success=(val)
+        Thread.current[:console_kit_configuration_success] = val
+      end
 
       def configure_tenant(key)
         constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
@@ -19,22 +23,34 @@ module ConsoleKit
       end
 
       def clear
-        @configuration_success = false
-        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
-          ConsoleKit.configuration.context_class.public_send("#{attr}=", nil)
-        end
+        ctx = ConsoleKit.configuration.context_class
+        return unless ctx
+
+        reset_tenant(ctx)
         Output.print_info('Tenant context has been cleared.')
       end
 
       private
 
+      def reset_tenant(ctx)
+        self.configuration_success = false
+        reset_context_attributes(ctx)
+        setup_connections(ctx)
+      end
+
+      def reset_context_attributes(ctx)
+        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+          ctx.public_send("#{attr}=", nil)
+        end
+      end
+
       def validate_constants!(constants)
         missing = %i[shard partner_code] - constants.keys
-        raise "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
+        raise Error, "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
       end
 
       def missing_config_error(key)
-        @configuration_success = false
+        self.configuration_success = false
         Output.print_error("No configuration found for tenant: #{key}")
       end
 
@@ -44,13 +60,31 @@ module ConsoleKit
         configure_success(key)
       end
 
+      def validate_context_interface!(ctx)
+        missing = required_interface_methods.reject { |s| ctx.respond_to?(s) }
+        return if missing.empty?
+
+        raise Error, "Context class #{ctx} does not implement the required interface. " \
+                     "Missing methods: #{missing.join(', ')}"
+      end
+
+      def required_interface_methods
+        attributes = %i[tenant_shard tenant_mongo_db partner_identifier]
+        attributes + attributes.map { |a| "#{a}=" }
+      end
+
       def apply_context(constant)
         ctx = ConsoleKit.configuration.context_class
+        validate_context_interface!(ctx)
+
+        assign_context_attributes(ctx, constant)
+        setup_connections(ctx)
+      end
+
+      def assign_context_attributes(ctx, constant)
         ctx.tenant_shard = constant[:shard]
         ctx.tenant_mongo_db = constant[:mongo_db]
         ctx.partner_identifier = constant[:partner_code]
-
-        setup_connections(ctx)
       end
 
       def setup_connections(context)
@@ -59,11 +93,11 @@ module ConsoleKit
 
       def configure_success(key)
         Output.print_success("Tenant set to: #{key}")
-        @configuration_success = true
+        self.configuration_success = true
       end
 
       def handle_error(error, key)
-        @configuration_success = false
+        self.configuration_success = false
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
       end

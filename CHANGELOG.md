@@ -6,6 +6,31 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.0] - 2026-03-01
+### Added
+- **Global Configuration Persistence:** ConsoleKit settings now persist across the entire session and across multiple threads.
+- **Isolated Tenant Selection:** Each thread maintains its own tenant selection for safety, while sharing the global configuration.
+- **Seamless Rails Reloading:** Full support for Rails `reload!`; your selected tenant and context are now automatically preserved after code reloads.
+- **Reliable Tenant Switching:** Switching or clearing tenants now correctly resets all database connections (SQL and MongoDB) to their default state.
+- **Flexible Tenant Selection:** Users can now select tenants by typing their names (case-insensitive) in addition to index numbers.
+- **Session Control:** Added support for `exit` or `quit` commands directly at the selection prompt to terminate the console session.
+- **Safe Mode:** Added a "Skip" option (0) to load the console without any tenant configuration.
+- **Improved Configuration Validation:** Enhanced startup checks to provide clearer feedback if the configuration or context class is incorrectly defined.
+- **Custom SQL Base Class:** New configuration option to specify a custom base class for SQL connections.
+
+### Changed
+- **Modernized CLI Interface:** Redesigned the tenant selection menu and prompts for a cleaner, more intuitive user experience.
+- **Enhanced Error Feedback:** Improved messaging for invalid selections and missing configurations.
+- **Optimized Performance:** Refactored internal discovery and configuration logic for better reliability in large applications.
+
+### Fixed
+- Fixed a bug where tenant context was lost after running `reload!` in the Rails console.
+- Fixed an issue where database connections could remain tied to a previous tenant after the context was cleared.
+- Resolved all stability and code quality warnings.
+- Fixed timestamp formatting in console output.
+
+---
+
 ## [0.1.5] - 2025-10-12
 ### Added
 - Minor Bug Fixes
@@ -58,10 +83,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
----
-
-## [Unreleased]
-
+[1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.3

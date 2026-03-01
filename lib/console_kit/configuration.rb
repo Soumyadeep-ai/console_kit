@@ -3,16 +3,43 @@
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
-    attr_reader :pretty_output, :tenants, :context_class
+    attr_accessor :pretty_output, :tenants, :sql_base_class
+    attr_writer :context_class
 
-    def initialize(tenants: nil, context_class: nil)
+    def initialize
       @pretty_output = true
-      @tenants = tenants
-      @context_class = context_class
+      @tenants = nil
+      @context_class = nil
+      @sql_base_class = 'ApplicationRecord'
     end
 
-    %i[pretty_output tenants context_class].each do |attr|
-      define_method("#{attr}=") { |value| instance_variable_set("@#{attr}", value) }
+    def context_class
+      case @context_class
+      when String, Symbol then resolve_context_class
+      else @context_class
+      end
+    end
+
+    def validate
+      validate!
+      true
+    rescue Error
+      false
+    end
+
+    def validate!
+      raise Error, 'ConsoleKit: `tenants` is not configured.' if @tenants.blank?
+      raise Error, 'ConsoleKit: `tenants` must be a Hash.' unless @tenants.is_a?(Hash)
+      raise Error, 'ConsoleKit: `context_class` is not configured.' if @context_class.blank?
+    end
+
+    private
+
+    def resolve_context_class
+      @context_class.to_s.constantize
+    rescue NameError
+      raise Error, "ConsoleKit: context_class '#{@context_class}' could not be found. " \
+                   'Ensure the class is defined before configuration is accessed.'
     end
   end
 end

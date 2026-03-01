@@ -29,9 +29,9 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     context 'when tenant_mongo_db is empty' do
       let(:context) { instance_double(DummyContext, tenant_mongo_db: '') }
 
-      it 'does not call override_client' do
+      it 'calls override_client with nil' do
         handler.connect
-        expect(Mongoid).not_to have_received(:override_client)
+        expect(Mongoid).to have_received(:override_client).with(nil)
       end
     end
 
@@ -60,6 +60,17 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   describe '#available?' do
     it 'returns true when Mongoid is defined' do
       expect(handler).to be_available
+    end
+
+    it 'returns false when Mongoid is not defined' do
+      hide_const('Mongoid')
+      expect(handler).not_to be_available
+    end
+  end
+
+  describe 'delegation' do
+    it 'delegates tenant_mongo_db to context' do
+      expect(handler.tenant_mongo_db).to eq('mongo_foo')
     end
   end
 end

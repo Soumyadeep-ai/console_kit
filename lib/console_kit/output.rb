@@ -15,24 +15,55 @@ module ConsoleKit
     }.freeze
 
     class << self
+      def silent = Thread.current[:console_kit_silent]
+
+      def silent=(val)
+        Thread.current[:console_kit_silent] = val
+      end
+
+      def silence
+        old_silent = silent
+        self.silent = true
+        yield
+      ensure
+        self.silent = old_silent
+      end
+
       TYPES.each_key do |type|
-        define_method("print_#{type}") do |text, timestamp: false|
-          formatted = (type == :header ? "\n=== #{text} ===" : text)
-          print_with(type, formatted, timestamp)
+        define_method("print_#{type}") do |text, timestamp: false, newline: (type != :prompt)|
+          return if silent
+
+          formatted = (type == :header ? "\n--- #{text} ---" : text)
+          print_with(type, formatted, timestamp, newline: newline)
         end
+      end
+
+      def print_list(items, header: nil)
+        return if silent
+
+        print_header(header) if header
+        items.each { |item| puts "  #{item}" }
+      end
+
+      def print_raw(text)
+        return if silent
+
+        puts text
       end
 
       # Backtrace prints always with timestamp, no param
       def print_backtrace(exception)
-        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true) }
+        return if silent
+
+        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true, newline: true) }
       end
 
       private
 
-      def print_with(type, text, timestamp)
+      def print_with(type, text, timestamp, newline: true)
         meta = TYPES.fetch(type)
         message = build_message(text, meta[:symbol], timestamp)
-        output(message, meta[:color])
+        output(message, meta[:color], newline: newline)
       end
 
       def build_message(text, symbol, timestamp)
@@ -43,10 +74,11 @@ module ConsoleKit
       def timestamp_prefix(timestamp) = prefix_for(timestamp) { Time.current.strftime('[%Y-%m-%d %H:%M:%S] ') }
       def symbol_prefix(symbol) = prefix_for(symbol) { |sym| "#{sym} " }
 
-      def output(message, color)
-        return puts message unless ConsoleKit.configuration.pretty_output && color
+      def output(message, color, newline: true)
+        method = newline ? :puts : :print
+        return send(method, message) unless ConsoleKit.configuration.pretty_output && color
 
-        puts "\e[#{color}m#{message}\e[0m"
+        send(method, "\e[#{color}m#{message}\e[0m")
       end
     end
   end

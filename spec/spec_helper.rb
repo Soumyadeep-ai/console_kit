@@ -25,4 +25,9 @@ RSpec.configure do |config|
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = true
   end
+
+  config.after do
+    ConsoleKit.reset_configuration!
+    Thread.current[:console_kit_silent] = nil
+  end
 end

@@ -24,7 +24,8 @@ Rails.application.config.after_initialize do
     # }
     config.tenants = nil
 
-    # TODO: Set your context class (e.g., CurrentContext)
+    # TODO: Set your context class (e.g., 'CurrentContext')
+    # Recommendation: Use a String to ensure the class is correctly re-resolved after `reload!`
     config.context_class = nil
 
     # Toggle pretty output on/off (default: true)

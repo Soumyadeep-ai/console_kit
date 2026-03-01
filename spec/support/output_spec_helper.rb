@@ -15,7 +15,7 @@ module OutputSpecHelper
   end
 
   def format_header_line(message)
-    "[ConsoleKit] \n=== #{message} ==="
+    "[ConsoleKit] \n--- #{message} ---"
   end
 
   def format_standard_line(symbol, message)

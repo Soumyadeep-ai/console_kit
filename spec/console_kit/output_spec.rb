@@ -105,17 +105,17 @@ RSpec.describe ConsoleKit::Output do
     before { allow(Time).to receive(:current).and_return(now) }
 
     it 'includes timestamp when enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('[2025-08-12 15:45:12]')
     end
 
     it 'includes ConsoleKit tag when timestamp is enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('[ConsoleKit]')
     end
 
     it 'includes message when timestamp is enabled' do
-      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', timestamp: true) }
+      output = OutputSpecHelper.capture_stdout { described_class.send(:print_with, :info, 'Timed', true) }
       expect(output).to include('Timed')
     end
   end
@@ -141,6 +141,112 @@ RSpec.describe ConsoleKit::Output do
       output = OutputSpecHelper.capture_stdout { described_class.print_error('Boom') }
       clean = output.gsub(/\e\[[\d;]+m/, '')
       expect(clean).to include('[ConsoleKit] [✗] Boom')
+    end
+  end
+
+  describe '.silence' do
+    let(:silent_exception) do
+      RuntimeError.new('silent error').tap { |e| e.set_backtrace(['trace:1']) }
+    end
+
+    it 'suppresses success output within the block' do
+      output = OutputSpecHelper.capture_stdout do
+        described_class.silence { described_class.print_success('Silent') }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'suppresses error output within the block' do
+      output = OutputSpecHelper.capture_stdout do
+        described_class.silence { described_class.print_error('Silent') }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'suppresses info output within the block' do
+      output = OutputSpecHelper.capture_stdout do
+        described_class.silence { described_class.print_info('Silent') }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'sets silent to true within the block' do
+      described_class.silence do
+        expect(described_class.silent).to be true
+      end
+    end
+
+    it 'restores previous silence state after the block' do
+      described_class.silent = false
+      described_class.silence { nil }
+      expect(described_class.silent).to be false
+    end
+
+    def silence_with_error
+      described_class.silence { raise 'Error' }
+    rescue StandardError
+      nil
+    end
+
+    it 'ensures silence state is restored even if error occurs' do
+      described_class.silent = false
+      silence_with_error
+      expect(described_class.silent).to be false
+    end
+
+    it 'suppresses backtraces when silent' do
+      output = OutputSpecHelper.capture_stdout do
+        described_class.silence { described_class.print_backtrace(silent_exception) }
+      end
+      expect(output).to be_empty
+    end
+
+    context 'with nested silence blocks' do
+      it 'keeps silent true in the outer block after inner block finishes' do
+        described_class.silence do
+          described_class.silence { nil }
+          expect(described_class.silent).to be true
+        end
+      end
+
+      it 'restores to false after all blocks finish' do
+        described_class.silent = false
+        described_class.silence do
+          described_class.silence { nil }
+        end
+        expect(described_class.silent).to be false
+      end
+    end
+
+    it 'returns the block value' do
+      result = described_class.silence { 'hello' }
+      expect(result).to eq('hello')
+    end
+
+    it 'is thread-safe' do
+      described_class.silent = false
+      Thread.new { described_class.silence { sleep 0.1 } }
+      sleep 0.05
+      expect(described_class.silent).to be_falsey
+    end
+  end
+
+  describe 'message building' do
+    it 'prefixes with [ConsoleKit]' do
+      msg = described_class.send(:build_message, 'test', nil, false)
+      expect(msg).to start_with('[ConsoleKit]')
+    end
+
+    it 'includes symbol when provided' do
+      msg = described_class.send(:build_message, 'test', '[!]', false)
+      expect(msg).to include('[!] test')
+    end
+
+    it 'includes timestamp when provided' do
+      now = Time.new(2026, 1, 1, 12, 0, 0)
+      allow(Time).to receive(:current).and_return(now)
+      msg = described_class.send(:build_message, 'test', nil, true)
+      expect(msg).to include('[2026-01-01 12:00:00]')
     end
   end
 end

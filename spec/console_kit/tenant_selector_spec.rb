@@ -21,9 +21,24 @@ RSpec.describe ConsoleKit::TenantSelector do
         expect(described_class.select).to eq('beta')
       end
 
-      it 'returns nil if user selects 0 (load without tenant)' do
+      it 'returns :none if user selects 0 (load without tenant)' do
         allow($stdin).to receive(:gets).and_return("0\n")
-        expect(described_class.select).to be_nil
+        expect(described_class.select).to eq(:none)
+      end
+
+      it 'returns :abort if input is nil (EOF)' do
+        allow($stdin).to receive(:gets).and_return(nil)
+        expect(described_class.select).to eq(:abort)
+      end
+
+      it 'returns :exit if input is "exit"' do
+        allow($stdin).to receive(:gets).and_return("exit\n")
+        expect(described_class.select).to eq(:exit)
+      end
+
+      it 'returns :exit if input is "QUIT" (case-insensitive)' do
+        allow($stdin).to receive(:gets).and_return("QUIT\n")
+        expect(described_class.select).to eq(:exit)
       end
 
       it 'defaults to "1" if input is empty' do
@@ -33,6 +48,16 @@ RSpec.describe ConsoleKit::TenantSelector do
 
       it 'strips surrounding whitespace from input' do
         allow($stdin).to receive(:gets).and_return(" 2 \n")
+        expect(described_class.select).to eq('beta')
+      end
+
+      it 'returns the selected tenant key for name input "alpha"' do
+        allow($stdin).to receive(:gets).and_return("alpha\n")
+        expect(described_class.select).to eq('alpha')
+      end
+
+      it 'returns the selected tenant key for name input "BETA" (case-insensitive)' do
+        allow($stdin).to receive(:gets).and_return("BETA\n")
         expect(described_class.select).to eq('beta')
       end
     end
@@ -86,10 +111,10 @@ RSpec.describe ConsoleKit::TenantSelector do
         expect(described_class.select).to eq('gamma')
       end
 
-      it 'returns nil for "0" even when only one tenant exists' do
+      it 'returns :none for "0" even when only one tenant exists' do
         allow(ConsoleKit).to receive(:tenants).and_return({ 'alpha' => {} })
         allow($stdin).to receive(:gets).and_return("0\n")
-        expect(described_class.select).to be_nil
+        expect(described_class.select).to eq(:none)
       end
     end
   end
