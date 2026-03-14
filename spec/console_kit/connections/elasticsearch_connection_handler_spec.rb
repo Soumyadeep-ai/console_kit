@@ -45,6 +45,16 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
+    context 'when Elasticsearch::Model does not support index_name_prefix=' do
+      before do
+        stub_const('Elasticsearch::Model', Module.new)
+      end
+
+      it 'does not raise an error' do
+        expect { handler.connect }.not_to raise_error
+      end
+    end
+
     context 'when tenant_elasticsearch_prefix is empty' do
       let(:context) { instance_double(DummyContext, tenant_elasticsearch_prefix: '') }
 

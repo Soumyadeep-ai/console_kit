@@ -30,9 +30,9 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     context 'when tenant_redis_db is nil' do
       let(:context) { instance_double(DummyContext, tenant_redis_db: nil) }
 
-      it 'does not call select' do
+      it 'resets to default DB 0' do
         handler.connect
-        expect(redis_instance).not_to have_received(:select)
+        expect(redis_instance).to have_received(:select).with(0)
       end
     end
 

@@ -6,10 +6,12 @@ module ConsoleKit
   module Connections
     # Handles Redis connections
     class RedisConnectionHandler < BaseConnectionHandler
+      DEFAULT_REDIS_DB = 0
+
       def connect
         db = context_attribute(:tenant_redis_db)
         Output.print_info(switch_message(db))
-        select_redis_db(db) if db
+        select_redis_db(db || DEFAULT_REDIS_DB)
       end
 
       def available? = defined?(Redis)

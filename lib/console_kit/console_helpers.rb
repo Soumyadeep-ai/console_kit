@@ -29,7 +29,9 @@ module ConsoleKit
       {
         'Partner' => :partner_code, 'Shard' => :shard, 'Mongo DB' => :mongo_db,
         'Redis DB' => :redis_db, 'ES Prefix' => :elasticsearch_prefix, 'Environment' => :environment
-      }.each { |label, key| ConsoleKit::Output.print_info("  #{label.ljust(13)}#{constants[key]}") if constants[key] }
+      }.each do |label, key|
+        ConsoleKit::Output.print_info("  #{label.ljust(13)}#{constants[key]}") unless constants[key].nil?
+      end
       nil
     end
   end

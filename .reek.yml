@@ -17,10 +17,11 @@ detectors:
       - ConsoleKit::ConsoleHelpers
       - ConsoleKit::Connections::SqlConnectionHandler#sql_base_class_name
 
-  # Interface validation requires respond_to? checks
+  # Context attribute access requires respond_to?/send dispatch
   ManualDispatch:
     exclude:
-      - ConsoleKit::TenantConfigurator#validate_context_interface!
+      - ConsoleKit::Connections::BaseConnectionHandler#context_attribute
+      - ConsoleKit::TenantConfigurator#available_context_attributes
 
   # Nil-check needed for selection result handling
   NilCheck:

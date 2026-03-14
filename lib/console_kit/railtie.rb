@@ -7,7 +7,7 @@ module ConsoleKit
       ConsoleKit::Setup.setup
       ConsoleKit::Prompt.apply
       if defined?(Pry)
-        TOPLEVEL_BINDING.eval('self').extend(ConsoleKit::ConsoleHelpers)
+        TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
       elsif defined?(IRB::ExtendCommandBundle)
         IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
       end

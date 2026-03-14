@@ -41,7 +41,15 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
 
       it 'does not print fields with nil values' do
         helper.tenant_info
-        expect(ConsoleKit::Output).not_to have_received(:print_info).with(/Redis DB/)
+        expect(ConsoleKit::Output).not_to have_received(:print_info).with(/ES Prefix/)
+      end
+
+      it 'prints fields with falsey non-nil values like 0' do
+        allow(ConsoleKit.configuration).to receive(:tenants).and_return(
+          'acme' => { constants: { partner_code: 'ACME', shard: 'shard_1', redis_db: 0 } }
+        )
+        helper.tenant_info
+        expect(ConsoleKit::Output).to have_received(:print_info).with(/Redis DB.*0/)
       end
 
       it 'returns nil' do
