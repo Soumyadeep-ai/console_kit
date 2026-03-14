@@ -62,9 +62,15 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
-  describe 'delegation' do
-    it 'delegates tenant_redis_db to context' do
-      expect(handler.tenant_redis_db).to eq(2)
+  describe 'context attribute access' do
+    it 'reads tenant_redis_db from context' do
+      expect(handler.send(:context_attribute, :tenant_redis_db)).to eq(2)
+    end
+
+    it 'returns nil when context does not support the attribute' do
+      bare_context = Object.new
+      bare_handler = described_class.new(bare_context)
+      expect(bare_handler.send(:context_attribute, :tenant_redis_db)).to be_nil
     end
   end
 end

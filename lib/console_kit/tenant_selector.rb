@@ -14,7 +14,6 @@ module ConsoleKit
           result = attempt_selection
           return result unless result == :retry
         end
-
         nil
       end
 
@@ -70,9 +69,10 @@ module ConsoleKit
 
       def read_input_with_default
         Output.print_prompt("Selection (number or name) [#{DEFAULT_SELECTION}]: ")
-
         raw_input = $stdin.gets
         raw_input ? normalize_input(raw_input) : :abort
+      rescue Interrupt
+        :abort
       end
 
       def normalize_input(raw_input)

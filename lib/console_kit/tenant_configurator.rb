@@ -7,6 +7,13 @@ module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
     class << self
+      HANDLER_ATTRIBUTES = {
+        Connections::SqlConnectionHandler => :tenant_shard,
+        Connections::MongoConnectionHandler => :tenant_mongo_db,
+        Connections::RedisConnectionHandler => :tenant_redis_db,
+        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
+      }.freeze
+
       def configuration_success = Thread.current[:console_kit_configuration_success]
 
       def configuration_success=(val)
@@ -30,13 +37,6 @@ module ConsoleKit
         Output.print_info('Tenant context has been cleared.')
       end
 
-      HANDLER_ATTRIBUTES = {
-        Connections::SqlConnectionHandler => :tenant_shard,
-        Connections::MongoConnectionHandler => :tenant_mongo_db,
-        Connections::RedisConnectionHandler => :tenant_redis_db,
-        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
-      }.freeze
-
       private
 
       def reset_tenant(ctx)
@@ -46,7 +46,7 @@ module ConsoleKit
       end
 
       def reset_context_attributes(ctx)
-        %i[tenant_shard tenant_mongo_db tenant_redis_db tenant_elasticsearch_prefix partner_identifier].each do |attr|
+        available_context_attributes(ctx).each do |attr|
           ctx.public_send("#{attr}=", nil)
         end
       end
@@ -67,40 +67,38 @@ module ConsoleKit
         configure_success(key)
       end
 
-      def validate_context_interface!(ctx)
-        missing = required_interface_methods.reject { |s| ctx.respond_to?(s) }
-        return if missing.empty?
-
-        raise Error, "Context class #{ctx} does not implement the required interface. " \
-                     "Missing methods: #{missing.join(', ')}"
-      end
-
-      def required_interface_methods
-        attributes = %i[partner_identifier]
-        HANDLER_ATTRIBUTES.each { |handler, attr| attributes << attr if handler_available?(handler) }
-        attributes + attributes.map { |a| :"#{a}=" }
-      end
-
       def handler_available?(handler_class)
         handler_class.new(nil).available?
       rescue NotImplementedError, StandardError
         false
       end
 
+      def available_context_attributes(ctx)
+        attributes = %i[partner_identifier]
+        HANDLER_ATTRIBUTES.each do |handler, attr|
+          attributes << attr if handler_available?(handler) && ctx.respond_to?("#{attr}=")
+        end
+        attributes.select { |attr| ctx.respond_to?("#{attr}=") }
+      end
+
       def apply_context(constant)
         ctx = ConsoleKit.configuration.context_class
-        validate_context_interface!(ctx)
-
         assign_context_attributes(ctx, constant)
         setup_connections(ctx)
       end
 
       def assign_context_attributes(ctx, constant)
-        ctx.tenant_shard = constant[:shard]
-        ctx.tenant_mongo_db = constant[:mongo_db]
-        ctx.tenant_redis_db = constant[:redis_db]
-        ctx.tenant_elasticsearch_prefix = constant[:elasticsearch_prefix]
-        ctx.partner_identifier = constant[:partner_code]
+        attribute_to_constant = {
+          partner_identifier: :partner_code,
+          tenant_shard: :shard,
+          tenant_mongo_db: :mongo_db,
+          tenant_redis_db: :redis_db,
+          tenant_elasticsearch_prefix: :elasticsearch_prefix
+        }
+
+        available_context_attributes(ctx).each do |attr|
+          ctx.public_send("#{attr}=", constant[attribute_to_constant[attr]])
+        end
       end
 
       def setup_connections(context)

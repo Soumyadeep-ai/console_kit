@@ -18,6 +18,8 @@ RSpec.describe ConsoleKit::TenantConfigurator do
 
     stub_const('ApplicationRecord', Class.new { def self.establish_connection(_arg = nil); end })
     stub_const('Mongoid', Class.new { def self.override_database(_arg); end })
+    stub_const('Redis', Class.new { def self.current; end })
+    stub_const('Elasticsearch', Module.new)
   end
 
   shared_examples 'prints configuration error' do |expected_message:|
@@ -261,8 +263,8 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  describe '.validate_context_interface!' do
-    let(:valid_ctx) do
+  describe '.available_context_attributes' do
+    let(:full_ctx) do
       Class.new do
         class << self
           attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
@@ -271,14 +273,16 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       end
     end
 
-    it 'raises error if context class is missing required methods' do
-      invalid_ctx = Class.new # No methods
-      expect { described_class.send(:validate_context_interface!, invalid_ctx) }
-        .to raise_error(ConsoleKit::Error, /does not implement the required interface/i)
+    it 'skips attributes the context class does not support' do
+      partial_ctx = Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end }
+      attrs = described_class.send(:available_context_attributes, partial_ctx)
+      expect(attrs).to contain_exactly(:partner_identifier, :tenant_shard)
     end
 
-    it 'does not raise error if context class has all required methods' do
-      expect { described_class.send(:validate_context_interface!, valid_ctx) }.not_to raise_error
+    it 'includes all attributes when context supports them' do
+      attrs = described_class.send(:available_context_attributes, full_ctx)
+      expect(attrs).to include(:partner_identifier, :tenant_shard, :tenant_mongo_db,
+                               :tenant_redis_db, :tenant_elasticsearch_prefix)
     end
   end
 end

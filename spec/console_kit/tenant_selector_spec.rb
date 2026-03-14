@@ -103,6 +103,13 @@ RSpec.describe ConsoleKit::TenantSelector do
       end
     end
 
+    context 'when user presses Ctrl+C' do
+      it 'returns :abort' do
+        allow($stdin).to receive(:gets).and_raise(Interrupt)
+        expect(described_class.select).to eq(:abort)
+      end
+    end
+
     context 'when handling edge cases' do
       it 'selects correctly when only one tenant exists' do
         single_tenant = { 'gamma' => { constants: { partner_code: 'GAMMA' } } }

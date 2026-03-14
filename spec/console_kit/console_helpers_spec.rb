@@ -38,6 +38,15 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
         helper.tenant_info
         expect(ConsoleKit::Output).to have_received(:print_info).with(/Partner.*ACME/)
       end
+
+      it 'does not print fields with nil values' do
+        helper.tenant_info
+        expect(ConsoleKit::Output).not_to have_received(:print_info).with(/Redis DB/)
+      end
+
+      it 'returns nil' do
+        expect(helper.tenant_info).to be_nil
+      end
     end
 
     context 'when no tenant is configured' do

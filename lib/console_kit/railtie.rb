@@ -6,7 +6,11 @@ module ConsoleKit
     console do
       ConsoleKit::Setup.setup
       ConsoleKit::Prompt.apply
-      Rails::ConsoleMethods.include(ConsoleKit::ConsoleHelpers) if defined?(Rails::ConsoleMethods)
+      if defined?(Pry)
+        TOPLEVEL_BINDING.eval('self').extend(ConsoleKit::ConsoleHelpers)
+      elsif defined?(IRB::ExtendCommandBundle)
+        IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
+      end
     end
 
     config.to_prepare { ConsoleKit::Setup.reapply if defined?(Rails::Console) }

@@ -68,9 +68,9 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  describe 'delegation' do
-    it 'delegates tenant_mongo_db to context' do
-      expect(handler.tenant_mongo_db).to eq('mongo_foo')
+  describe 'context attribute access' do
+    it 'reads tenant_mongo_db from context' do
+      expect(handler.send(:context_attribute, :tenant_mongo_db)).to eq('mongo_foo')
     end
   end
 end

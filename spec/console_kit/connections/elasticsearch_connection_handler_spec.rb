@@ -75,9 +75,9 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
     end
   end
 
-  describe 'delegation' do
-    it 'delegates tenant_elasticsearch_prefix to context' do
-      expect(handler.tenant_elasticsearch_prefix).to eq('acme')
+  describe 'context attribute access' do
+    it 'reads tenant_elasticsearch_prefix from context' do
+      expect(handler.send(:context_attribute, :tenant_elasticsearch_prefix)).to eq('acme')
     end
   end
 end

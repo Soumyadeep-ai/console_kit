@@ -35,6 +35,23 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
 
+    context 'when IRB is defined with nil PROMPT hash' do
+      let(:irb_conf) { { PROMPT: nil, PROMPT_MODE: nil } }
+
+      before do
+        irb_module = Module.new do
+          def self.conf; end
+        end
+        stub_const('IRB', irb_module)
+        allow(IRB).to receive(:conf).and_return(irb_conf)
+      end
+
+      it 'initializes PROMPT hash and sets the prompt' do
+        described_class.apply
+        expect(irb_conf[:PROMPT][:CONSOLE_KIT]).to be_a(Hash)
+      end
+    end
+
     context 'when Pry is defined' do
       let(:pry_config) { Struct.new(:prompt).new }
 

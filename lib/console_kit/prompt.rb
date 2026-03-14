@@ -18,6 +18,7 @@ module ConsoleKit
 
       def apply_irb_prompt
         conf = IRB.conf
+        conf[:PROMPT] ||= {}
         conf[:PROMPT][:CONSOLE_KIT] = {
           PROMPT_I: "#{tenant_label} %N(%m):%03n> ",
           PROMPT_S: "#{tenant_label} %N(%m):%03n%l ",

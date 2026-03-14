@@ -1,18 +1,13 @@
 # frozen_string_literal: true
 
-require 'forwardable'
 require_relative 'base_connection_handler'
 
 module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
-      extend Forwardable
-
-      def_delegator :@context, :tenant_mongo_db
-
       def connect
-        db = tenant_mongo_db.presence
+        db = context_attribute(:tenant_mongo_db).presence
         Output.print_info(switch_message(db))
         Mongoid.override_database(db)
       rescue NoMethodError

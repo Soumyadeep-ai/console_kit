@@ -1,18 +1,13 @@
 # frozen_string_literal: true
 
-require 'forwardable'
 require_relative 'base_connection_handler'
 
 module ConsoleKit
   module Connections
     # Handles SQL connections
     class SqlConnectionHandler < BaseConnectionHandler
-      extend Forwardable
-
-      def_delegator :@context, :tenant_shard
-
       def connect
-        shard = tenant_shard.presence&.to_sym
+        shard = context_attribute(:tenant_shard).presence&.to_sym
         Output.print_info("#{connection_message(shard)} via #{base_class}")
         shard ? base_class.establish_connection(shard) : base_class.establish_connection
       end

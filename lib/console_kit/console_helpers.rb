@@ -3,9 +3,7 @@
 module ConsoleKit
   # Helper methods available in the Rails console
   module ConsoleHelpers
-    def switch_tenant
-      ConsoleKit.reset_current_tenant
-    end
+    def switch_tenant = ConsoleKit.reset_current_tenant
 
     def tenant_info
       tenant = ConsoleKit::Setup.current_tenant
@@ -31,7 +29,8 @@ module ConsoleKit
       {
         'Partner' => :partner_code, 'Shard' => :shard, 'Mongo DB' => :mongo_db,
         'Redis DB' => :redis_db, 'ES Prefix' => :elasticsearch_prefix, 'Environment' => :environment
-      }.each { |label, key| ConsoleKit::Output.print_info("  #{label.ljust(13)}#{constants[key] || 'N/A'}") }
+      }.each { |label, key| ConsoleKit::Output.print_info("  #{label.ljust(13)}#{constants[key]}") if constants[key] }
+      nil
     end
   end
 end
