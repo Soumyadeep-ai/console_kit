@@ -3,7 +3,15 @@
 module ConsoleKit
   # Railtie for integrating ConsoleKit with Rails console.
   class Railtie < Rails::Railtie
-    console { ConsoleKit::Setup.setup }
+    console do
+      ConsoleKit::Setup.setup
+      ConsoleKit::Prompt.apply
+      if defined?(Pry)
+        TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
+      elsif defined?(IRB::ExtendCommandBundle)
+        IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
+      end
+    end
 
     config.to_prepare { ConsoleKit::Setup.reapply if defined?(Rails::Console) }
   end

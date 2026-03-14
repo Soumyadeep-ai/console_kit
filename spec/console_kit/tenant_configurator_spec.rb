@@ -4,16 +4,22 @@ require 'spec_helper'
 
 RSpec.describe ConsoleKit::TenantConfigurator do
   let(:tenant_key) { 'acme' }
-  let(:valid_constants) { { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } }
+  let(:valid_constants) do
+    { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME', redis_db: 1, elasticsearch_prefix: 'acme' }
+  end
   let(:tenants) { { tenant_key => { constants: valid_constants } } }
-  let(:context_class) { Struct.new(:tenant_shard, :tenant_mongo_db, :partner_identifier).new }
+  let(:context_class) do
+    Struct.new(:tenant_shard, :tenant_mongo_db, :tenant_redis_db, :tenant_elasticsearch_prefix, :partner_identifier).new
+  end
 
   before do
     # Stub configuration accessor
     allow(ConsoleKit.configuration).to receive_messages(tenants: tenants, context_class: context_class)
 
-    stub_const('ApplicationRecord', Class.new { def self.establish_connection(_arg); end })
-    stub_const('Mongoid', Class.new { def self.override_client(_arg); end })
+    stub_const('ApplicationRecord', Class.new { def self.establish_connection(_arg = nil); end })
+    stub_const('Mongoid', Class.new { def self.override_database(_arg); end })
+    stub_const('Redis', Class.new { def self.current; end })
+    stub_const('Elasticsearch', Module.new)
   end
 
   shared_examples 'prints configuration error' do |expected_message:|
@@ -38,7 +44,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     context 'with valid tenant key' do
       before do
         allow(ApplicationRecord).to receive(:establish_connection)
-        allow(Mongoid).to receive(:override_client)
+        allow(Mongoid).to receive(:override_database)
         allow(ConsoleKit::Output).to receive(:print_success)
       end
 
@@ -49,7 +55,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
 
       it 'overrides Mongoid client with correct DB' do
         configure
-        expect(Mongoid).to have_received(:override_client).with('acme_db')
+        expect(Mongoid).to have_received(:override_database).with('acme_db')
       end
 
       it 'prints success message' do
@@ -70,6 +76,16 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       it 'sets partner_identifier correctly' do
         configure
         expect(context_class.partner_identifier).to eq('ACME')
+      end
+
+      it 'sets tenant_redis_db correctly' do
+        configure
+        expect(context_class.tenant_redis_db).to eq(1)
+      end
+
+      it 'sets tenant_elasticsearch_prefix correctly' do
+        configure
+        expect(context_class.tenant_elasticsearch_prefix).to eq('acme')
       end
 
       it 'returns true' do
@@ -114,17 +130,17 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       it_behaves_like 'prints backtrace'
     end
 
-    context 'when Mongoid.override_client fails' do
-      before { allow(Mongoid).to receive(:override_client).and_raise('Mongo error') }
+    context 'when Mongoid.override_database fails' do
+      before { allow(Mongoid).to receive(:override_database).and_raise('Mongo error') }
 
       it_behaves_like 'prints configuration error', expected_message: 'Failed to configure tenant'
       it_behaves_like 'prints backtrace'
     end
 
-    context 'when Mongoid does not support override_client' do
+    context 'when Mongoid does not support override_database' do
       before do
         mongo_class = Class.new
-        allow(mongo_class).to receive(:respond_to?).with(:override_client).and_return(false)
+        allow(mongo_class).to receive(:respond_to?).with(:override_database).and_return(false)
         stub_const('Mongoid', mongo_class)
       end
 
@@ -177,7 +193,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       context_class.partner_identifier = 'some_partner'
       allow(ConsoleKit::Output).to receive(:print_info)
       allow(ApplicationRecord).to receive(:establish_connection)
-      allow(Mongoid).to receive(:override_client)
+      allow(Mongoid).to receive(:override_database)
     end
 
     it 'prints info about clearing' do
@@ -187,12 +203,12 @@ RSpec.describe ConsoleKit::TenantConfigurator do
 
     it 'resets ActiveRecord connection' do
       described_class.clear
-      expect(ApplicationRecord).to have_received(:establish_connection).with(nil)
+      expect(ApplicationRecord).to have_received(:establish_connection).with(no_args)
     end
 
     it 'resets Mongoid client override' do
       described_class.clear
-      expect(Mongoid).to have_received(:override_client).with(nil)
+      expect(Mongoid).to have_received(:override_database).with(nil)
     end
 
     it 'resets tenant_shard to nil' do
@@ -203,6 +219,16 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     it 'resets tenant_mongo_db to nil' do
       described_class.clear
       expect(context_class.tenant_mongo_db).to be_nil
+    end
+
+    it 'resets tenant_redis_db to nil' do
+      described_class.clear
+      expect(context_class.tenant_redis_db).to be_nil
+    end
+
+    it 'resets tenant_elasticsearch_prefix to nil' do
+      described_class.clear
+      expect(context_class.tenant_elasticsearch_prefix).to be_nil
     end
 
     it 'resets partner_identifier to nil' do
@@ -237,23 +263,26 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  describe '.validate_context_interface!' do
-    let(:valid_ctx) do
+  describe '.available_context_attributes' do
+    let(:full_ctx) do
       Class.new do
         class << self
-          attr_accessor :tenant_shard, :tenant_mongo_db, :partner_identifier
+          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
+                        :tenant_elasticsearch_prefix, :partner_identifier
         end
       end
     end
 
-    it 'raises error if context class is missing required methods' do
-      invalid_ctx = Class.new # No methods
-      expect { described_class.send(:validate_context_interface!, invalid_ctx) }
-        .to raise_error(ConsoleKit::Error, /does not implement the required interface/i)
+    it 'skips attributes the context class does not support' do
+      partial_ctx = Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end }
+      attrs = described_class.send(:available_context_attributes, partial_ctx)
+      expect(attrs).to contain_exactly(:partner_identifier, :tenant_shard)
     end
 
-    it 'does not raise error if context class has all required methods' do
-      expect { described_class.send(:validate_context_interface!, valid_ctx) }.not_to raise_error
+    it 'includes all attributes when context supports them' do
+      attrs = described_class.send(:available_context_attributes, full_ctx)
+      expect(attrs).to include(:partner_identifier, :tenant_shard, :tenant_mongo_db,
+                               :tenant_redis_db, :tenant_elasticsearch_prefix)
     end
   end
 end

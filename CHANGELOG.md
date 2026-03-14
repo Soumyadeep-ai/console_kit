@@ -6,6 +6,22 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0] - 2026-03-14
+### Added
+- **Redis Connection Handler:** Automatic Redis DB selection per tenant via `Redis.current.select`, with graceful fallback for Redis v5+ where `Redis.current` is deprecated.
+- **Elasticsearch Connection Handler:** Sets a per-tenant Elasticsearch index name prefix via thread-local storage and `Elasticsearch::Model.index_name_prefix=` (when available).
+- **Console Helpers:** New `switch_tenant`, `tenant_info`, and `tenants` methods available in the Rails console for quick tenant management.
+- **Custom Console Prompt:** IRB and Pry prompts now display the active tenant name (e.g., `[acme] main:001>`).
+- **Tenant Banner:** On successful tenant initialization, a banner now shows the tenant name, environment safety warnings (production in red, staging in yellow), and a summary of active connections.
+- **Environment Safety Warnings:** Production and staging environments are flagged with color-coded warnings at tenant setup time.
+- New tenant configuration keys: `redis_db`, `elasticsearch_prefix`, and `environment`.
+
+### Changed
+- `TenantConfigurator` now manages `tenant_redis_db` and `tenant_elasticsearch_prefix` context attributes alongside existing ones.
+- Generator template updated with examples for the new configuration keys.
+
+---
+
 ## [1.0.0] - 2026-03-01
 ### Added
 - **Global Configuration Persistence:** ConsoleKit settings now persist across the entire session and across multiple threads.
@@ -83,6 +99,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.1.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.4

@@ -16,34 +16,34 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   let(:handler) { described_class.new(context) }
 
   before do
-    stub_const('Mongoid', Class.new { def self.override_client(*); end })
-    allow(Mongoid).to receive(:override_client)
+    stub_const('Mongoid', Class.new { def self.override_database(*); end })
+    allow(Mongoid).to receive(:override_database)
   end
 
   describe '#connect' do
-    it 'calls override_client with correct DB' do
+    it 'calls override_database with correct DB' do
       handler.connect
-      expect(Mongoid).to have_received(:override_client).with('mongo_foo')
+      expect(Mongoid).to have_received(:override_database).with('mongo_foo')
     end
 
     context 'when tenant_mongo_db is empty' do
       let(:context) { instance_double(DummyContext, tenant_mongo_db: '') }
 
-      it 'calls override_client with nil' do
+      it 'calls override_database with nil' do
         handler.connect
-        expect(Mongoid).to have_received(:override_client).with(nil)
+        expect(Mongoid).to have_received(:override_database).with(nil)
       end
     end
 
     it 'raises error on connection issues' do
-      allow(Mongoid).to receive(:override_client).and_raise('mongo error')
+      allow(Mongoid).to receive(:override_database).and_raise('mongo error')
       expect { handler.connect }.to raise_error('mongo error')
     end
 
-    context 'when Mongoid does not support override_client' do
+    context 'when Mongoid does not support override_database' do
       before do
         mongo_class = Class.new
-        allow(mongo_class).to receive(:respond_to?).with(:override_client).and_return(false)
+        allow(mongo_class).to receive(:respond_to?).with(:override_database).and_return(false)
         stub_const('Mongoid', mongo_class)
       end
 
@@ -52,7 +52,7 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
 
         handler.connect
 
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(/override_client/)
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(/override_database/)
       end
     end
   end
@@ -68,9 +68,9 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  describe 'delegation' do
-    it 'delegates tenant_mongo_db to context' do
-      expect(handler.tenant_mongo_db).to eq('mongo_foo')
+  describe 'context attribute access' do
+    it 'reads tenant_mongo_db from context' do
+      expect(handler.send(:context_attribute, :tenant_mongo_db)).to eq('mongo_foo')
     end
   end
 end

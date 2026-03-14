@@ -9,36 +9,36 @@ module ConsoleKit
     DEFAULT_SELECTION = '1'
 
     class << self
-      def select = attempt_selection(RETRY_LIMIT)
+      def select
+        RETRY_LIMIT.times do
+          result = attempt_selection
+          return result unless result == :retry
+        end
+        nil
+      end
 
       private
 
-      def attempt_selection(retries_left)
-        return nil if retries_left.zero?
-
+      def attempt_selection
         print_tenant_selection_menu
-        process_selection(retries_left)
-      end
-
-      def process_selection(retries_left)
         selection = parse_user_selection
         return :abort if selection == :abort
-        return attempt_selection(retries_left - 1) unless selection
+        return :retry unless selection
 
         selection.is_a?(Integer) ? resolve_selection(selection) : selection
       end
 
       def print_tenant_selection_menu
         Output.print_header('Multiple tenants detected. Please choose one:')
+        Output.print_list(menu_items)
+      end
 
-        items = []
-        items << '0. Skip (load without tenant configuration)'
-
+      def menu_items
+        items = ['0. Skip (load without tenant configuration)']
         ConsoleKit.tenants.keys.each_with_index do |key, index|
           items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
         end
-
-        Output.print_list(items)
+        items
       end
 
       def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'
@@ -69,9 +69,10 @@ module ConsoleKit
 
       def read_input_with_default
         Output.print_prompt("Selection (number or name) [#{DEFAULT_SELECTION}]: ")
-
         raw_input = $stdin.gets
         raw_input ? normalize_input(raw_input) : :abort
+      rescue Interrupt
+        :abort
       end
 
       def normalize_input(raw_input)

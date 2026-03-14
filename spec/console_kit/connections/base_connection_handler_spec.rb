@@ -35,8 +35,8 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
   end
 
   describe '#available?' do
-    it 'returns false by default' do
-      expect(handler.available?).to be(false)
+    it 'raises NotImplementedError by default' do
+      expect { handler.available? }.to raise_error(NotImplementedError, /must implement #available?/)
     end
   end
 
