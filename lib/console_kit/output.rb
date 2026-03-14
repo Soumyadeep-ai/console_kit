@@ -34,7 +34,7 @@ module ConsoleKit
           return if silent
 
           formatted = (type == :header ? "\n--- #{text} ---" : text)
-          print_with(type, formatted, timestamp, newline: newline)
+          print_with(type, formatted, timestamp, { newline: newline })
         end
       end
 
@@ -55,15 +55,15 @@ module ConsoleKit
       def print_backtrace(exception)
         return if silent
 
-        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true, newline: true) }
+        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}", true, { newline: true }) }
       end
 
       private
 
-      def print_with(type, text, timestamp, newline: true)
+      def print_with(type, text, timestamp, opts = {})
         meta = TYPES.fetch(type)
         message = build_message(text, meta[:symbol], timestamp)
-        output(message, meta[:color], newline: newline)
+        emit(message, meta[:color], opts.fetch(:newline, true))
       end
 
       def build_message(text, symbol, timestamp)
@@ -74,11 +74,10 @@ module ConsoleKit
       def timestamp_prefix(timestamp) = prefix_for(timestamp) { Time.current.strftime('[%Y-%m-%d %H:%M:%S] ') }
       def symbol_prefix(symbol) = prefix_for(symbol) { |sym| "#{sym} " }
 
-      def output(message, color, newline: true)
-        method = newline ? :puts : :print
-        return send(method, message) unless ConsoleKit.configuration.pretty_output && color
-
-        send(method, "\e[#{color}m#{message}\e[0m")
+      def emit(message, color, newline)
+        writer = newline ? :puts : :print
+        formatted = ConsoleKit.configuration.pretty_output && color ? "\e[#{color}m#{message}\e[0m" : message
+        send(writer, formatted)
       end
     end
   end

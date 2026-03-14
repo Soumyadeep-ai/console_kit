@@ -14,9 +14,9 @@ module ConsoleKit
       def connect
         db = tenant_mongo_db.presence
         Output.print_info(switch_message(db))
-        Mongoid.override_client(db)
+        Mongoid.override_database(db)
       rescue NoMethodError
-        Output.print_warning('Mongoid.override_client is not defined.')
+        Output.print_warning('Mongoid.override_database is not available in this version of Mongoid.')
       end
 
       def available? = defined?(Mongoid)

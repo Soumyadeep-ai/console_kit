@@ -30,6 +30,13 @@ module ConsoleKit
         Output.print_info('Tenant context has been cleared.')
       end
 
+      HANDLER_ATTRIBUTES = {
+        Connections::SqlConnectionHandler => :tenant_shard,
+        Connections::MongoConnectionHandler => :tenant_mongo_db,
+        Connections::RedisConnectionHandler => :tenant_redis_db,
+        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
+      }.freeze
+
       private
 
       def reset_tenant(ctx)
@@ -39,7 +46,7 @@ module ConsoleKit
       end
 
       def reset_context_attributes(ctx)
-        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+        %i[tenant_shard tenant_mongo_db tenant_redis_db tenant_elasticsearch_prefix partner_identifier].each do |attr|
           ctx.public_send("#{attr}=", nil)
         end
       end
@@ -69,8 +76,15 @@ module ConsoleKit
       end
 
       def required_interface_methods
-        attributes = %i[tenant_shard tenant_mongo_db partner_identifier]
-        attributes + attributes.map { |a| "#{a}=" }
+        attributes = %i[partner_identifier]
+        HANDLER_ATTRIBUTES.each { |handler, attr| attributes << attr if handler_available?(handler) }
+        attributes + attributes.map { |a| :"#{a}=" }
+      end
+
+      def handler_available?(handler_class)
+        handler_class.new(nil).available?
+      rescue NotImplementedError, StandardError
+        false
       end
 
       def apply_context(constant)
@@ -84,6 +98,8 @@ module ConsoleKit
       def assign_context_attributes(ctx, constant)
         ctx.tenant_shard = constant[:shard]
         ctx.tenant_mongo_db = constant[:mongo_db]
+        ctx.tenant_redis_db = constant[:redis_db]
+        ctx.tenant_elasticsearch_prefix = constant[:elasticsearch_prefix]
         ctx.partner_identifier = constant[:partner_code]
       end
 

@@ -27,12 +27,19 @@ module ConsoleKit
       def reset_current_tenant
         return warn_no_tenants unless tenants?
 
-        warn_reset if current_tenant
-        TenantConfigurator.clear if current_tenant
+        if current_tenant
+          warn_reset
+          TenantConfigurator.clear
+        end
 
         self.current_tenant = nil
         setup
       end
+
+      ENVIRONMENT_WARNINGS = {
+        'production' => -> { Output.print_error('WARNING: You are connected to a PRODUCTION environment!') },
+        'staging' => -> { Output.print_warning('You are connected to a staging environment.') }
+      }.freeze
 
       private
 
@@ -64,9 +71,7 @@ module ConsoleKit
         end
       end
 
-      def exit_on_key(key)
-        return unless key == :exit
-
+      def exit_on_key(_key)
         Output.print_info('Exiting console...')
         Kernel.exit
       end
@@ -76,7 +81,33 @@ module ConsoleKit
         return unless TenantConfigurator.configuration_success
 
         self.current_tenant = key
+        print_tenant_banner(key)
+      end
+
+      def print_tenant_banner(key)
+        constants = ConsoleKit.configuration.tenants[key]&.[](:constants) || {}
+        env = constants[:environment]&.to_s&.downcase
+
         Output.print_success("Tenant initialized: #{key}")
+        print_environment_warning(env) if env
+        print_active_connections
+      end
+
+      def print_environment_warning(env)
+        ENVIRONMENT_WARNINGS[env]&.call
+      end
+
+      def print_active_connections
+        names = active_connection_names
+        Output.print_info("Active connections: #{names.join(', ')}") unless names.empty?
+      end
+
+      def active_connection_names
+        ctx = context_class
+        return [] unless ctx
+
+        handlers = ConsoleKit::Connections::ConnectionManager.available_handlers(ctx)
+        handlers.map { |h| h.class.name.demodulize.delete_suffix('ConnectionHandler') }
       end
 
       def tenants = ConsoleKit.configuration.tenants

@@ -11,14 +11,20 @@ Rails.application.config.after_initialize do
     #     constants: {
     #       shard: :shard_1,
     #       mongo_db: 'mongo_db_1',
-    #       partner_code: 'partner_a'
+    #       partner_code: 'partner_a',
+    #       redis_db: 1,
+    #       elasticsearch_prefix: 'tenant_a',
+    #       environment: 'production'
     #     }
     #   },
     #   tenant_b: {
     #     constants: {
     #       shard: :shard_2,
     #       mongo_db: 'mongo_db_2',
-    #       partner_code: 'partner_b'
+    #       partner_code: 'partner_b',
+    #       redis_db: 2,
+    #       elasticsearch_prefix: 'tenant_b',
+    #       environment: 'staging'
     #     }
     #   }
     # }

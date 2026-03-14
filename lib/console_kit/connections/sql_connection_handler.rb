@@ -13,10 +13,8 @@ module ConsoleKit
 
       def connect
         shard = tenant_shard.presence&.to_sym
-        msg = shard ? "Establishing SQL connection to shard: #{shard}" : 'Resetting SQL connection to default'
-
-        Output.print_info("#{msg} via #{base_class}")
-        base_class.establish_connection(shard)
+        Output.print_info("#{connection_message(shard)} via #{base_class}")
+        shard ? base_class.establish_connection(shard) : base_class.establish_connection
       end
 
       def available? = sql_base_class_name.to_s.safe_constantize.present?
@@ -28,6 +26,10 @@ module ConsoleKit
         return klass if klass
 
         raise Error, "ConsoleKit: sql_base_class '#{sql_base_class_name}' could not be found."
+      end
+
+      def connection_message(shard)
+        shard ? "Establishing SQL connection to shard: #{shard}" : 'Resetting SQL connection to default'
       end
 
       def sql_base_class_name = ConsoleKit.configuration.sql_base_class

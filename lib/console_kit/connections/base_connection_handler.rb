@@ -14,7 +14,7 @@ module ConsoleKit
 
       def initialize(context) = @context = context
       def connect = raise NotImplementedError, "#{self.class} must implement #connect"
-      def available? = false
+      def available? = raise NotImplementedError, "#{self.class} must implement #available?"
     end
   end
 end

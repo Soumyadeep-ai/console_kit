@@ -7,6 +7,8 @@ require 'active_support/core_ext/string/inflections'
 require_relative 'console_kit/version'
 require_relative 'console_kit/configuration'
 require_relative 'console_kit/setup'
+require_relative 'console_kit/console_helpers'
+require_relative 'console_kit/prompt'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 # Main module for ConsoleKit
@@ -21,7 +23,7 @@ module ConsoleKit
     def reset_configuration!
       @configuration = nil
       Setup.current_tenant = nil
-      TenantConfigurator.configuration_success = false
+      TenantConfigurator.configuration_success = false if defined?(TenantConfigurator)
     end
 
     def pretty_output = configuration.pretty_output

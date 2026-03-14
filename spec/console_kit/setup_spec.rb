@@ -13,7 +13,7 @@ RSpec.describe ConsoleKit::Setup do
   let(:context_class) do
     Class.new do
       class << self
-        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+        %i[tenant_shard tenant_mongo_db tenant_redis_db tenant_elasticsearch_prefix partner_identifier].each do |attr|
           define_method(attr) { instance_variable_get("@#{attr}") }
           define_method("#{attr}=") { |val| instance_variable_set("@#{attr}", val) }
         end
@@ -256,6 +256,65 @@ RSpec.describe ConsoleKit::Setup do
       it 'sets up tenant with symbol keys' do
         described_class.setup
         expect(described_class.current_tenant).to eq(:acme)
+      end
+    end
+  end
+
+  describe '.print_tenant_banner' do
+    before do
+      allow(ConsoleKit::Output).to receive(:print_error)
+      allow(ConsoleKit::Output).to receive(:print_warning)
+      allow(ConsoleKit::Output).to receive(:print_info)
+    end
+
+    context 'when environment is production' do
+      before do
+        ConsoleKit.configure do |config|
+          config.tenants = {
+            'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME', environment: 'production' } }
+          }
+          config.context_class = context_class
+        end
+      end
+
+      it 'prints a production warning' do
+        described_class.send(:print_tenant_banner, 'acme')
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/PRODUCTION/)
+      end
+    end
+
+    context 'when environment is staging' do
+      before do
+        ConsoleKit.configure do |config|
+          config.tenants = {
+            'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME', environment: 'staging' } }
+          }
+          config.context_class = context_class
+        end
+      end
+
+      it 'prints a staging warning' do
+        described_class.send(:print_tenant_banner, 'acme')
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(/staging/)
+      end
+    end
+
+    context 'when environment is not set' do
+      before do
+        ConsoleKit.configure do |config|
+          config.tenants = { 'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME' } } }
+          config.context_class = context_class
+        end
+      end
+
+      it 'does not print a production error' do
+        described_class.send(:print_tenant_banner, 'acme')
+        expect(ConsoleKit::Output).not_to have_received(:print_error)
+      end
+
+      it 'does not print a staging warning' do
+        described_class.send(:print_tenant_banner, 'acme')
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
   end

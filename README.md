@@ -8,7 +8,7 @@
 
 A simple and flexible multi-tenant console setup toolkit for Rails applications.
 
-ConsoleKit helps you manage tenant-specific database connections and context configuration via an easy CLI interface and Rails integration.
+ConsoleKit helps you manage tenant-specific database connections (SQL, MongoDB, Redis, Elasticsearch) and context configuration via an easy CLI interface and Rails integration.
 
 ## Installation
 
@@ -50,10 +50,24 @@ Then, edit config/initializers/console_kit.rb to define your tenants and context
 ConsoleKit.configure do |config|
   config.tenants = {
     tenant_one: {
-      constants: { shard: :tenant_one_db, mongo_db: :tenant_one_mongo, partner_code: 'partnerA' }
+      constants: {
+        shard: :tenant_one_db,
+        mongo_db: :tenant_one_mongo,
+        partner_code: 'partnerA',
+        redis_db: 1,
+        elasticsearch_prefix: 'tenant_one',
+        environment: 'production'
+      }
     },
     tenant_two: {
-      constants: { shard: :tenant_two_db, mongo_db: :tenant_two_mongo, partner_code: 'partnerB' }
+      constants: {
+        shard: :tenant_two_db,
+        mongo_db: :tenant_two_mongo,
+        partner_code: 'partnerB',
+        redis_db: 2,
+        elasticsearch_prefix: 'tenant_two',
+        environment: 'staging'
+      }
     }
   }
 
@@ -64,38 +78,71 @@ ConsoleKit.configure do |config|
 end
 ```
 
+## Supported Connections
+
+ConsoleKit automatically detects and manages connections for:
+
+| Connection      | Gem Required    | Config Key               | Behavior                                        |
+|-----------------|-----------------|--------------------------|------------------------------------------------|
+| SQL (ActiveRecord) | `activerecord` | `shard`               | Calls `establish_connection` on your base class |
+| MongoDB         | `mongoid`       | `mongo_db`              | Calls `Mongoid.override_database`              |
+| Redis           | `redis`         | `redis_db`              | Calls `Redis.current.select(db)`               |
+| Elasticsearch   | `elasticsearch` | `elasticsearch_prefix`  | Sets `Elasticsearch::Model.index_name_prefix=` |
+
+Handlers are only activated when their corresponding gem is loaded.
+
 ## Console Usage
 
-When launching the Rails console, ConsoleKit will prompt you to select a tenant (if multiple tenants are configured).
+When launching the Rails console, ConsoleKit will prompt you to select a tenant (if multiple tenants are configured). On selection, a tenant banner is displayed showing the tenant name, environment safety warnings, and active connections.
 
 ### Selection Options:
 - **Number or Name:** Select a tenant by its index or name (case-insensitive).
 - **0 (Skip):** Load the console without any tenant configuration.
 - **exit / quit:** Immediately terminate the console session.
 
-You can also manually interact with it:
+### Console Helpers
 
-### Get Current Tenant
+The following helper methods are available in your Rails console:
+
 ```ruby
+# Switch to a different tenant
+switch_tenant
+
+# Print details about the current tenant
+tenant_info
+
+# List all available tenants
+tenants
+```
+
+### Custom Prompt
+
+ConsoleKit automatically sets your IRB/Pry prompt to show the active tenant:
+
+```
+[tenant_one] main:001>
+```
+
+### Other Methods
+
+```ruby
+# Get current tenant
 ConsoleKit.current_tenant
 # => :tenant_one
-```
 
-### Reset Current Tenant
-```ruby
+# Reset and re-select tenant
 ConsoleKit.reset_current_tenant
-# => nil
-```
 
-### Manually Enable Pretty Output
-```ruby
+# Toggle pretty output
 ConsoleKit.enable_pretty_output
-```
-
-### Manually Disable Pretty Output
-```ruby
 ConsoleKit.disable_pretty_output
 ```
+
+### Environment Warnings
+
+When a tenant has an `environment` key in its constants:
+- **production**: A red warning is displayed at setup time.
+- **staging**: A yellow warning is displayed at setup time.
 
 ## Development
 

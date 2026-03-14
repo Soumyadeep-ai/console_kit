@@ -1,4 +1,28 @@
+exclude_paths:
+  - spec
+
 detectors:
   UncommunicativeVariableName:
     exclude:
       - e
+
+  # Configuration classes need writable attributes by design
+  Attribute:
+    exclude:
+      - ConsoleKit::Configuration
+
+  # Module methods designed to be mixed into console session via include
+  UtilityFunction:
+    exclude:
+      - ConsoleKit::ConsoleHelpers
+      - ConsoleKit::Connections::SqlConnectionHandler#sql_base_class_name
+
+  # Interface validation requires respond_to? checks
+  ManualDispatch:
+    exclude:
+      - ConsoleKit::TenantConfigurator#validate_context_interface!
+
+  # Nil-check needed for selection result handling
+  NilCheck:
+    exclude:
+      - ConsoleKit::Setup#handle_selection_result
