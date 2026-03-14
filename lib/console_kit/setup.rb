@@ -80,6 +80,7 @@ module ConsoleKit
         return unless TenantConfigurator.configuration_success
 
         self.current_tenant = key
+        Prompt.apply
         print_tenant_banner(key)
       end
 

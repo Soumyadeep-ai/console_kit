@@ -11,7 +11,7 @@ module ConsoleKit
       def connect
         db = context_attribute(:tenant_redis_db)
         Output.print_info(switch_message(db))
-        select_redis_db(db || DEFAULT_REDIS_DB)
+        select_redis_db(db.nil? ? DEFAULT_REDIS_DB : db)
       end
 
       def available? = defined?(Redis)
@@ -21,7 +21,7 @@ module ConsoleKit
       def select_redis_db(db)
         if Redis.respond_to?(:current) && Redis.current
           Redis.current.select(db)
-        elsif defined?(RedisClient)
+        elsif defined?(RedisClient) && db != DEFAULT_REDIS_DB
           Output.print_warning("Redis DB #{db} configured but auto-select not supported with RedisClient. " \
                                'Ensure your Redis configuration sets the correct DB.')
         end
