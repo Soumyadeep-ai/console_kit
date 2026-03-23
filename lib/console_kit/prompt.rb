@@ -29,14 +29,14 @@ module ConsoleKit
       end
 
       def apply_pry_prompt
-        Pry.config.prompt = Pry::Prompt.new(
-          'console_kit',
-          'ConsoleKit tenant prompt',
-          [
-            proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}> " },
-            proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}* " }
-          ]
-        )
+        main_proc = proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}> " }
+        wait_proc = proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}* " }
+
+        Pry.config.prompt = if defined?(Pry::Prompt) && Pry::Prompt.respond_to?(:new)
+                               Pry::Prompt.new('console_kit', 'ConsoleKit tenant prompt', [main_proc, wait_proc])
+                             else
+                               [main_proc, wait_proc]
+                             end
       end
     end
   end
