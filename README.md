@@ -5,6 +5,7 @@
 ![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/release.yml/badge.svg)
 ![License](https://img.shields.io/github/license/Soumyadeep-ai/console_kit)
 ![Ruby](https://img.shields.io/badge/ruby-%3E=3.1.0-red)
+![Rails](https://img.shields.io/badge/rails-%3E=6.1-red)
 
 A simple and flexible multi-tenant console setup toolkit for Rails applications.
 
