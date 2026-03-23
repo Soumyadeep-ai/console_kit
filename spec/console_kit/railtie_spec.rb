@@ -52,16 +52,19 @@ RSpec.describe 'ConsoleKit::Railtie' do
       expect(ConsoleKit::Setup).to have_received(:setup)
     end
 
-    it 'extends main when neither Pry nor IRB::ExtendCommandBundle is defined' do
-      hide_const('Pry') if defined?(Pry)
-      hide_const('IRB::ExtendCommandBundle') if defined?(IRB::ExtendCommandBundle)
-      allow(ConsoleKit::Setup).to receive(:setup)
-      allow(ConsoleKit::Prompt).to receive(:apply)
+    context 'when neither Pry nor IRB::ExtendCommandBundle is defined' do
+      before do
+        hide_const('Pry') if defined?(Pry)
+        hide_const('IRB::ExtendCommandBundle') if defined?(IRB::ExtendCommandBundle)
+        allow(ConsoleKit::Setup).to receive(:setup)
+        allow(ConsoleKit::Prompt).to receive(:apply)
+        allow(TOPLEVEL_BINDING.receiver).to receive(:extend)
+      end
 
-      receiver = TOPLEVEL_BINDING.receiver
-      expect(receiver).to receive(:extend).with(ConsoleKit::ConsoleHelpers)
-
-      ConsoleKit::Railtie.console_block.call
+      it 'extends main directly with ConsoleHelpers' do
+        ConsoleKit::Railtie.console_block.call
+        expect(TOPLEVEL_BINDING.receiver).to have_received(:extend).with(ConsoleKit::ConsoleHelpers)
+      end
     end
   end
 

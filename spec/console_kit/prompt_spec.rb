@@ -99,10 +99,13 @@ RSpec.describe ConsoleKit::Prompt do
         allow(Pry).to receive(:config).and_return(pry_config)
       end
 
-      it 'sets the Pry prompt as an array of procs' do
+      it 'sets the Pry prompt as an array' do
         described_class.apply
-        expect(pry_config.prompt).to be_an(Array)
-        expect(pry_config.prompt.length).to eq(2)
+        expect(pry_config.prompt).to be_an(Array).and have_attributes(length: 2)
+      end
+
+      it 'uses procs for the prompt entries' do
+        described_class.apply
         expect(pry_config.prompt.first).to be_a(Proc)
       end
 

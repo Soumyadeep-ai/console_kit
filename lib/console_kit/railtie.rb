@@ -6,9 +6,7 @@ module ConsoleKit
     console do
       ConsoleKit::Setup.setup
       ConsoleKit::Prompt.apply
-      if defined?(Pry)
-        TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
-      elsif defined?(IRB::ExtendCommandBundle)
+      if defined?(IRB::ExtendCommandBundle) && !defined?(Pry)
         IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
       else
         TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
