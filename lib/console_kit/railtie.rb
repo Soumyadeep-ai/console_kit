@@ -10,6 +10,8 @@ module ConsoleKit
         TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
       elsif defined?(IRB::ExtendCommandBundle)
         IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
+      else
+        TOPLEVEL_BINDING.receiver.extend(ConsoleKit::ConsoleHelpers)
       end
     end
 
