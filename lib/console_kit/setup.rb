@@ -90,7 +90,7 @@ module ConsoleKit
         Output.print_success("Tenant initialized: #{key}")
         print_environment_warning(env) if env
         print_active_connections
-        ConsoleKit::Connections::Dashboard.display
+        ConsoleKit::Connections::Dashboard.display if ConsoleKit.configuration.show_dashboard
       end
 
       def print_environment_warning(env) = ENVIRONMENT_WARNINGS[env]&.call

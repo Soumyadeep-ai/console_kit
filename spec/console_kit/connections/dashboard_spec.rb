@@ -19,7 +19,7 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
           details: { adapter: 'PostgreSQL', pool_size: 5, version: 'PostgreSQL 14.0' }
         }
       end
-      let(:mock_handler) { double(diagnostics: sql_diagnostics) }
+      let(:mock_handler) { double(safe_diagnostics: sql_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)
@@ -80,8 +80,8 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       let(:error_diagnostics) do
         { name: 'MongoDB', status: :error, latency_ms: nil, details: { error: 'auth failed' } }
       end
-      let(:connected_handler) { double(diagnostics: connected_diagnostics) }
-      let(:error_handler)     { double(diagnostics: error_diagnostics) }
+      let(:connected_handler) { double(safe_diagnostics: connected_diagnostics) }
+      let(:error_handler)     { double(safe_diagnostics: error_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)
@@ -116,7 +116,7 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       let(:unavailable_diagnostics) do
         { name: 'Redis', status: :unavailable, latency_ms: nil, details: {} }
       end
-      let(:mock_handler) { double(diagnostics: unavailable_diagnostics) }
+      let(:mock_handler) { double(safe_diagnostics: unavailable_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)

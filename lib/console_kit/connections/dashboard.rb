@@ -8,7 +8,7 @@ module ConsoleKit
         def display
           ctx = ConsoleKit.configuration.context_class
           handlers = ConnectionManager.available_handlers(ctx)
-          rows = handlers.map(&:diagnostics)
+          rows = handlers.map(&:safe_diagnostics)
           return Output.print_warning('No connections available') if rows.empty?
 
           Output.print_header('Connection Dashboard')
@@ -44,7 +44,7 @@ module ConsoleKit
         def format_status(status)
           case status
           when :connected then "\u2713 Connected"
-          when :error then "\u2717 Error"
+          when :error, :timeout then "\u2717 Error"
           when :unavailable then "\u2014 N/A"
           else '? Unknown'
           end

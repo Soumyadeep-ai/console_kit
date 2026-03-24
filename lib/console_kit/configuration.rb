@@ -3,7 +3,7 @@
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
-    attr_accessor :pretty_output, :tenants, :sql_base_class
+    attr_accessor :pretty_output, :tenants, :sql_base_class, :show_dashboard
     attr_writer :context_class
 
     def initialize
@@ -11,6 +11,7 @@ module ConsoleKit
       @tenants = nil
       @context_class = nil
       @sql_base_class = 'ApplicationRecord'
+      @show_dashboard = false
     end
 
     def context_class
