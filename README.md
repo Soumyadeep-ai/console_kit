@@ -76,6 +76,9 @@ ConsoleKit.configure do |config|
 
   # Optional: Toggle pretty CLI output
   config.pretty_output = true
+
+  # Optional: Show connection dashboard on tenant switch (default: false)
+  # config.show_dashboard = true
 end
 ```
 
@@ -114,6 +117,9 @@ tenant_info
 
 # List all available tenants
 tenants
+
+# Show connection diagnostics dashboard
+dashboard
 ```
 
 ### Custom Prompt
@@ -137,6 +143,28 @@ ConsoleKit.reset_current_tenant
 # Toggle pretty output
 ConsoleKit.enable_pretty_output
 ConsoleKit.disable_pretty_output
+```
+
+### Connection Dashboard
+
+Run `dashboard` in the console to see a diagnostics table for all active connections:
+
+```
+--- Connection Dashboard ---
+┌───────────────┬─────────────┬─────────┬──────────────────────────────────────────┐
+│ Service       │ Status      │ Latency │ Details                                  │
+├───────────────┼─────────────┼─────────┼──────────────────────────────────────────┤
+│ SQL           │ ✓ Connected │ 1.1ms   │ adapter: PostgreSQL, pool_size: 5, ...   │
+│ MongoDB       │ ✓ Connected │ 2.3ms   │ database: my_tenant_db, version: 8.0.20  │
+│ Redis         │ — N/A       │ —       │                                          │
+│ Elasticsearch │ ✗ Error     │ —       │ error: connection refused                │
+└───────────────┴─────────────┴─────────┴──────────────────────────────────────────┘
+```
+
+Each handler is queried with a 2-second timeout to keep things fast. To auto-display the dashboard on every tenant switch, add to your initializer:
+
+```ruby
+config.show_dashboard = true
 ```
 
 ### Environment Warnings

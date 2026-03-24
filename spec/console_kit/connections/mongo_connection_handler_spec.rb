@@ -76,8 +76,7 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
           command: double('mock')
         )
       end
-      let(:used_client) { double(database: database) }
-      let(:client) { double(use: used_client, database: database) }
+      let(:client) { double(use: double(database: database), database: database) }
       let(:build_info_result) { [{ 'version' => '6.0.0' }] }
 
       before do
