@@ -85,6 +85,106 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
     end
   end
 
+  describe '#diagnostics' do
+    context 'when Elasticsearch::Model is available with a client' do
+      let(:cluster) { double(health: { 'cluster_name' => 'my-cluster', 'status' => 'green' }) }
+      let(:es_client) { double(ping: true, cluster: cluster) }
+
+      before do
+        the_client = es_client
+        es_model = Module.new do
+          define_singleton_method(:client) { the_client }
+        end
+        stub_const('Elasticsearch::Model', es_model)
+      end
+
+      it 'returns name Elasticsearch' do
+        expect(handler.diagnostics[:name]).to eq('Elasticsearch')
+      end
+
+      it 'returns status :connected' do
+        expect(handler.diagnostics[:status]).to eq(:connected)
+      end
+
+      it 'returns a numeric latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_a(Numeric)
+      end
+
+      it 'returns details with prefix, cluster, and health keys' do
+        expect(handler.diagnostics[:details]).to include(:prefix, :cluster, :health)
+      end
+
+      it 'includes the cluster name in details' do
+        expect(handler.diagnostics[:details][:cluster]).to eq('my-cluster')
+      end
+
+      it 'includes the cluster health status in details' do
+        expect(handler.diagnostics[:details][:health]).to eq('green')
+      end
+    end
+
+    context 'when Elasticsearch::Model does not respond to client' do
+      before do
+        stub_const('Elasticsearch::Model', Module.new)
+      end
+
+      it 'returns status :unavailable' do
+        expect(handler.diagnostics[:status]).to eq(:unavailable)
+      end
+
+      it 'returns name Elasticsearch' do
+        expect(handler.diagnostics[:name]).to eq('Elasticsearch')
+      end
+    end
+
+    context 'when Elasticsearch is not defined' do
+      before { hide_const('Elasticsearch') }
+
+      it 'returns status :unavailable' do
+        expect(handler.diagnostics[:status]).to eq(:unavailable)
+      end
+
+      it 'returns name Elasticsearch' do
+        expect(handler.diagnostics[:name]).to eq('Elasticsearch')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'returns empty details' do
+        expect(handler.diagnostics[:details]).to eq({})
+      end
+    end
+
+    context 'when the connection raises an error' do
+      before do
+        es_model = Module.new do
+          def self.client
+            raise StandardError, 'connection timeout'
+          end
+        end
+        stub_const('Elasticsearch::Model', es_model)
+      end
+
+      it 'returns status :error' do
+        expect(handler.diagnostics[:status]).to eq(:error)
+      end
+
+      it 'returns name Elasticsearch' do
+        expect(handler.diagnostics[:name]).to eq('Elasticsearch')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'includes the error message in details' do
+        expect(handler.diagnostics[:details][:error]).to include('connection timeout')
+      end
+    end
+  end
+
   describe 'context attribute access' do
     it 'reads tenant_elasticsearch_prefix from context' do
       expect(handler.send(:context_attribute, :tenant_elasticsearch_prefix)).to eq('acme')

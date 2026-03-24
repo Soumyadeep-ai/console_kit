@@ -81,4 +81,106 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       ConsoleKit.configuration.sql_base_class = 'ApplicationRecord'
     end
   end
+
+  describe '#diagnostics' do
+    context 'when SQL is available' do
+      let(:pool) { double(size: 5) }
+      let(:conn) do
+        double(
+          adapter_name: 'PostgreSQL',
+          execute: true,
+          select_value: 'PostgreSQL 14.0'
+        )
+      end
+
+      before do
+        stub_const('ApplicationRecord', Class.new do
+          def self.establish_connection(*); end
+          def self.connection; end
+          def self.connection_pool; end
+        end)
+        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+      end
+
+      it 'returns a hash with name SQL' do
+        result = handler.diagnostics
+        expect(result[:name]).to eq('SQL')
+      end
+
+      it 'returns status :connected' do
+        result = handler.diagnostics
+        expect(result[:status]).to eq(:connected)
+      end
+
+      it 'returns a numeric latency_ms' do
+        result = handler.diagnostics
+        expect(result[:latency_ms]).to be_a(Numeric)
+      end
+
+      it 'returns details with adapter, pool_size, and version keys' do
+        result = handler.diagnostics
+        expect(result[:details]).to include(:adapter, :pool_size, :version)
+      end
+
+      it 'includes the adapter name in details' do
+        result = handler.diagnostics
+        expect(result[:details][:adapter]).to eq('PostgreSQL')
+      end
+
+      it 'includes the pool size in details' do
+        result = handler.diagnostics
+        expect(result[:details][:pool_size]).to eq(5)
+      end
+    end
+
+    context 'when SQL is unavailable' do
+      before do
+        ConsoleKit.configuration.sql_base_class = 'NonExistent'
+      end
+
+      after { ConsoleKit.configuration.sql_base_class = 'ApplicationRecord' }
+
+      it 'returns status :unavailable' do
+        expect(handler.diagnostics[:status]).to eq(:unavailable)
+      end
+
+      it 'returns name SQL' do
+        expect(handler.diagnostics[:name]).to eq('SQL')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'returns empty details' do
+        expect(handler.diagnostics[:details]).to eq({})
+      end
+    end
+
+    context 'when the connection raises an error' do
+      before do
+        stub_const('ApplicationRecord', Class.new do
+          def self.establish_connection(*); end
+          def self.connection; end
+        end)
+        allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'connection refused')
+      end
+
+      it 'returns status :error' do
+        expect(handler.diagnostics[:status]).to eq(:error)
+      end
+
+      it 'returns name SQL' do
+        expect(handler.diagnostics[:name]).to eq('SQL')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'includes the error message in details' do
+        expect(handler.diagnostics[:details][:error]).to include('connection refused')
+      end
+    end
+  end
 end

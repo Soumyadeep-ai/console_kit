@@ -265,6 +265,7 @@ RSpec.describe ConsoleKit::Setup do
       allow(ConsoleKit::Output).to receive(:print_error)
       allow(ConsoleKit::Output).to receive(:print_warning)
       allow(ConsoleKit::Output).to receive(:print_info)
+      allow(ConsoleKit::Connections::Dashboard).to receive(:display)
     end
 
     context 'when environment is production' do

@@ -9,3 +9,7 @@ plugins:
 Metrics/BlockLength:
   Exclude:
     - 'spec/**/*_spec.rb'
+
+RSpec/VerifiedDoubles:
+  Exclude:
+    - 'spec/console_kit/connections/**/*_spec.rb'

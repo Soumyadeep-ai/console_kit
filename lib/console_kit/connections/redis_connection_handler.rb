@@ -16,7 +16,37 @@ module ConsoleKit
 
       def available? = defined?(Redis)
 
+      def diagnostics
+        return unavailable_diagnostics('Redis') unless available?
+
+        redis = Redis.respond_to?(:current) && Redis.current
+        return unavailable_diagnostics('Redis') unless redis
+
+        latency = measure_latency { redis.ping }
+        build_redis_diagnostics(redis, latency)
+      rescue StandardError => e
+        error_diagnostics('Redis', e)
+      end
+
       private
+
+      def build_redis_diagnostics(redis, latency)
+        {
+          name: 'Redis',
+          status: :connected,
+          latency_ms: latency,
+          details: redis_details(redis)
+        }
+      end
+
+      def redis_details(redis)
+        info = redis.info
+        {
+          db: context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB,
+          version: info['redis_version'],
+          memory: info['used_memory_human']
+        }
+      end
 
       def select_redis_db(db)
         if Redis.respond_to?(:current) && Redis.current

@@ -14,7 +14,30 @@ module ConsoleKit
 
       def available? = sql_base_class_name.to_s.safe_constantize.present?
 
+      def diagnostics
+        return unavailable_diagnostics('SQL') unless available?
+
+        conn = base_class.connection
+        latency = measure_latency { conn.execute('SELECT 1') }
+        build_sql_diagnostics(conn, latency)
+      rescue StandardError => e
+        error_diagnostics('SQL', e)
+      end
+
       private
+
+      def build_sql_diagnostics(conn, latency)
+        {
+          name: 'SQL',
+          status: :connected,
+          latency_ms: latency,
+          details: {
+            adapter: conn.adapter_name,
+            pool_size: base_class.connection_pool.size,
+            version: conn.select_value('SELECT version()').to_s.truncate(50)
+          }
+        }
+      end
 
       def base_class
         klass = sql_base_class_name.to_s.safe_constantize

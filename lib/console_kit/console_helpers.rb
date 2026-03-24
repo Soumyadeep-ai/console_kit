@@ -16,6 +16,8 @@ module ConsoleKit
       print_tenant_details(tenant, constants)
     end
 
+    def dashboard = ConsoleKit::Connections::Dashboard.display
+
     def tenants
       names = ConsoleKit.configuration.tenants&.keys || []
       ConsoleKit::Output.print_list(names, header: 'Available Tenants')

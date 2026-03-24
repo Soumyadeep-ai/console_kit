@@ -2,6 +2,7 @@
 
 require_relative 'output'
 require_relative 'connections/connection_manager'
+require_relative 'connections/dashboard'
 
 module ConsoleKit
   # For tenant configuration

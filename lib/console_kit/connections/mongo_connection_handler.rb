@@ -16,7 +16,30 @@ module ConsoleKit
 
       def available? = defined?(Mongoid)
 
+      def diagnostics
+        return unavailable_diagnostics('MongoDB') unless available?
+
+        client = Mongoid.default_client
+        latency = measure_latency { client.database.command(ping: 1) }
+        build_mongo_diagnostics(client, latency)
+      rescue StandardError => e
+        error_diagnostics('MongoDB', e)
+      end
+
       private
+
+      def build_mongo_diagnostics(client, latency)
+        build_info = client.database.command(buildInfo: 1).first
+        {
+          name: 'MongoDB',
+          status: :connected,
+          latency_ms: latency,
+          details: {
+            database: client.database.name,
+            version: build_info['version']
+          }
+        }
+      end
 
       def switch_message(db)
         db ? "Switching to MongoDB client: #{db}" : 'Resetting MongoDB client to default'
