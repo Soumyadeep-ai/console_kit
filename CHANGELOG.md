@@ -6,8 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.2.0] - 2026-03-23
+## [1.2.0] - 2026-03-24
 ### Added
+- **Connection Dashboard:** New `dashboard` console helper displaying a Unicode table with connection status, latency, and service-specific details (adapter, DB version, pool size, memory, cluster health) for all active handlers.
+- **`show_dashboard` Config Option:** Opt-in auto-display of the dashboard on tenant switch (`config.show_dashboard = true`). Off by default to keep tenant switching fast.
+- **Handler Diagnostics:** Each connection handler now exposes a `diagnostics` method with status, latency, and details.
+- **Per-Handler Timeout:** Diagnostics calls are wrapped in a 2-second timeout to prevent slow services from blocking.
 - **Rails 6.1+ Support:** Lowered minimum Rails version from 7.2.1 to 6.1, enabling use in older Rails applications.
 - **Pry Prompt Fallback:** Graceful fallback for Pry versions < 0.13 that lack `Pry::Prompt.new`.
 - **IRB Fallback:** Console helpers now work when `IRB::ExtendCommandBundle` is not available.
