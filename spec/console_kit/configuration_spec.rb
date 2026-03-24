@@ -21,6 +21,10 @@ RSpec.describe ConsoleKit::Configuration do
     it 'sets default sql_base_class to ApplicationRecord' do
       expect(config.sql_base_class).to eq('ApplicationRecord')
     end
+
+    it 'sets default show_dashboard to false' do
+      expect(config.show_dashboard).to be false
+    end
   end
 
   describe '#context_class' do

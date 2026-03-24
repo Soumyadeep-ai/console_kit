@@ -44,6 +44,12 @@ module ConsoleKit
       configuration.context_class = val
     end
 
+    def show_dashboard = configuration.show_dashboard
+
+    def show_dashboard=(val)
+      configuration.show_dashboard = val
+    end
+
     def current_tenant = Setup.current_tenant
     def reset_current_tenant = Setup.reset_current_tenant
     def enable_pretty_output = configuration.pretty_output = true
