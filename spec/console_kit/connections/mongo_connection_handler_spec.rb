@@ -72,11 +72,12 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     context 'when MongoDB is available' do
       let(:database) do
         double(
-          name: 'test_db',
+          name: 'mongo_foo',
           command: double('mock')
         )
       end
-      let(:client) { double(database: database) }
+      let(:used_client) { double(database: database) }
+      let(:client) { double(use: used_client, database: database) }
       let(:build_info_result) { [{ 'version' => '6.0.0' }] }
 
       before do
@@ -106,7 +107,7 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
 
       it 'includes the database name in details' do
-        expect(handler.diagnostics[:details][:database]).to eq('test_db')
+        expect(handler.diagnostics[:details][:database]).to eq('mongo_foo')
       end
 
       it 'includes the server version in details' do

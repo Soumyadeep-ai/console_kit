@@ -19,23 +19,29 @@ module ConsoleKit
       def diagnostics
         return unavailable_diagnostics('MongoDB') unless available?
 
-        client = Mongoid.default_client
-        latency = measure_latency { client.database.command(ping: 1) }
-        build_mongo_diagnostics(client, latency)
+        db = tenant_database
+        latency = measure_latency { db.command(ping: 1) }
+        build_mongo_diagnostics(db, latency)
       rescue StandardError => e
         error_diagnostics('MongoDB', e)
       end
 
       private
 
-      def build_mongo_diagnostics(client, latency)
-        build_info = client.database.command(buildInfo: 1).first
+      def tenant_database
+        override = context_attribute(:tenant_mongo_db).presence
+        client = Mongoid.default_client
+        override ? client.use(override).database : client.database
+      end
+
+      def build_mongo_diagnostics(database, latency)
+        build_info = database.command(buildInfo: 1).first
         {
           name: 'MongoDB',
           status: :connected,
           latency_ms: latency,
           details: {
-            database: client.database.name,
+            database: database.name,
             version: build_info['version']
           }
         }
