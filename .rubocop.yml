@@ -13,3 +13,4 @@ Metrics/BlockLength:
 RSpec/VerifiedDoubles:
   Exclude:
     - 'spec/console_kit/connections/**/*_spec.rb'
+
