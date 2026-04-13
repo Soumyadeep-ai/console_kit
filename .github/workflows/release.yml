@@ -40,7 +40,7 @@ jobs:
         run: gem build console_kit.gemspec
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: console_kit-*.gem
           generate_release_notes: true
