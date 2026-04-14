@@ -16,7 +16,12 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     # Stub configuration accessor
     allow(ConsoleKit.configuration).to receive_messages(tenants: tenants, context_class: context_class)
 
-    stub_const('ApplicationRecord', Class.new { def self.establish_connection(_arg = nil); end })
+    stub_const('ApplicationRecord', Class.new do
+      def self.establish_connection(_arg = nil); end
+      def self.connection_pool
+        @connection_pool ||= Class.new { def disconnect!; end }.new
+      end
+    end)
     stub_const('Mongoid', Class.new { def self.override_database(_arg); end })
     stub_const('Redis', Class.new { def self.current; end })
     stub_const('Elasticsearch', Module.new)

@@ -14,10 +14,15 @@ end
 RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
   let(:context) { instance_double(DummyContext, tenant_shard: 'shard_foo') }
   let(:handler) { described_class.new(context) }
+  let(:connection_pool) { instance_double('ConnectionPool', disconnect!: true) }
 
   before do
-    stub_const('ApplicationRecord', Class.new { def self.establish_connection(*); end })
+    stub_const('ApplicationRecord', Class.new do
+      def self.establish_connection(*); end
+      def self.connection_pool; end
+    end)
     allow(ApplicationRecord).to receive(:establish_connection)
+    allow(ApplicationRecord).to receive(:connection_pool).and_return(connection_pool)
   end
 
   describe '#connect' do
@@ -26,10 +31,29 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_foo)
     end
 
+    it 'disconnects the old connection pool before establishing a new one' do
+      handler.connect
+      expect(connection_pool).to have_received(:disconnect!)
+    end
+
+    # rubocop:disable RSpec/MultipleExpectations, RSpec/MessageSpies
+    it 'disconnects before establishing a new connection' do
+      expect(connection_pool).to receive(:disconnect!).ordered
+      expect(ApplicationRecord).to receive(:establish_connection).with(:shard_foo).ordered
+      handler.connect
+    end
+    # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
+
     context 'with a custom base class' do
+      let(:custom_pool) { instance_double('ConnectionPool', disconnect!: true) }
+
       before do
-        stub_const('MyBaseRecord', Class.new { def self.establish_connection(*); end })
+        stub_const('MyBaseRecord', Class.new do
+          def self.establish_connection(*); end
+          def self.connection_pool; end
+        end)
         allow(MyBaseRecord).to receive(:establish_connection)
+        allow(MyBaseRecord).to receive(:connection_pool).and_return(custom_pool)
         ConsoleKit.configuration.sql_base_class = 'MyBaseRecord'
       end
 
@@ -38,6 +62,11 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       it 'calls establish_connection on the custom base class' do
         handler.connect
         expect(MyBaseRecord).to have_received(:establish_connection).with(:shard_foo)
+      end
+
+      it 'disconnects the custom base class pool' do
+        handler.connect
+        expect(custom_pool).to have_received(:disconnect!)
       end
 
       it 'does not call establish_connection on ApplicationRecord' do
@@ -52,6 +81,23 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       it 'calls establish_connection with no arguments' do
         handler.connect
         expect(ApplicationRecord).to have_received(:establish_connection).with(no_args)
+      end
+
+      it 'still disconnects the old pool' do
+        handler.connect
+        expect(connection_pool).to have_received(:disconnect!)
+      end
+    end
+
+    context 'when connection_pool is not available' do
+      before do
+        allow(ApplicationRecord).to receive(:respond_to?).and_call_original
+        allow(ApplicationRecord).to receive(:respond_to?).with(:connection_pool).and_return(false)
+      end
+
+      it 'skips disconnect and still establishes connection' do
+        handler.connect
+        expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_foo)
       end
     end
 
