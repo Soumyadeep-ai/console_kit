@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'active_support/core_ext/class/subclasses'
-require 'timeout'
 
 module ConsoleKit
   module Connections
@@ -19,16 +18,20 @@ module ConsoleKit
       def diagnostics = raise NotImplementedError, "#{self.class} must implement #diagnostics"
 
       def safe_diagnostics(timeout: 2)
-        Timeout.timeout(timeout) { diagnostics }
-      rescue Timeout::Error
-        { name: self.class.name.demodulize.delete_suffix('ConnectionHandler'), status: :timeout, latency_ms: nil,
-          details: { error: "Timed out after #{timeout}s" } }
+        result = nil
+        thread = Thread.new { result = diagnostics }
+        unless thread.join(timeout)
+          thread.kill
+          return { name: self.class.name.demodulize.delete_suffix('ConnectionHandler'), status: :timeout,
+                   latency_ms: nil, details: { error: "Timed out after #{timeout}s" } }
+        end
+        result
       end
 
       private
 
       def context_attribute(name)
-        @context.respond_to?(name, true) ? @context.send(name) : nil
+        @context.respond_to?(name) ? @context.public_send(name) : nil
       end
 
       def measure_latency
