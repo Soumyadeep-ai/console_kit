@@ -18,6 +18,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
 
     stub_const('ApplicationRecord', Class.new do
       def self.establish_connection(_arg = nil); end
+
       def self.connection_pool
         @connection_pool ||= Class.new { def disconnect!; end }.new
       end

@@ -9,7 +9,7 @@ module ConsoleKit
       def connect
         shard = context_attribute(:tenant_shard).presence&.to_sym
         Output.print_info("#{connection_message(shard)} via #{base_class}")
-        base_class.connection_pool.disconnect! if base_class.respond_to?(:connection_pool) && base_class.connection_pool
+        disconnect_existing_pool
         shard ? base_class.establish_connection(shard) : base_class.establish_connection
       end
 
@@ -26,6 +26,10 @@ module ConsoleKit
       end
 
       private
+
+      def disconnect_existing_pool
+        base_class.connection_pool.disconnect! if base_class.respond_to?(:connection_pool) && base_class.connection_pool
+      end
 
       def build_sql_diagnostics(conn, latency)
         {

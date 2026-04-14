@@ -12,9 +12,14 @@ class DummyContext
 end
 
 RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
+  let(:pool_class) do
+    Class.new do
+      def disconnect!; end
+    end
+  end
   let(:context) { instance_double(DummyContext, tenant_shard: 'shard_foo') }
   let(:handler) { described_class.new(context) }
-  let(:connection_pool) { instance_double('ConnectionPool', disconnect!: true) }
+  let(:connection_pool) { instance_double(pool_class, disconnect!: true) }
 
   before do
     stub_const('ApplicationRecord', Class.new do
@@ -45,7 +50,7 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
 
     context 'with a custom base class' do
-      let(:custom_pool) { instance_double('ConnectionPool', disconnect!: true) }
+      let(:custom_pool) { instance_double(pool_class, disconnect!: true) }
 
       before do
         stub_const('MyBaseRecord', Class.new do
@@ -130,22 +135,16 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
 
   describe '#diagnostics' do
     context 'when SQL is available' do
-      let(:pool) { double(size: 5) }
-      let(:conn) do
-        double(
-          adapter_name: 'PostgreSQL',
-          execute: true,
-          select_value: 'PostgreSQL 14.0'
-        )
-      end
-
       before do
         stub_const('ApplicationRecord', Class.new do
           def self.establish_connection(*); end
           def self.connection; end
           def self.connection_pool; end
         end)
-        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+        allow(ApplicationRecord).to receive_messages(
+          connection: double(adapter_name: 'PostgreSQL', execute: true, select_value: 'PostgreSQL 14.0'),
+          connection_pool: double(size: 5)
+        )
       end
 
       it 'returns a hash with name SQL' do
