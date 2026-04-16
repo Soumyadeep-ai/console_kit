@@ -14,6 +14,7 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
       def connect; end
       def available? = true
+      def diagnostics = { name: 'DummyA', status: :connected, latency_ms: 0, details: {} }
     end
   end
 
@@ -21,6 +22,7 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
       def connect; end
       def available? = false
+      def diagnostics = { name: 'DummyB', status: :unavailable, latency_ms: nil, details: {} }
     end
   end
 
@@ -51,15 +53,15 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       expect(handlers.first.context).to eq(context)
     end
 
-    it 'returns an empty array if no handlers are available' do
+    it 'returns an empty array when all handlers are unavailable' do
       allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([dummy_handler_b])
       expect(described_class.available_handlers(context)).to be_empty
     end
-  end
 
-  describe '.handler_classes' do
-    it 'returns the classes from the BaseConnectionHandler registry' do
-      expect(described_class.send(:handler_classes)).to eq(ConsoleKit::Connections::BaseConnectionHandler.registry)
+    it 'uses BaseConnectionHandler.registry to discover handlers' do
+      allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_call_original
+      described_class.available_handlers(context)
+      expect(ConsoleKit::Connections::BaseConnectionHandler).to have_received(:registry)
     end
   end
 end

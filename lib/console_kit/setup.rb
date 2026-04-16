@@ -3,17 +3,13 @@
 require_relative 'tenant_selector'
 require_relative 'tenant_configurator'
 require_relative 'output'
+require_relative 'setup_ui'
 
 # Core Logic for initial Setup
 module ConsoleKit
   # Does the initial setup
   module Setup
     class << self
-      ENVIRONMENT_WARNINGS = {
-        'production' => -> { Output.print_error('WARNING: You are connected to a PRODUCTION environment!') },
-        'staging' => -> { Output.print_warning('You are connected to a staging environment.') }
-      }.freeze
-
       def current_tenant = Thread.current[:console_kit_current_tenant]
 
       def current_tenant=(val)
@@ -32,6 +28,12 @@ module ConsoleKit
       def reset_current_tenant
         return warn_no_tenants unless tenants?
 
+        perform_tenant_reset
+      end
+
+      private
+
+      def perform_tenant_reset
         key = select_tenant_key
         return cancel_switch if key == :abort || key.blank?
 
@@ -41,12 +43,11 @@ module ConsoleKit
         configure(key)
       end
 
-      private
-
       def run_setup
         return if tenant_setup_successful?
 
-        ConsoleKit.configuration.validate!
+        config = ConsoleKit.configuration
+        config.validate!
         select_and_configure
       rescue StandardError => e
         handle_error(e)
@@ -62,12 +63,8 @@ module ConsoleKit
       def handle_selection_result(key)
         exit_on_key if %i[exit abort].include?(key)
 
-        case key
-        when :none
-          Output.print_info('No tenant selected. Loading without tenant configuration.')
-        when nil, ''
-          Output.print_error('Tenant selection failed. Loading without tenant configuration.')
-        end
+        skip_tenant_message if key == :none
+        Output.print_error('Tenant selection failed. Loading without tenant configuration.') if key.blank?
       end
 
       def exit_on_key
@@ -81,48 +78,20 @@ module ConsoleKit
 
         self.current_tenant = key
         Prompt.apply
-        print_tenant_banner(key)
-      end
-
-      def print_tenant_banner(key)
-        constants = ConsoleKit.configuration.tenants[key]&.[](:constants) || {}
-        env = constants[:environment]&.to_s&.downcase
-        Output.print_success("Tenant initialized: #{key}")
-        print_environment_warning(env) if env
-        print_active_connections
-      end
-
-      def print_environment_warning(env) = ENVIRONMENT_WARNINGS[env]&.call
-
-      def print_active_connections
-        names = active_connection_names
-        Output.print_info("Active connections: #{names.join(', ')}") unless names.empty?
-      end
-
-      def active_connection_names
-        ctx = context_class
-        return [] unless ctx
-
-        handlers = ConsoleKit::Connections::ConnectionManager.available_handlers(ctx)
-        handlers.map { |h| h.class.name.demodulize.delete_suffix('ConnectionHandler') }
+        SetupUI.print_tenant_banner(key, ConsoleKit.configuration)
       end
 
       def tenants = ConsoleKit.configuration.tenants
-      def context_class = ConsoleKit.configuration.context_class
       def tenants? = tenants&.any?
-      def no_tenants? = !tenants?
       def select_tenant_key = auto_select? ? tenants.keys.first : TenantSelector.select
-      def auto_select? = single_tenant? || non_interactive?
-      def single_tenant? = tenants.size == 1
-      def non_interactive? = !$stdin.tty?
+      def auto_select? = (tenants.size == 1) || !$stdin.tty?
       def warn_no_tenants = Output.print_warning('Cannot reset tenant: No tenants configured.')
-      def warn_reset = Output.print_warning("Resetting tenant: #{current_tenant}")
       def cancel_switch = Output.print_warning('Tenant switch cancelled.')
       def skip_tenant_message = Output.print_info('No tenant selected. Loading without tenant configuration.')
 
       def clear_current_tenant
         if current_tenant
-          warn_reset
+          Output.print_warning("Resetting tenant: #{current_tenant}")
           TenantConfigurator.clear
         end
         self.current_tenant = nil

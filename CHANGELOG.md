@@ -6,6 +6,23 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.0] - 2026-03-24
+### Added
+- **Connection Dashboard:** New `dashboard` console helper displaying a Unicode table with connection status, latency, and service-specific details (adapter, DB version, pool size, memory, cluster health) for all active handlers.
+- **`show_dashboard` Config Option:** Opt-in auto-display of the dashboard on tenant switch (`config.show_dashboard = true`). Off by default to keep tenant switching fast.
+- **Handler Diagnostics:** Each connection handler now exposes a `diagnostics` method with status, latency, and details.
+- **Per-Handler Timeout:** Diagnostics calls are wrapped in a 2-second timeout to prevent slow services from blocking.
+- **Rails 6.1+ Support:** Lowered minimum Rails version from 7.2.1 to 6.1, enabling use in older Rails applications.
+- **Pry Prompt Fallback:** Graceful fallback for Pry versions < 0.13 that lack `Pry::Prompt.new`.
+- **IRB Fallback:** Console helpers now work when `IRB::ExtendCommandBundle` is not available.
+- **Multi-version CI:** Test matrix covering Rails 6.1, 7.0, 7.1, 7.2, and 8.0.
+
+### Changed
+- **Lightweight Dependencies:** Replaced full `rails` gem dependency with `railties`, `activerecord`, and `activesupport` only.
+- **Smaller Gem Package:** Excluded `.md` files and `docs/` from the gem package.
+
+---
+
 ## [1.1.0] - 2026-03-14
 ### Added
 - **Redis Connection Handler:** Automatic Redis DB selection per tenant via `Redis.current.select`, with graceful fallback for Redis v5+ where `Redis.current` is deprecated.
@@ -99,6 +116,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.2.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0
 [0.1.5]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v0.1.5

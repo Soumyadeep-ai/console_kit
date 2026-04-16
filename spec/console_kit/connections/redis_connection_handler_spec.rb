@@ -17,7 +17,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
   let(:redis_instance) { instance_double(Redis, select: true) }
 
   before do
-    stub_const('Redis', Class.new { def self.current; end })
     allow(Redis).to receive(:current).and_return(redis_instance)
   end
 
@@ -59,6 +58,102 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     it 'returns false when Redis is not defined' do
       hide_const('Redis')
       expect(handler).not_to be_available
+    end
+  end
+
+  describe '#diagnostics' do
+    context 'when Redis is available' do
+      let(:redis_info) { { 'redis_version' => '7.0.0', 'used_memory_human' => '1.00M' } }
+      let(:redis_client) { double(ping: 'PONG', info: redis_info) }
+
+      before do
+        allow(Redis).to receive(:respond_to?).with(:current).and_return(true)
+        allow(Redis).to receive(:current).and_return(redis_client)
+      end
+
+      it 'returns name Redis' do
+        expect(handler.diagnostics[:name]).to eq('Redis')
+      end
+
+      it 'returns status :connected' do
+        expect(handler.diagnostics[:status]).to eq(:connected)
+      end
+
+      it 'returns a numeric latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_a(Numeric)
+      end
+
+      it 'returns details with db, version, and memory keys' do
+        expect(handler.diagnostics[:details]).to include(:db, :version, :memory)
+      end
+
+      it 'includes the redis version in details' do
+        expect(handler.diagnostics[:details][:version]).to eq('7.0.0')
+      end
+
+      it 'includes used memory in details' do
+        expect(handler.diagnostics[:details][:memory]).to eq('1.00M')
+      end
+    end
+
+    context 'when Redis.current is not available' do
+      before do
+        allow(Redis).to receive(:respond_to?).with(:current).and_return(false)
+      end
+
+      it 'returns status :unavailable' do
+        expect(handler.diagnostics[:status]).to eq(:unavailable)
+      end
+
+      it 'returns name Redis' do
+        expect(handler.diagnostics[:name]).to eq('Redis')
+      end
+    end
+
+    context 'when Redis is not defined' do
+      before { hide_const('Redis') }
+
+      it 'returns status :unavailable' do
+        expect(handler.diagnostics[:status]).to eq(:unavailable)
+      end
+
+      it 'returns name Redis' do
+        expect(handler.diagnostics[:name]).to eq('Redis')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'returns empty details' do
+        expect(handler.diagnostics[:details]).to eq({})
+      end
+    end
+
+    context 'when the connection raises an error' do
+      let(:redis_client) { instance_double(Redis) }
+
+      before do
+        allow(Redis).to receive(:respond_to?).with(:current).and_return(true)
+        allow(Redis).to receive(:current).and_return(redis_client)
+        allow(redis_client).to receive(:ping).and_raise(StandardError, 'ECONNREFUSED')
+      end
+
+      it 'returns status :error' do
+        expect(handler.diagnostics[:status]).to eq(:error)
+      end
+
+      it 'returns name Redis' do
+        expect(handler.diagnostics[:name]).to eq('Redis')
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics[:latency_ms]).to be_nil
+      end
+
+      it 'includes the error message in details' do
+        expect(handler.diagnostics[:details][:error]).to include('ECONNREFUSED')
+      end
     end
   end
 
