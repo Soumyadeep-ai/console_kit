@@ -2,7 +2,9 @@
 
 require 'spec_helper'
 
-RSpec.describe 'Full Console Flow' do
+module FullConsoleFlow; end
+
+RSpec.describe FullConsoleFlow do
   let(:context_class) do
     Class.new do
       class << self
