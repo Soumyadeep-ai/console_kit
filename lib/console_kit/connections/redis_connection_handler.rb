@@ -25,8 +25,8 @@ module ConsoleKit
 
         latency = measure_latency { redis.ping }
         build_redis_diagnostics(redis.info, latency)
-      rescue StandardError => exception
-        error_diagnostics(name, exception)
+      rescue StandardError => e
+        error_diagnostics(name, e)
       end
 
       private

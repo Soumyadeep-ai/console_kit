@@ -24,8 +24,8 @@ module ConsoleKit
         client = Elasticsearch::Model.client
         latency = measure_latency { client.ping }
         build_elasticsearch_diagnostics(client, latency)
-      rescue StandardError => exception
-        error_diagnostics(name, exception)
+      rescue StandardError => e
+        error_diagnostics(name, e)
       end
 
       private
