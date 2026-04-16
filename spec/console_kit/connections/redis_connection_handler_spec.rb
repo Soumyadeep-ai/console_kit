@@ -17,7 +17,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
   let(:redis_instance) { instance_double(Redis, select: true) }
 
   before do
-    stub_const('Redis', Class.new { def self.current; end })
     allow(Redis).to receive(:current).and_return(redis_instance)
   end
 
@@ -132,7 +131,7 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
 
     context 'when the connection raises an error' do
-      let(:redis_client) { double('mock') }
+      let(:redis_client) { instance_double(Redis) }
 
       before do
         allow(Redis).to receive(:respond_to?).with(:current).and_return(true)

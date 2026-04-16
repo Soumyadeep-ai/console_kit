@@ -16,7 +16,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   let(:handler) { described_class.new(context) }
 
   before do
-    stub_const('Mongoid', Class.new { def self.override_database(*); end })
     allow(Mongoid).to receive(:override_database)
   end
 
@@ -71,19 +70,15 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   describe '#diagnostics' do
     context 'when MongoDB is available' do
       let(:database) do
-        double(
-          name: 'mongo_foo',
-          command: double('mock')
+        instance_double(
+          Mongoid::Database,
+          name: 'mongo_foo'
         )
       end
-      let(:client) { double(use: double(database: database), database: database) }
+      let(:client) { instance_double(Mongoid::Client, use: double(database: database), database: database) }
       let(:build_info_result) { [{ 'version' => '6.0.0' }] }
 
       before do
-        stub_const('Mongoid', Class.new do
-          def self.override_database(*); end
-          def self.default_client; end
-        end)
         allow(database).to receive(:command).with(ping: 1)
         allow(database).to receive(:command).with(buildInfo: 1).and_return(build_info_result)
         allow(Mongoid).to receive(:default_client).and_return(client)

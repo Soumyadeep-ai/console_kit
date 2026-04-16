@@ -16,19 +16,23 @@ module ConsoleKit
       def available? = sql_base_class_name.to_s.safe_constantize.present?
 
       def diagnostics
-        return unavailable_diagnostics('SQL') unless available?
+        name = 'SQL'
+        return unavailable_diagnostics(name) unless available?
 
         conn = base_class.connection
         latency = measure_latency { conn.execute('SELECT 1') }
         build_sql_diagnostics(conn, latency)
       rescue StandardError => e
-        error_diagnostics('SQL', e)
+        error_diagnostics(name, e)
       end
 
       private
 
       def disconnect_existing_pool
-        base_class.connection_pool.disconnect! if base_class.respond_to?(:connection_pool) && base_class.connection_pool
+        return unless base_class.respond_to?(:connection_pool)
+
+        pool = base_class.connection_pool
+        pool&.disconnect!
       end
 
       def build_sql_diagnostics(conn, latency)
@@ -39,9 +43,15 @@ module ConsoleKit
           details: {
             adapter: conn.adapter_name,
             pool_size: base_class.connection_pool.size,
-            version: conn.select_value('SELECT version()').to_s.truncate(50)
+            version: fetch_sql_version(conn).to_s.truncate(50)
           }
         }
+      end
+
+      def fetch_sql_version(conn)
+        conn.select_value('SELECT version()')
+      rescue StandardError
+        nil
       end
 
       def base_class

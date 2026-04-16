@@ -75,11 +75,14 @@ module ConsoleKit
       end
 
       def available_context_attributes(ctx)
-        attributes = %i[partner_identifier]
-        HANDLER_ATTRIBUTES.each do |handler, attr|
-          attributes << attr if handler_available?(handler) && ctx.respond_to?("#{attr}=")
+        attributes = ctx.respond_to?(:partner_identifier=) ? [:partner_identifier] : []
+
+        HANDLER_ATTRIBUTES.each_with_object(attributes) do |(handler, attr), list|
+          next unless ctx.respond_to?("#{attr}=")
+          next unless handler_available?(handler)
+
+          list << attr
         end
-        attributes.select { |attr| ctx.respond_to?("#{attr}=") }
       end
 
       def apply_context(constant)

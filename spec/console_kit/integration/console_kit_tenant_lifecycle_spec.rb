@@ -260,16 +260,12 @@ RSpec.describe ConsoleKit do
     end
 
     it 'includes Redis handler when Redis is defined' do
-      stub_const('Redis', Class.new)
-
       handlers = ConsoleKit::Connections::ConnectionManager.available_handlers(context_class)
 
       expect(handlers.map(&:class)).to include(ConsoleKit::Connections::RedisConnectionHandler)
     end
 
     it 'includes Elasticsearch handler when Elasticsearch is defined' do
-      stub_const('Elasticsearch', Module.new)
-
       handlers = ConsoleKit::Connections::ConnectionManager.available_handlers(context_class)
 
       expect(handlers.map(&:class)).to include(ConsoleKit::Connections::ElasticsearchConnectionHandler)

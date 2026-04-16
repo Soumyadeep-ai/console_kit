@@ -17,13 +17,14 @@ module ConsoleKit
       def available? = defined?(Mongoid)
 
       def diagnostics
-        return unavailable_diagnostics('MongoDB') unless available?
+        name = 'MongoDB'
+        return unavailable_diagnostics(name) unless available?
 
         db = tenant_database
         latency = measure_latency { db.command(ping: 1) }
         build_mongo_diagnostics(db, latency)
       rescue StandardError => e
-        error_diagnostics('MongoDB', e)
+        error_diagnostics(name, e)
       end
 
       private
@@ -31,7 +32,9 @@ module ConsoleKit
       def tenant_database
         override = context_attribute(:tenant_mongo_db).presence
         client = Mongoid.default_client
-        override ? client.use(override).database : client.database
+        return client.database unless override
+
+        client.use(override).database
       end
 
       def build_mongo_diagnostics(database, latency)
@@ -40,11 +43,12 @@ module ConsoleKit
           name: 'MongoDB',
           status: :connected,
           latency_ms: latency,
-          details: {
-            database: database.name,
-            version: build_info['version']
-          }
+          details: mongo_details(database.name, build_info['version'])
         }
+      end
+
+      def mongo_details(name, version)
+        { database: name, version: version }
       end
 
       def switch_message(db)

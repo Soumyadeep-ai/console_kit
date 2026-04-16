@@ -18,8 +18,8 @@ module ConsoleKit
 
       def apply_irb_prompt
         conf = IRB.conf
-        conf[:PROMPT] ||= {}
-        conf[:PROMPT][:CONSOLE_KIT] = {
+        prompt = conf[:PROMPT] ||= {}
+        prompt[:CONSOLE_KIT] = {
           PROMPT_I: "#{tenant_label} %N(%m):%03n> ",
           PROMPT_S: "#{tenant_label} %N(%m):%03n%l ",
           PROMPT_C: "#{tenant_label} %N(%m):%03n* ",
@@ -29,17 +29,22 @@ module ConsoleKit
       end
 
       def apply_pry_prompt
-        main_proc = proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}> " }
-        wait_proc = proc { |obj, nest_level, _pry_instance| "#{Prompt.send(:tenant_label)} (#{obj}):#{nest_level}* " }
-
-        Pry.config.prompt = build_pry_prompt(main_proc, wait_proc)
+        procs = pry_prompt_procs(tenant_label)
+        Pry.config.prompt = build_pry_prompt(procs)
       end
 
-      def build_pry_prompt(main_proc, wait_proc)
+      def pry_prompt_procs(label)
+        [
+          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}> " },
+          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}* " }
+        ]
+      end
+
+      def build_pry_prompt(procs)
         if defined?(Pry::Prompt) && Pry::Prompt.respond_to?(:new)
-          Pry::Prompt.new('console_kit', 'ConsoleKit tenant prompt', [main_proc, wait_proc])
+          Pry::Prompt.new('console_kit', 'ConsoleKit tenant prompt', procs)
         else
-          [main_proc, wait_proc]
+          procs
         end
       end
     end

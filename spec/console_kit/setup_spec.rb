@@ -260,7 +260,7 @@ RSpec.describe ConsoleKit::Setup do
     end
   end
 
-  describe '.print_tenant_banner' do
+  describe 'SetupUI.print_tenant_banner' do
     before do
       allow(ConsoleKit::Output).to receive(:print_error)
       allow(ConsoleKit::Output).to receive(:print_warning)
@@ -279,7 +279,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'prints a production warning' do
-        described_class.send(:print_tenant_banner, 'acme')
+        ConsoleKit::SetupUI.print_tenant_banner('acme', ConsoleKit.configuration)
         expect(ConsoleKit::Output).to have_received(:print_error).with(/PRODUCTION/)
       end
     end
@@ -295,7 +295,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'prints a staging warning' do
-        described_class.send(:print_tenant_banner, 'acme')
+        ConsoleKit::SetupUI.print_tenant_banner('acme', ConsoleKit.configuration)
         expect(ConsoleKit::Output).to have_received(:print_warning).with(/staging/)
       end
     end
@@ -309,12 +309,12 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'does not print a production error' do
-        described_class.send(:print_tenant_banner, 'acme')
+        ConsoleKit::SetupUI.print_tenant_banner('acme', ConsoleKit.configuration)
         expect(ConsoleKit::Output).not_to have_received(:print_error)
       end
 
       it 'does not print a staging warning' do
-        described_class.send(:print_tenant_banner, 'acme')
+        ConsoleKit::SetupUI.print_tenant_banner('acme', ConsoleKit.configuration)
         expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end

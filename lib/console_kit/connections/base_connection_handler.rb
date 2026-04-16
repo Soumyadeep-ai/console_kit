@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
 require 'active_support/core_ext/class/subclasses'
+require 'active_support/core_ext/string/inflections'
+require 'active_support/core_ext/string/filters'
+require_relative 'diagnostic_helpers'
 
 module ConsoleKit
   module Connections
     # Parent class for connection handlers
     class BaseConnectionHandler
+      include DiagnosticHelpers
+
       class << self
         def registry = descendants
       end
@@ -18,34 +23,43 @@ module ConsoleKit
       def diagnostics = raise NotImplementedError, "#{self.class} must implement #diagnostics"
 
       def safe_diagnostics(timeout: 2)
-        result = nil
-        thread = Thread.new { result = diagnostics }
-        unless thread.join(timeout)
+        handler_name = self.class.name.demodulize.delete_suffix('ConnectionHandler')
+        thread, result_wrapper = spawn_diagnostic_thread(handler_name)
+
+        if thread.join(timeout)
+          result_wrapper[:value] || error_diagnostics(handler_name, StandardError.new('Unknown error'))
+        else
           thread.kill
-          return { name: self.class.name.demodulize.delete_suffix('ConnectionHandler'), status: :timeout,
-                   latency_ms: nil, details: { error: "Timed out after #{timeout}s" } }
+          timeout_diagnostics(handler_name, timeout)
         end
-        result
       end
 
       private
 
+      def spawn_diagnostic_thread(handler_name)
+        wrapper = { value: nil }
+        thread = Thread.new { wrapper[:value] = run_diagnostics_safely(handler_name) }
+        [thread, wrapper]
+      end
+
+      def run_diagnostics_safely(name)
+        diagnostics
+      rescue StandardError => e
+        error_diagnostics(name, e)
+      end
+
       def context_attribute(name)
-        @context.respond_to?(name) ? @context.public_send(name) : nil
+        @context.respond_to?(name, true) ? @context.send(name) : nil
       end
 
       def measure_latency
-        start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        start = clock_time
         yield
-        ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(1)
+        ((clock_time - start) * 1000).round(1)
       end
 
       def unavailable_diagnostics(name)
         { name: name, status: :unavailable, latency_ms: nil, details: {} }
-      end
-
-      def error_diagnostics(name, error)
-        { name: name, status: :error, latency_ms: nil, details: { error: error.message.truncate(60) } }
       end
     end
   end

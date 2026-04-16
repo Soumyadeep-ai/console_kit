@@ -21,9 +21,12 @@ module ConsoleKit
 
       def attempt_selection
         print_tenant_selection_menu
-        selection = parse_user_selection
-        return :abort if selection == :abort
+        process_selection(parse_user_selection)
+      end
+
+      def process_selection(selection)
         return :retry unless selection
+        return selection if selection == :abort
 
         selection.is_a?(Integer) ? resolve_selection(selection) : selection
       end
@@ -34,8 +37,9 @@ module ConsoleKit
       end
 
       def menu_items
+        tenants = ConsoleKit.tenants.keys
         items = ['0. Skip (load without tenant configuration)']
-        ConsoleKit.tenants.keys.each_with_index do |key, index|
+        tenants.each_with_index.map do |key, index|
           items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
         end
         items

@@ -15,10 +15,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
   let(:context) { instance_double(DummyContext, tenant_elasticsearch_prefix: 'acme') }
   let(:handler) { described_class.new(context) }
 
-  before do
-    stub_const('Elasticsearch', Module.new)
-  end
-
   after do
     Thread.current[:console_kit_elasticsearch_prefix] = nil
   end

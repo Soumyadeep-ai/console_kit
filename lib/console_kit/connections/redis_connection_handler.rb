@@ -9,38 +9,42 @@ module ConsoleKit
       DEFAULT_REDIS_DB = 0
 
       def connect
-        db = context_attribute(:tenant_redis_db)
+        db = context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB
         Output.print_info(switch_message(db))
-        select_redis_db(db.nil? ? DEFAULT_REDIS_DB : db)
+        select_redis_db(db)
       end
 
       def available? = defined?(Redis)
 
       def diagnostics
-        return unavailable_diagnostics('Redis') unless available?
+        name = 'Redis'
+        return unavailable_diagnostics(name) unless available?
 
-        redis = Redis.respond_to?(:current) && Redis.current
-        return unavailable_diagnostics('Redis') unless redis
+        redis = fetch_redis_client
+        return unavailable_diagnostics(name) unless redis
 
         latency = measure_latency { redis.ping }
-        build_redis_diagnostics(redis, latency)
+        build_redis_diagnostics(redis.info, latency)
       rescue StandardError => e
-        error_diagnostics('Redis', e)
+        error_diagnostics(name, e)
       end
 
       private
 
-      def build_redis_diagnostics(redis, latency)
+      def fetch_redis_client
+        Redis.respond_to?(:current) && Redis.current
+      end
+
+      def build_redis_diagnostics(info, latency)
         {
           name: 'Redis',
           status: :connected,
           latency_ms: latency,
-          details: redis_details(redis)
+          details: redis_details(info)
         }
       end
 
-      def redis_details(redis)
-        info = redis.info
+      def redis_details(info)
         {
           db: context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB,
           version: info['redis_version'],
@@ -49,14 +53,19 @@ module ConsoleKit
       end
 
       def select_redis_db(db)
-        if Redis.respond_to?(:current) && Redis.current
-          Redis.current.select(db)
+        redis = fetch_redis_client
+        if redis
+          redis.select(db)
         elsif defined?(RedisClient) && db != DEFAULT_REDIS_DB
-          Output.print_warning("Redis DB #{db} configured but auto-select not supported with RedisClient. " \
-                               'Ensure your Redis configuration sets the correct DB.')
+          warn_about_redis_client(db)
         end
       rescue NoMethodError
         Output.print_warning('Redis.current is not available (deprecated in Redis v5+).')
+      end
+
+      def warn_about_redis_client(db)
+        Output.print_warning("Redis DB #{db} configured but auto-select not supported with RedisClient. " \
+                             'Ensure your Redis configuration sets the correct DB.')
       end
 
       def switch_message(db)
