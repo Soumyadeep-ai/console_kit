@@ -54,32 +54,59 @@ RSpec.describe FullConsoleFlow do
 
     allow(Mongoid).to receive(:default_client).and_return(mongo_client)
 
-    allow(Redis).to receive_messages(respond_to?: true, current: instance_double(Redis, select: true, ping: 'PONG',
-                                                                                        info: { 'redis_version' => '7.0', 'used_memory_human' => '1MB' }))
+    allow(Redis).to receive_messages(
+      respond_to?: true,
+      current: instance_double(Redis, select: true, ping: 'PONG',
+                                      info: { 'redis_version' => '7.0', 'used_memory_human' => '1MB' })
+    )
 
     allow(Elasticsearch::Model).to receive(:index_name_prefix=)
     allow(Elasticsearch::Model).to receive_messages(
       respond_to?: true,
-      client: double(ping: true, cluster: double(health: { 'cluster_name' => 'test', 'status' => 'green' }))
+      client: double(
+        ping: true,
+        cluster: double(health: { 'cluster_name' => 'test', 'status' => 'green' })
+      )
     )
 
     # Mock user input for TenantSelector
     allow($stdin).to receive(:gets).and_return('1')
   end
 
-  it 'performs setup and configures acme tenant' do
-    ConsoleKit::Setup.setup
-    expect(ConsoleKit::Setup.current_tenant).to eq('acme')
-    expect(context_class.partner_identifier).to eq('ACME')
-    expect(context_class.tenant_shard).to eq('shard_acme')
+  describe 'Setup' do
+    before { ConsoleKit::Setup.setup }
+
+    it 'sets current_tenant to acme' do
+      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+    end
+
+    it 'sets partner_identifier' do
+      expect(context_class.partner_identifier).to eq('ACME')
+    end
+
+    it 'sets tenant_shard' do
+      expect(context_class.tenant_shard).to eq('shard_acme')
+    end
   end
 
-  it 'switches to globex tenant' do
-    allow($stdin).to receive(:gets).and_return('2')
-    ConsoleKit::Setup.reset_current_tenant
-    expect(ConsoleKit::Setup.current_tenant).to eq('globex')
-    expect(context_class.partner_identifier).to eq('GBX')
-    expect(context_class.tenant_shard).to eq('shard_globex')
+  describe 'Switching' do
+    before do
+      ConsoleKit::Setup.setup
+      allow($stdin).to receive(:gets).and_return('2')
+      ConsoleKit::Setup.reset_current_tenant
+    end
+
+    it 'sets current_tenant to globex' do
+      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+    end
+
+    it 'sets partner_identifier' do
+      expect(context_class.partner_identifier).to eq('GBX')
+    end
+
+    it 'sets tenant_shard' do
+      expect(context_class.tenant_shard).to eq('shard_globex')
+    end
   end
 
   it 'verifies helper output' do
@@ -87,27 +114,31 @@ RSpec.describe FullConsoleFlow do
     expect(output).to include('No tenant is currently configured.')
   end
 
-  it 'handles "none" selection correctly' do
-    allow($stdin).to receive(:gets).and_return('0')
-
-    output = capture_all_output do
+  describe 'Edge cases' do
+    it 'handles "none" selection by setting current_tenant to nil' do
+      allow($stdin).to receive(:gets).and_return('0')
       ConsoleKit::Setup.setup
+      expect(ConsoleKit::Setup.current_tenant).to be_nil
     end
 
-    expect(ConsoleKit::Setup.current_tenant).to be_nil
-    expect(output).to include('No tenant selected')
-    expect(context_class.partner_identifier).to be_nil
-  end
-
-  it 'handles abort/exit correctly' do
-    allow($stdin).to receive(:gets).and_return('exit')
-    allow(Kernel).to receive(:exit)
-
-    capture_all_output do
-      ConsoleKit::Setup.setup
+    it 'handles "none" selection by printing a message' do
+      allow($stdin).to receive(:gets).and_return('0')
+      output = capture_all_output { ConsoleKit::Setup.setup }
+      expect(output).to include('No tenant selected')
     end
 
-    expect(Kernel).to have_received(:exit)
+    it 'handles "none" selection by not setting context' do
+      allow($stdin).to receive(:gets).and_return('0')
+      ConsoleKit::Setup.setup
+      expect(context_class.partner_identifier).to be_nil
+    end
+
+    it 'handles abort/exit correctly' do
+      allow($stdin).to receive(:gets).and_return('exit')
+      allow(Kernel).to receive(:exit)
+      ConsoleKit::Setup.setup
+      expect(Kernel).to have_received(:exit)
+    end
   end
 
   def capture_all_output
