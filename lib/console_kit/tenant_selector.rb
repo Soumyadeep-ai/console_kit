@@ -57,7 +57,7 @@ module ConsoleKit
       end
 
       def find_tenant_by_name(input)
-        match = ConsoleKit.tenants.keys.find { |k| k.to_s.casecmp(input).zero? }
+        match = ConsoleKit.tenants.keys.find { |key| key.to_s.casecmp(input).zero? }
         return match if match
 
         handle_invalid_input("Invalid selection: '#{input}'. Please enter a number or tenant name.")

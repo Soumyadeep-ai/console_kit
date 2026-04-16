@@ -23,8 +23,8 @@ module ConsoleKit
         db = tenant_database
         latency = measure_latency { db.command(ping: 1) }
         build_mongo_diagnostics(db, latency)
-      rescue StandardError => e
-        error_diagnostics(name, e)
+      rescue StandardError => exception
+        error_diagnostics(name, exception)
       end
 
       private

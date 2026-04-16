@@ -49,8 +49,8 @@ module ConsoleKit
         config = ConsoleKit.configuration
         config.validate!
         select_and_configure
-      rescue StandardError => e
-        handle_error(e)
+      rescue StandardError => exception
+        handle_error(exception)
       end
 
       def select_and_configure

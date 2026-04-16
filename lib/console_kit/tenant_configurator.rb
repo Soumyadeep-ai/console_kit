@@ -26,8 +26,8 @@ module ConsoleKit
         return missing_config_error(key) unless constants
 
         perform_configuration(key, constants)
-      rescue StandardError => e
-        handle_error(e, key)
+      rescue StandardError => exception
+        handle_error(exception, key)
       end
 
       def clear
@@ -70,7 +70,7 @@ module ConsoleKit
 
       def handler_available?(handler_class)
         handler_class.new(nil).available?
-      rescue NotImplementedError, StandardError
+      rescue NotImplementedError, StandardError => exception
         false
       end
 

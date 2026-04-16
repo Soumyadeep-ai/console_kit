@@ -9,7 +9,7 @@ module ConsoleKit
       class << self
         def render(rows)
           headers = %w[Service Status Latency Details]
-          table_rows = rows.map { |r| TableFormatter.format_row(r) }
+          table_rows = rows.map { |row| TableFormatter.format_row(row) }
           widths = calculate_widths(headers, table_rows)
 
           build_table(headers, table_rows, widths)
@@ -35,12 +35,12 @@ module ConsoleKit
           lines.join("\n")
         end
 
-        def table_top(widths) = "\u250C#{widths.map { |w| "\u2500" * (w + 2) }.join("\u252C")}\u2510"
-        def table_mid(widths) = "\u251C#{widths.map { |w| "\u2500" * (w + 2) }.join("\u253C")}\u2524"
-        def table_bottom(widths) = "\u2514#{widths.map { |w| "\u2500" * (w + 2) }.join("\u2534")}\u2518"
+        def table_top(widths) = "\u250C#{widths.map { |width| "\u2500" * (width + 2) }.join("\u252C")}\u2510"
+        def table_mid(widths) = "\u251C#{widths.map { |width| "\u2500" * (width + 2) }.join("\u253C")}\u2524"
+        def table_bottom(widths) = "\u2514#{widths.map { |width| "\u2500" * (width + 2) }.join("\u2534")}\u2518"
 
         def table_line(cells, widths)
-          content = cells.each_with_index.map { |c, i| " #{c.ljust(widths[i])} " }.join("\u2502")
+          content = cells.each_with_index.map { |cell, index| " #{cell.ljust(widths[index])} " }.join("\u2502")
           "\u2502#{content}\u2502"
         end
       end

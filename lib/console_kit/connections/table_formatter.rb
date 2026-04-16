@@ -29,7 +29,7 @@ module ConsoleKit
         def format_details(details)
           return '' unless details&.any?
 
-          details.compact.map { |k, v| "#{k}: #{v}" }.join(', ')
+          details.compact.map { |key, value| "#{key}: #{value}" }.join(', ')
         end
       end
     end

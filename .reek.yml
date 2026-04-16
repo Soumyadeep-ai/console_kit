@@ -1,29 +1,76 @@
+---
+# Exclude specs
 exclude_paths:
   - spec
 
+# Allow standard library utility functions and common patterns
 detectors:
-  UncommunicativeVariableName:
+  # Configuration classes need writable attributes by design
+  Attribute:
     exclude:
-      - e
+      - ConsoleKit::Configuration
 
-  # # Configuration classes need writable attributes by design
-  # Attribute:
-  #   exclude:
-  #     - ConsoleKit::Configuration
+  # Allow common diagnostic pattern
+  TooManyStatements:
+    exclude:
+      - ConsoleKit::Connections::BaseConnectionHandler#spawn_diagnostic_thread
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler#diagnostics
+      - ConsoleKit::Connections::RedisConnectionHandler#diagnostics
+      - ConsoleKit::Connections::SqlConnectionHandler#diagnostics
+      - ConsoleKit::Connections::MongoConnectionHandler#diagnostics
+      - ConsoleKit::Connections::Dashboard
+      - ConsoleKit::Setup
+      - ConsoleKit::TenantSelector#attempt_selection
+      - ConsoleKit::Prompt#apply_pry_prompt
+      - ConsoleKit::Output#print_with
+      - ConsoleKit::Setup#run_setup
+      - ConsoleKit::TenantConfigurator#available_context_attributes
+      - ConsoleKit::ConsoleHelpers#print_tenant_details
 
-  # # Module methods designed to be mixed into console session via include
-  # UtilityFunction:
-  #   exclude:
-  #     - ConsoleKit::ConsoleHelpers
-  #     - ConsoleKit::Connections::SqlConnectionHandler#sql_base_class_name
+  # Diagnostic data structures often trigger duplicate calls
+  DuplicateMethodCall:
+    exclude:
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler#diagnostics
+      - ConsoleKit::Connections::RedisConnectionHandler
+      - ConsoleKit::Connections::SqlConnectionHandler#disconnect_existing_pool
+      - ConsoleKit::ConsoleHelpers#print_tenant_details
+      - ConsoleKit::Setup#print_tenant_banner
+      - ConsoleKit::TenantConfigurator#available_context_attributes
 
-  # # Context attribute access requires respond_to?/send dispatch
-  # ManualDispatch:
-  #   exclude:
-  #     - ConsoleKit::Connections::BaseConnectionHandler#context_attribute
-  #     - ConsoleKit::TenantConfigurator#available_context_attributes
+  # Data objects being formatted into diagnostics
+  FeatureEnvy:
+    exclude:
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler#elasticsearch_details
+      - ConsoleKit::Connections::MongoConnectionHandler#build_mongo_diagnostics
+      - ConsoleKit::Connections::MongoConnectionHandler#tenant_database
+      - ConsoleKit::Connections::RedisConnectionHandler#redis_details
 
-  # # Nil-check needed for selection result handling
-  # NilCheck:
-  #   exclude:
-  #     - ConsoleKit::Setup#handle_selection_result
+  # Context attribute access requires respond_to?/send dispatch
+  ManualDispatch:
+    exclude:
+      - ConsoleKit::Connections::BaseConnectionHandler#context_attribute
+      - ConsoleKit::TenantConfigurator#available_context_attributes
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler
+      - ConsoleKit::Connections::RedisConnectionHandler
+      - ConsoleKit::Connections::SqlConnectionHandler
+      - ConsoleKit::Prompt
+
+  # Utility functions that are logically part of the module namespace
+  UtilityFunction:
+    exclude:
+      - ConsoleKit::ConsoleHelpers
+      - ConsoleKit::Connections::SqlConnectionHandler#sql_base_class_name
+      - ConsoleKit::Connections::SqlConnectionHandler#fetch_sql_version
+      - ConsoleKit::Connections::BaseConnectionHandler#clock_time
+      - ConsoleKit::Connections::BaseConnectionHandler#error_diagnostics
+      - ConsoleKit::Connections::BaseConnectionHandler#measure_latency
+      - ConsoleKit::Connections::RedisConnectionHandler#fetch_redis_client
+      - ConsoleKit::Connections::RedisConnectionHandler#warn_about_redis_client
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler#apply_model_index_prefix
+      - ConsoleKit::Connections::ElasticsearchConnectionHandler#available?
+
+  # Table rendering requires nested loops
+  NestedIterators:
+    exclude:
+      - ConsoleKit::Connections::Dashboard#render_table
+      - ConsoleKit::ConsoleHelpers#print_tenant_details

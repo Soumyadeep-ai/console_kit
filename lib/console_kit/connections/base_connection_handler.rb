@@ -44,8 +44,8 @@ module ConsoleKit
 
       def run_diagnostics_safely(name)
         diagnostics
-      rescue StandardError => e
-        error_diagnostics(name, e)
+      rescue StandardError => exception
+        error_diagnostics(name, exception)
       end
 
       def context_attribute(name)

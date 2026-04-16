@@ -22,8 +22,8 @@ module ConsoleKit
         conn = base_class.connection
         latency = measure_latency { conn.execute('SELECT 1') }
         build_sql_diagnostics(conn, latency)
-      rescue StandardError => e
-        error_diagnostics(name, e)
+      rescue StandardError => exception
+        error_diagnostics(name, exception)
       end
 
       private

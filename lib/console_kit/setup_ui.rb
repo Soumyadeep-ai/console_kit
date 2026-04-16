@@ -26,8 +26,8 @@ module ConsoleKit
 
       def print_active_connections
         ctx = ConsoleKit.configuration.context_class
-        active = Connections::ConnectionManager.available_handlers(ctx).map do |h|
-          h.class.name.demodulize.delete_suffix('ConnectionHandler')
+        active = Connections::ConnectionManager.available_handlers(ctx).map do |handler|
+          handler.class.name.demodulize.delete_suffix('ConnectionHandler')
         end
 
         Output.print_info("Active connections: #{active.join(', ')}") if active.any?
