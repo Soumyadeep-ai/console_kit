@@ -2,9 +2,13 @@
 
 require 'spec_helper'
 
-module FullConsoleFlow; end
+# Helper module for FullConsoleFlow integration tests
+module FullConsoleFlow
+end
 
 RSpec.describe FullConsoleFlow do
+  include IntegrationTestHelper
+
   let(:context_class) do
     Class.new do
       class << self
@@ -70,8 +74,7 @@ RSpec.describe FullConsoleFlow do
     )
 
     # Mock user input for TenantSelector
-    allow($stdin).to receive(:tty?).and_return(true)
-    allow($stdin).to receive(:gets).and_return('1')
+    allow($stdin).to receive_messages(tty?: true, gets: '1')
   end
 
   describe 'Setup' do
@@ -108,6 +111,16 @@ RSpec.describe FullConsoleFlow do
     it 'sets tenant_shard' do
       expect(context_class.tenant_shard).to eq('shard_globex')
     end
+
+    it 'is idempotent when switching to the same tenant' do
+      # Already on globex from before block
+      allow($stdin).to receive(:gets).and_return('2') # select globex again
+
+      output = capture_all_output { ConsoleKit::Setup.reset_current_tenant }
+
+      expect(output).to include('Already using tenant: globex')
+      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+    end
   end
 
   it 'verifies helper output' do
@@ -140,17 +153,19 @@ RSpec.describe FullConsoleFlow do
       ConsoleKit::Setup.setup
       expect(Kernel).to have_received(:exit)
     end
-  end
 
-  def capture_all_output
-    original_stdout = $stdout
-    original_stderr = $stderr
-    $stdout = StringIO.new
-    $stderr = StringIO.new
-    yield
-    $stdout.string + $stderr.string
-  ensure
-    $stdout = original_stdout
-    $stderr = original_stderr
+    it 'handles TenantSelector returning nil' do
+      allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
+      # Setup will retry or fail if select returns nil
+      # We need to ensure it doesn't crash
+      expect { ConsoleKit::Setup.setup }.not_to raise_error
+    end
+
+    it 'logs error if configuration is invalid during setup' do
+      ConsoleKit.configuration.tenants = nil
+      output = capture_all_output { ConsoleKit::Setup.setup }
+      expect(output).to include('Error setting up tenant')
+      expect(output).to include('tenants` is not configured')
+    end
   end
 end

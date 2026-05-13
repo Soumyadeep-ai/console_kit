@@ -63,12 +63,21 @@ module ConsoleKit
 
       def print_with(type, text, options = {})
         opts = options.is_a?(Hash) ? options : { timestamp: options }
-        meta = TYPES.fetch(type)
-        message = build_message(text, meta[:symbol], opts[:timestamp])
-        color = meta[:color]
-        formatted = ConsoleKit.configuration.pretty_output && color ? "\e[#{color}m#{message}\e[0m" : message
+        message = build_formatted_message(type, text, opts[:timestamp])
 
-        opts.fetch(:newline, true) ? puts(formatted) : print(formatted)
+        opts.fetch(:newline, true) ? puts(message) : print(message)
+      end
+
+      def build_formatted_message(type, text, timestamp)
+        meta = TYPES.fetch(type)
+        message = build_message(text, meta[:symbol], timestamp)
+        colorize(message, meta[:color])
+      end
+
+      def colorize(message, color)
+        return message unless ConsoleKit.configuration.pretty_output && color
+
+        "\e[#{color}m#{message}\e[0m"
       end
 
       def build_message(text, symbol, timestamp)

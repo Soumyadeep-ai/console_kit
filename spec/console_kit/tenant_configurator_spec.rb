@@ -259,17 +259,30 @@ RSpec.describe ConsoleKit::TenantConfigurator do
   end
 
   describe '.available_context_attributes' do
+    let(:context_class) do
+      Class.new do
+        class << self
+          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db, :tenant_elasticsearch_prefix,
+                        :partner_identifier
+        end
+      end
+    end
+
     let(:full_ctx) do
       Class.new do
         class << self
-          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
-                        :tenant_elasticsearch_prefix, :partner_identifier
+          attr_accessor :partner_identifier, :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
+                        :tenant_elasticsearch_prefix
         end
       end
     end
 
     it 'skips attributes the context class does not support' do
-      partial_ctx = Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end }
+      partial_ctx = Class.new do
+        class << self
+          attr_accessor :partner_identifier, :tenant_shard
+        end
+      end
       attrs = described_class.send(:available_context_attributes, partial_ctx)
       expect(attrs).to contain_exactly(:partner_identifier, :tenant_shard)
     end

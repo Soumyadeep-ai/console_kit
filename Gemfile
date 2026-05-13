@@ -14,10 +14,12 @@ group :development, :test do
   gem 'rubocop', '~> 1.85'
   gem 'rubocop-rake'
   gem 'rubocop-rspec'
+  gem 'rubycritic', require: false
 end
 
 group :test do
   gem 'aruba'
   gem 'generator_spec'
   gem 'rspec_junit_formatter'
+  gem 'simplecov', require: false
 end

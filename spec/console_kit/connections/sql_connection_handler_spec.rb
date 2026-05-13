@@ -110,6 +110,13 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       allow(ApplicationRecord).to receive(:establish_connection).and_raise('SQL ERROR')
       expect { handler.connect }.to raise_error('SQL ERROR')
     end
+
+    it 'raises a ConsoleKit::Error if base class is not found during connect' do
+      ConsoleKit.configuration.sql_base_class = 'NonExistent'
+      expect { handler.connect }.to raise_error(ConsoleKit::Error, /could not be found/)
+    ensure
+      ConsoleKit.configuration.sql_base_class = 'ApplicationRecord'
+    end
   end
 
   describe '#available?' do
@@ -207,6 +214,7 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
         stub_const('ApplicationRecord', Class.new do
           def self.establish_connection(*); end
           def self.connection; end
+          def self.connection_pool; end
         end)
         allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'connection refused')
       end
@@ -225,6 +233,27 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
 
       it 'includes the error message in details' do
         expect(handler.diagnostics[:details][:error]).to include('connection refused')
+      end
+
+      it 'captures error when connection_pool access fails' do
+        allow(ApplicationRecord).to receive_messages(
+          connection: double(adapter_name: 'PostgreSQL', execute: true),
+          connection_pool: double
+        )
+        allow(ApplicationRecord.connection_pool).to receive(:size).and_raise(StandardError, 'pool error')
+
+        result = handler.diagnostics
+        expect(result[:status]).to eq(:error)
+        expect(result[:details][:error]).to include('pool error')
+      end
+
+      it 'captures error when execute fails during latency measurement' do
+        allow(ApplicationRecord).to receive(:connection).and_return(double)
+        allow(ApplicationRecord.connection).to receive(:execute).and_raise(StandardError, 'query failed')
+
+        result = handler.diagnostics
+        expect(result[:status]).to eq(:error)
+        expect(result[:details][:error]).to include('query failed')
       end
     end
   end

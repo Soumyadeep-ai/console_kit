@@ -41,11 +41,9 @@ module ConsoleKit
       end
 
       def build_pry_prompt(procs)
-        if defined?(Pry::Prompt) && Pry::Prompt.respond_to?(:new)
-          Pry::Prompt.new('console_kit', 'ConsoleKit tenant prompt', procs)
-        else
-          procs
-        end
+        return procs unless defined?(Pry::Prompt)
+
+        Pry::Prompt.try(:new, 'console_kit', 'ConsoleKit tenant prompt', procs) || procs
       end
     end
   end

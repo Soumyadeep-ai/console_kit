@@ -6,52 +6,60 @@ module ConsoleKit
   module Connections
     # Handles Elasticsearch connections
     class ElasticsearchConnectionHandler < BaseConnectionHandler
+      class << self
+        def elasticsearch_available?
+          return false unless defined?(Elasticsearch::Model)
+
+          Elasticsearch::Model.method(:client)
+          true
+        rescue NameError
+          false
+        end
+
+        def apply_prefix(prefix)
+          return unless defined?(Elasticsearch::Model)
+
+          Elasticsearch::Model.try(:index_name_prefix=, prefix)
+        end
+      end
+
       def connect
         prefix = context_attribute(:tenant_elasticsearch_prefix).presence
         Output.print_info(switch_message(prefix))
         Thread.current[:console_kit_elasticsearch_prefix] = prefix
-        apply_model_index_prefix(prefix)
+        self.class.apply_prefix(prefix)
       end
 
-      def available?
-        !!(defined?(Elasticsearch::Model) && Elasticsearch::Model.respond_to?(:client))
-      end
+      def available? = self.class.elasticsearch_available?
 
       def diagnostics
-        name = 'Elasticsearch'
-        return unavailable_diagnostics(name) unless available?
+        return unavailable_diagnostics('Elasticsearch') unless available?
 
-        client = Elasticsearch::Model.client
-        latency = measure_latency { client.ping }
-        build_elasticsearch_diagnostics(client, latency)
+        perform_diagnostics
       rescue StandardError => e
-        error_diagnostics(name, e)
+        error_diagnostics('Elasticsearch', e)
       end
 
       private
 
-      def build_elasticsearch_diagnostics(client, latency)
+      def perform_diagnostics
+        client = Elasticsearch::Model.client
+        latency = measure_latency { client.ping rescue nil }
+        health = client.cluster.health
+        build_elasticsearch_diagnostics(health['cluster_name'], health['status'], latency)
+      end
+
+      def build_elasticsearch_diagnostics(cluster, status, latency)
         {
           name: 'Elasticsearch',
           status: :connected,
           latency_ms: latency,
-          details: elasticsearch_details(client.cluster.health)
+          details: {
+            prefix: context_attribute(:tenant_elasticsearch_prefix),
+            cluster: cluster,
+            health: status
+          }
         }
-      end
-
-      def elasticsearch_details(health)
-        {
-          prefix: context_attribute(:tenant_elasticsearch_prefix),
-          cluster: health['cluster_name'],
-          health: health['status']
-        }
-      end
-
-      def apply_model_index_prefix(prefix)
-        return unless defined?(Elasticsearch::Model)
-        return unless Elasticsearch::Model.respond_to?(:index_name_prefix=)
-
-        Elasticsearch::Model.index_name_prefix = prefix
       end
 
       def switch_message(prefix)

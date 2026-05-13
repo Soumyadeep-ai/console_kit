@@ -1,5 +1,16 @@
 # frozen_string_literal: true
 
+require 'simplecov'
+SimpleCov.start do
+  enable_coverage :branch
+  add_filter '/spec/'
+  track_files 'lib/**/*.rb'
+
+  add_group 'Core', 'lib/console_kit/'
+  add_group 'Connections', 'lib/console_kit/connections/'
+  add_group 'Generators', 'lib/generators/'
+end
+
 require 'logger'
 require 'console_kit'
 require 'generator_spec'
@@ -33,5 +44,9 @@ RSpec.configure do |config|
   config.after do
     ConsoleKit.reset_configuration!
     Thread.current[:console_kit_silent] = nil
+    Thread.current[:console_kit_configuration_success] = nil
+    Thread.current[:console_kit_current_tenant_key] = nil
+    Thread.current[:console_kit_current_tenant] = nil
+    Thread.current[:console_kit_elasticsearch_prefix] = nil
   end
 end

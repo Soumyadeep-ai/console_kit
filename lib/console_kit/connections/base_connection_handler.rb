@@ -43,13 +43,9 @@ module ConsoleKit
       end
 
       def run_diagnostics_safely(name)
-        diagnostics
+        yield
       rescue StandardError => e
         error_diagnostics(name, e)
-      end
-
-      def context_attribute(name)
-        @context.respond_to?(name, true) ? @context.send(name) : nil
       end
 
       def measure_latency
@@ -58,9 +54,8 @@ module ConsoleKit
         ((clock_time - start) * 1000).round(1)
       end
 
-      def unavailable_diagnostics(name)
-        { name: name, status: :unavailable, latency_ms: nil, details: {} }
-      end
+      def context_attribute(name) = @context.try(name)
+      def unavailable_diagnostics(name) = { name: name, status: :unavailable, latency_ms: nil, details: {} }
     end
   end
 end

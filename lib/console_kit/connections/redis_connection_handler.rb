@@ -8,68 +8,67 @@ module ConsoleKit
     class RedisConnectionHandler < BaseConnectionHandler
       DEFAULT_REDIS_DB = 0
 
+      class << self
+        def redis_client = Redis.try(:current)
+
+        def warn_no_auto_select(db_index)
+          Output.print_warning("Redis DB #{db_index} configured but auto-select not supported with RedisClient. " \
+                               'Ensure your Redis configuration sets the correct DB.')
+        end
+      end
+
       def connect
-        db = context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB
-        Output.print_info(switch_message(db))
-        select_redis_db(db)
+        db_index = context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB
+        Output.print_info(switch_message(db_index))
+        select_redis_db(db_index)
       end
 
       def available? = defined?(Redis)
 
       def diagnostics
-        name = 'Redis'
-        return unavailable_diagnostics(name) unless available?
+        redis = self.class.redis_client if available?
+        return unavailable_diagnostics('Redis') unless redis
 
-        redis = fetch_redis_client
-        return unavailable_diagnostics(name) unless redis
-
-        latency = measure_latency { redis.ping }
-        build_redis_diagnostics(redis.info, latency)
+        perform_diagnostics(redis)
       rescue StandardError => e
-        error_diagnostics(name, e)
+        error_diagnostics('Redis', e)
       end
 
       private
 
-      def fetch_redis_client
-        Redis.respond_to?(:current) && Redis.current
+      def perform_diagnostics(redis)
+        latency = measure_latency { redis.ping }
+        info = redis.info
+        build_redis_diagnostics(info['redis_version'], info['used_memory_human'], latency)
       end
 
-      def build_redis_diagnostics(info, latency)
+      def build_redis_diagnostics(version, memory, latency)
         {
           name: 'Redis',
           status: :connected,
           latency_ms: latency,
-          details: redis_details(info)
+          details: {
+            db: context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB,
+            version: version,
+            memory: memory
+          }
         }
       end
 
-      def redis_details(info)
-        {
-          db: context_attribute(:tenant_redis_db) || DEFAULT_REDIS_DB,
-          version: info['redis_version'],
-          memory: info['used_memory_human']
-        }
-      end
-
-      def select_redis_db(db)
-        redis = fetch_redis_client
+      def select_redis_db(db_index)
+        klass = self.class
+        redis = klass.redis_client
         if redis
-          redis.select(db)
-        elsif defined?(RedisClient) && db != DEFAULT_REDIS_DB
-          warn_about_redis_client(db)
+          redis.select(db_index)
+        elsif defined?(RedisClient) && db_index != DEFAULT_REDIS_DB
+          klass.warn_no_auto_select(db_index)
         end
       rescue NoMethodError
         Output.print_warning('Redis.current is not available (deprecated in Redis v5+).')
       end
 
-      def warn_about_redis_client(db)
-        Output.print_warning("Redis DB #{db} configured but auto-select not supported with RedisClient. " \
-                             'Ensure your Redis configuration sets the correct DB.')
-      end
-
-      def switch_message(db)
-        db ? "Switching to Redis DB: #{db}" : 'Resetting Redis connection to default'
+      def switch_message(db_index)
+        db_index ? "Switching to Redis DB: #{db_index}" : 'Resetting Redis connection to default'
       end
     end
   end

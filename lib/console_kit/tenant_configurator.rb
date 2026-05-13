@@ -3,6 +3,7 @@
 require_relative 'output'
 require_relative 'connections/connection_manager'
 require_relative 'connections/dashboard'
+require_relative 'tenant_configurator/context_wrapper'
 
 module ConsoleKit
   # For tenant configuration
@@ -21,35 +22,43 @@ module ConsoleKit
         Thread.current[:console_kit_configuration_success] = val
       end
 
-      def configure_tenant(key)
-        constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
-        return missing_config_error(key) unless constants
+      def current_tenant_key = Thread.current[:console_kit_current_tenant_key]
 
-        perform_configuration(key, constants)
+      def current_tenant_key=(val)
+        Thread.current[:console_kit_current_tenant_key] = val
+      end
+
+      def configure_tenant(key)
+        return true if key == current_tenant_key && configuration_success
+
+        constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
+        return missing_config_error?(key) unless constants
+
+        run_configuration(key, constants)
       rescue StandardError => e
-        handle_error(e, key)
+        handle_error?(e, key)
       end
 
       def clear
         ctx = ConsoleKit.configuration.context_class
         return unless ctx
 
-        reset_tenant(ctx)
+        attributes = available_context_attributes(ctx)
+        wrapper = ContextWrapper.new(ctx, attributes)
+        return unless configuration_success || wrapper.any_set?
+
+        reset_tenant(wrapper)
         Output.print_info('Tenant context has been cleared.')
+        true
       end
 
       private
 
-      def reset_tenant(ctx)
+      def reset_tenant(wrapper)
         self.configuration_success = false
-        reset_context_attributes(ctx)
-        setup_connections(ctx)
-      end
-
-      def reset_context_attributes(ctx)
-        available_context_attributes(ctx).each do |attr|
-          ctx.public_send("#{attr}=", nil)
-        end
+        self.current_tenant_key = nil
+        wrapper.reset
+        setup_connections(wrapper.ctx)
       end
 
       def validate_constants!(constants)
@@ -57,15 +66,16 @@ module ConsoleKit
         raise Error, "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
       end
 
-      def missing_config_error(key)
+      def missing_config_error?(key)
         self.configuration_success = false
         Output.print_error("No configuration found for tenant: #{key}")
+        false
       end
 
-      def perform_configuration(key, constants)
+      def run_configuration(key, constants)
         validate_constants!(constants)
         apply_context(constants)
-        configure_success(key)
+        configure_success?(key)
       end
 
       def handler_available?(handler_class)
@@ -75,10 +85,14 @@ module ConsoleKit
       end
 
       def available_context_attributes(ctx)
-        attributes = ctx.respond_to?(:partner_identifier=) ? [:partner_identifier] : []
+        methods = ctx.public_methods
+        attributes = methods.include?(:partner_identifier=) ? [:partner_identifier] : []
+        attributes + handler_attributes_for(methods)
+      end
 
-        HANDLER_ATTRIBUTES.each_with_object(attributes) do |(handler, attr), list|
-          next unless ctx.respond_to?("#{attr}=")
+      def handler_attributes_for(methods)
+        HANDLER_ATTRIBUTES.each_with_object([]) do |(handler, attr), list|
+          next unless methods.include?(:"#{attr}=")
           next unless handler_available?(handler)
 
           list << attr
@@ -87,12 +101,10 @@ module ConsoleKit
 
       def apply_context(constant)
         ctx = ConsoleKit.configuration.context_class
-        assign_context_attributes(ctx, constant)
-        setup_connections(ctx)
-      end
+        attributes = available_context_attributes(ctx)
+        wrapper = ContextWrapper.new(ctx, attributes)
 
-      def assign_context_attributes(ctx, constant)
-        attribute_to_constant = {
+        mapping = {
           partner_identifier: :partner_code,
           tenant_shard: :shard,
           tenant_mongo_db: :mongo_db,
@@ -100,24 +112,26 @@ module ConsoleKit
           tenant_elasticsearch_prefix: :elasticsearch_prefix
         }
 
-        available_context_attributes(ctx).each do |attr|
-          ctx.public_send("#{attr}=", constant[attribute_to_constant[attr]])
-        end
+        wrapper.assign(constant, mapping)
+        setup_connections(ctx)
       end
 
       def setup_connections(context)
-        ConsoleKit::Connections::ConnectionManager.available_handlers(context).each(&:connect)
+        Connections::ConnectionManager.available_handlers(context).each(&:connect)
       end
 
-      def configure_success(key)
+      def configure_success?(key)
         Output.print_success("Tenant set to: #{key}")
         self.configuration_success = true
+        self.current_tenant_key = key
+        true
       end
 
-      def handle_error(error, key)
+      def handle_error?(error, key)
         self.configuration_success = false
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
+        false
       end
     end
   end

@@ -110,6 +110,20 @@ RSpec.describe ConsoleKit::TenantSelector do
       end
     end
 
+    context 'when tenants is empty' do
+      before { allow(ConsoleKit).to receive(:tenants).and_return({}) }
+
+      it 'returns :none for "0" input' do
+        allow($stdin).to receive(:gets).and_return("0\n")
+        expect(described_class.select).to eq(:none)
+      end
+
+      it 'fails validation for non-zero index' do
+        allow($stdin).to receive(:gets).and_return("1\n", "exit\n")
+        expect(described_class.select).to eq(:exit)
+      end
+    end
+
     context 'when handling edge cases' do
       it 'selects correctly when only one tenant exists' do
         single_tenant = { 'gamma' => { constants: { partner_code: 'GAMMA' } } }
