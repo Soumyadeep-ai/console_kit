@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'logger'
 require 'console_kit'
 require 'generator_spec'
 

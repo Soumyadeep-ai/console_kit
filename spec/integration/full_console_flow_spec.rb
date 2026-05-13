@@ -70,6 +70,7 @@ RSpec.describe FullConsoleFlow do
     )
 
     # Mock user input for TenantSelector
+    allow($stdin).to receive(:tty?).and_return(true)
     allow($stdin).to receive(:gets).and_return('1')
   end
 
