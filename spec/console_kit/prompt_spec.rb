@@ -87,6 +87,35 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
 
+    context 'when Pry is defined but Pry::Prompt does not support .new' do
+      let(:pry_config) { Struct.new(:prompt).new }
+
+      before do
+        pry_class = Class.new do
+          def self.config; end
+        end
+        stub_const('Pry', pry_class)
+        # Do NOT define Pry::Prompt — simulates old Pry
+        allow(Pry).to receive(:config).and_return(pry_config)
+      end
+
+      it 'sets the Pry prompt as an array' do
+        described_class.apply
+        expect(pry_config.prompt).to be_an(Array).and have_attributes(length: 2)
+      end
+
+      it 'uses procs for the prompt entries' do
+        described_class.apply
+        expect(pry_config.prompt.first).to be_a(Proc)
+      end
+
+      it 'includes the tenant name in the fallback prompt' do
+        described_class.apply
+        prompt_text = pry_config.prompt.first.call('main', 0, nil)
+        expect(prompt_text).to include('[acme]')
+      end
+    end
+
     context 'when neither IRB nor Pry is defined' do
       it 'does not raise an error' do
         expect { described_class.apply }.not_to raise_error

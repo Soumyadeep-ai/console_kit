@@ -37,6 +37,10 @@ Rails.application.config.after_initialize do
     # Toggle pretty output on/off (default: true)
     config.pretty_output = true
 
+    # Show connection dashboard on tenant switch (default: false)
+    # When false, use the `dashboard` command in the console to display on-demand
+    # config.show_dashboard = true
+
     if config.tenants.nil?
       warn '[ConsoleKit] Warning: `tenants` is not configured. ' \
            'Please set it in config/initializers/console_kit.rb'

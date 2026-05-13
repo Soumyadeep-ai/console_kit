@@ -13,12 +13,43 @@ module ConsoleKit
         apply_model_index_prefix(prefix)
       end
 
-      def available? = defined?(Elasticsearch)
+      def available?
+        !!(defined?(Elasticsearch::Model) && Elasticsearch::Model.respond_to?(:client))
+      end
+
+      def diagnostics
+        name = 'Elasticsearch'
+        return unavailable_diagnostics(name) unless available?
+
+        client = Elasticsearch::Model.client
+        latency = measure_latency { client.ping }
+        build_elasticsearch_diagnostics(client, latency)
+      rescue StandardError => e
+        error_diagnostics(name, e)
+      end
 
       private
 
+      def build_elasticsearch_diagnostics(client, latency)
+        {
+          name: 'Elasticsearch',
+          status: :connected,
+          latency_ms: latency,
+          details: elasticsearch_details(client.cluster.health)
+        }
+      end
+
+      def elasticsearch_details(health)
+        {
+          prefix: context_attribute(:tenant_elasticsearch_prefix),
+          cluster: health['cluster_name'],
+          health: health['status']
+        }
+      end
+
       def apply_model_index_prefix(prefix)
-        return unless defined?(Elasticsearch::Model) && Elasticsearch::Model.respond_to?(:index_name_prefix=)
+        return unless defined?(Elasticsearch::Model)
+        return unless Elasticsearch::Model.respond_to?(:index_name_prefix=)
 
         Elasticsearch::Model.index_name_prefix = prefix
       end

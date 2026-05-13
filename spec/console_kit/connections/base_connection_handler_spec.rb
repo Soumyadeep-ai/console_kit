@@ -40,6 +40,12 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  describe '#diagnostics' do
+    it 'raises NotImplementedError' do
+      expect { handler.diagnostics }.to raise_error(NotImplementedError, /must implement #diagnostics/)
+    end
+  end
+
   describe 'initialization' do
     it 'assigns the context' do
       expect(handler.context).to eq(context)

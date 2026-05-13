@@ -3,6 +3,9 @@
 require 'console_kit'
 require 'generator_spec'
 
+# Load mocks
+Dir[File.expand_path('support/mocks/**/*.rb', __dir__)].each { |f| require f }
+
 # Load all support files
 Dir[File.expand_path('support/**/*.rb', __dir__)].each { |f| require f }
 

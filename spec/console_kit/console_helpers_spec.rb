@@ -69,6 +69,14 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
     end
   end
 
+  describe '#dashboard' do
+    it 'delegates to ConsoleKit::Connections::Dashboard.display' do
+      allow(ConsoleKit::Connections::Dashboard).to receive(:display)
+      helper.dashboard
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display)
+    end
+  end
+
   describe '#tenants' do
     before do
       allow(ConsoleKit.configuration).to receive(:tenants).and_return(
