@@ -97,18 +97,19 @@ RSpec.describe ConsoleKit do
         expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
       end
 
-      it 'is idempotent when configuring the same tenant twice' do
+      it 'remains successful after configuring the same tenant twice' do
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
-        expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
 
-        # Reset mock to clear the count from the first configuration
-        # RSpec's `receive` on a class can be reset using `clear_interactions`
-        # or by re-stubbing.
+        expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
+      end
+
+      it 'does not re-establish the connection when configuring the same tenant twice' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
         RSpec::Mocks.space.proxy_for(ApplicationRecord).reset
         allow(ApplicationRecord).to receive(:establish_connection).and_call_original
-
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
-        expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
+
         expect(ApplicationRecord).not_to have_received(:establish_connection)
       end
 
@@ -338,24 +339,43 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    it 'sets Elasticsearch::Model.index_name_prefix when available' do
-      es_model = Module.new do
-        class << self
-          attr_accessor :index_name_prefix
+    context 'when Elasticsearch::Model is available' do
+      let(:es_model) do
+        Module.new do
+          class << self
+            attr_accessor :index_name_prefix
+          end
         end
       end
-      stub_const('Elasticsearch::Model', es_model)
-      context_class.tenant_elasticsearch_prefix = 'acme_idx'
 
-      ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+      before do
+        stub_const('Elasticsearch::Model', es_model)
+        context_class.tenant_elasticsearch_prefix = 'acme_idx'
+        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+      end
 
-      expect(Elasticsearch::Model.index_name_prefix).to eq('acme_idx')
+      it 'sets Elasticsearch::Model.index_name_prefix' do
+        expect(Elasticsearch::Model.index_name_prefix).to eq('acme_idx')
+      end
     end
   end
 
   describe 'dashboard' do
     let(:context_class) do
       self.class.build_context_class(:tenant_shard, :partner_identifier)
+    end
+    let(:connected_diag) { ->(name) { { name: name, status: :connected, latency_ms: 10, details: {} } } }
+    let(:stub_handlers) do
+      [
+        instance_double(ConsoleKit::Connections::SqlConnectionHandler,
+                        safe_diagnostics: connected_diag.call('SQL')),
+        instance_double(ConsoleKit::Connections::ElasticsearchConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Elasticsearch')),
+        instance_double(ConsoleKit::Connections::MongoConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Mongo')),
+        instance_double(ConsoleKit::Connections::RedisConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Redis'))
+      ]
     end
 
     let(:pool) { double(size: 5) }
@@ -375,21 +395,23 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    it 'renders a dashboard table for available connections', :aggregate_failures do
-      allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+    context 'when all handlers report connected status' do
+      before do
+        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+        allow(ConsoleKit::Connections::ConnectionManager)
+          .to receive(:available_handlers)
+          .and_return(stub_handlers)
+      end
 
-      # Mock diagnostic return values to avoid calling real client logic
-      allow_any_instance_of(ConsoleKit::Connections::SqlConnectionHandler).to receive(:diagnostics).and_return({ name: 'SQL', status: :connected, latency_ms: 10, details: {} })
-      allow_any_instance_of(ConsoleKit::Connections::ElasticsearchConnectionHandler).to receive(:diagnostics).and_return({ name: 'Elasticsearch', status: :connected, latency_ms: 10, details: {} })
-      allow_any_instance_of(ConsoleKit::Connections::MongoConnectionHandler).to receive(:diagnostics).and_return({ name: 'Mongo', status: :connected, latency_ms: 10, details: {} })
-      allow_any_instance_of(ConsoleKit::Connections::RedisConnectionHandler).to receive(:diagnostics).and_return({ name: 'Redis', status: :connected, latency_ms: 10, details: {} })
+      it 'renders SQL in the dashboard table' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+        expect(output).to include('SQL')
+      end
 
-      output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
-
-      expect(output).to include('SQL')
-      expect(output).to include('Connected')
-    end
-
+      it 'renders Connected status in the dashboard table' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+        expect(output).to include('Connected')
+      end
     end
 
     it 'shows error status when connection fails', :aggregate_failures do

@@ -29,7 +29,6 @@ module ConsoleKit
         if thread.join(timeout)
           result_wrapper[:value] || error_diagnostics(handler_name, StandardError.new('Unknown error'))
         else
-          thread.kill
           timeout_diagnostics(handler_name, timeout)
         end
       end
@@ -38,7 +37,7 @@ module ConsoleKit
 
       def spawn_diagnostic_thread(handler_name)
         wrapper = { value: nil }
-        thread = Thread.new { wrapper[:value] = run_diagnostics_safely(handler_name) }
+        thread = Thread.new { wrapper[:value] = run_diagnostics_safely(handler_name) { diagnostics } }
         [thread, wrapper]
       end
 

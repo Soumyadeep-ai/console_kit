@@ -112,14 +112,20 @@ RSpec.describe FullConsoleFlow do
       expect(context_class.tenant_shard).to eq('shard_globex')
     end
 
-    it 'is idempotent when switching to the same tenant' do
-      # Already on globex from before block
-      allow($stdin).to receive(:gets).and_return('2') # select globex again
+    context 'when switching to the same tenant again' do
+      let(:idempotent_output) do
+        allow($stdin).to receive(:gets).and_return('2') # select globex again
+        capture_all_output { ConsoleKit::Setup.reset_current_tenant }
+      end
 
-      output = capture_all_output { ConsoleKit::Setup.reset_current_tenant }
+      it 'prints an already-using message' do
+        expect(idempotent_output).to include('Already using tenant: globex')
+      end
 
-      expect(output).to include('Already using tenant: globex')
-      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+      it 'keeps current_tenant as globex' do
+        idempotent_output
+        expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+      end
     end
   end
 
@@ -164,8 +170,7 @@ RSpec.describe FullConsoleFlow do
     it 'logs error if configuration is invalid during setup' do
       ConsoleKit.configuration.tenants = nil
       output = capture_all_output { ConsoleKit::Setup.setup }
-      expect(output).to include('Error setting up tenant')
-      expect(output).to include('tenants` is not configured')
+      expect(output).to include('Error setting up tenant').and include('tenants` is not configured')
     end
   end
 end

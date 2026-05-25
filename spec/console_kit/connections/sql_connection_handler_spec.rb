@@ -235,25 +235,32 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
         expect(handler.diagnostics[:details][:error]).to include('connection refused')
       end
 
-      it 'captures error when connection_pool access fails' do
-        allow(ApplicationRecord).to receive_messages(
-          connection: double(adapter_name: 'PostgreSQL', execute: true),
-          connection_pool: double
-        )
-        allow(ApplicationRecord.connection_pool).to receive(:size).and_raise(StandardError, 'pool error')
-
-        result = handler.diagnostics
-        expect(result[:status]).to eq(:error)
-        expect(result[:details][:error]).to include('pool error')
+      it 'returns status :error when connection_pool access fails' do
+        pool = double
+        conn = double(adapter_name: 'PostgreSQL', execute: true)
+        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+        allow(pool).to receive(:size).and_raise(StandardError, 'pool error')
+        expect(handler.diagnostics[:status]).to eq(:error)
       end
 
-      it 'captures error when execute fails during latency measurement' do
+      it 'includes the pool error message in details' do
+        pool = double
+        conn = double(adapter_name: 'PostgreSQL', execute: true)
+        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+        allow(pool).to receive(:size).and_raise(StandardError, 'pool error')
+        expect(handler.diagnostics[:details][:error]).to include('pool error')
+      end
+
+      it 'returns status :error when execute fails during latency measurement' do
         allow(ApplicationRecord).to receive(:connection).and_return(double)
         allow(ApplicationRecord.connection).to receive(:execute).and_raise(StandardError, 'query failed')
+        expect(handler.diagnostics[:status]).to eq(:error)
+      end
 
-        result = handler.diagnostics
-        expect(result[:status]).to eq(:error)
-        expect(result[:details][:error]).to include('query failed')
+      it 'includes the execute error message in details' do
+        allow(ApplicationRecord).to receive(:connection).and_return(double)
+        allow(ApplicationRecord.connection).to receive(:execute).and_raise(StandardError, 'query failed')
+        expect(handler.diagnostics[:details][:error]).to include('query failed')
       end
     end
   end

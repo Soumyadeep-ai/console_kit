@@ -60,11 +60,11 @@ module ConsoleKit
       end
 
       def base_class
-        name = self.class.base_class_name
-        klass = name.to_s.safe_constantize
-        return klass if klass
-
-        raise Error, "ConsoleKit: sql_base_class '#{name}' could not be found."
+        @base_class ||= begin
+          name = self.class.base_class_name
+          klass = name.to_s.safe_constantize
+          klass || raise(Error, "ConsoleKit: sql_base_class '#{name}' could not be found.")
+        end
       end
 
       def connection_message(shard)

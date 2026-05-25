@@ -39,8 +39,9 @@ module ConsoleKit
     private
 
     def resolve_context_class(val)
-      val.to_s.constantize
-    rescue NameError
+      klass = val.to_s.safe_constantize
+      return klass if klass
+
       raise Error, "ConsoleKit: context_class '#{val}' could not be found. " \
                    'Ensure the class is defined before configuration is accessed.'
     end

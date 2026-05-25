@@ -6,6 +6,26 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.0] - 2026-05-25
+### Added
+- **Mongoid Named Client Support:** `MongoConnectionHandler` now detects named Mongoid clients (configured in `mongoid.yml`) and calls `Mongoid.override_client` instead of `Mongoid.override_database`. This correctly handles multi-tenant setups where each tenant has a separate Mongoid client URI rather than a shared client with a different database name override.
+- **Partner Identifier Case-Mismatch Warning:** When ConsoleKit writes a `partner_identifier` that differs from the existing context value only in case (e.g., app set `"DAHABDEV_SO"`, config has `"dahabdev_so"`), a warning is now printed so misconfigured tenant constants are immediately visible.
+- **Mongoid Reset on Clear:** `TenantConfigurator.clear` now resets both `Mongoid.override_client` and `Mongoid.override_database` to nil, ensuring a clean state regardless of which override path was used.
+
+### Fixed
+- **Mongoid Wrong Database Bug:** Tenants using named Mongoid clients (separate URIs per tenant) were previously routed to a non-existent database because ConsoleKit called `Mongoid.override_database` with the client name instead of switching the client. Fixed by detecting named clients and using `Mongoid.override_client`.
+- **Test Suite Stability:** Resolved 3 pre-existing failures in `tenant_orchestrator_spec.rb` caused by `auto_select?` returning true in non-TTY environments (CI/test), bypassing stubbed tenant selection. Fixed by stubbing `auto_select?` in affected examples.
+- **Pending Tests Eliminated:** 12 pending tests in `output_spec.rb` caused by conditional `skip` in shared examples consolidated into a single unconditional assertion per example.
+
+### Security
+- **`safe_constantize` in Configuration:** `Configuration#resolve_context_class` now uses `safe_constantize` (returns nil on unknown constant) instead of `constantize` (raises on NameError), consistent with `SqlConnectionHandler`. Removes an inconsistency in constant resolution across the codebase.
+- **Removed `Thread.kill` on Diagnostic Timeout:** Diagnostic threads that exceed the 2-second timeout are no longer forcibly killed via `Thread#kill`. Forcibly killing a thread mid-operation can leave database connections in a corrupt state. Timed-out threads now finish naturally while the main thread proceeds with a timeout diagnostic result.
+
+### Performance
+- **`base_class` Memoization in SQL Handler:** `SqlConnectionHandler#base_class` now memoizes the resolved constant with `@base_class ||=`, eliminating repeated `safe_constantize` calls across `connect`, `diagnostics`, and `disconnect_existing_pool` within the same handler instance.
+
+---
+
 ## [1.2.0] - 2026-05-13
 ### Added
 - **Connection Dashboard:** New `dashboard` console helper displaying a Unicode table with connection status, latency, and service-specific details (adapter, DB version, pool size, memory, cluster health) for all active handlers.
@@ -116,6 +136,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.3.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.0.0

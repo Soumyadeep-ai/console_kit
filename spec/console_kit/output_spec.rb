@@ -22,12 +22,9 @@ RSpec.describe ConsoleKit::Output do
       expect(output).to include(OutputSpecHelper.format_expected_line(method, message, symbol))
     end
 
-    it "handles ANSI color for #{method}" do
-      if ConsoleKit.configuration.pretty_output && color_code
-        expect(output).to match(/\e\[#{color_code}m.*\e\[0m/m)
-      else
-        expect(output).not_to match(/\e\[[\d;]+m/)
-      end
+    it "handles ANSI color codes correctly for #{method}" do
+      use_color = ConsoleKit.configuration.pretty_output && color_code
+      expect(output).to(satisfy { |o| use_color ? o.match?(/\e\[#{color_code}m.*\e\[0m/m) : !o.match?(/\e\[[\d;]+m/) })
     end
   end
 

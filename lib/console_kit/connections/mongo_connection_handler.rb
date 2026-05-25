@@ -8,10 +8,9 @@ module ConsoleKit
     class MongoConnectionHandler < BaseConnectionHandler
       def connect
         db = context_attribute(:tenant_mongo_db).presence
-        Output.print_info(switch_message(db))
-        Mongoid.override_database(db)
+        switch_mongo(db)
       rescue NoMethodError
-        Output.print_warning('Mongoid.override_database is not available in this version of Mongoid.')
+        Output.print_warning('Mongoid client override is not available in this version of Mongoid.')
       end
 
       def available? = defined?(Mongoid)
@@ -48,8 +47,28 @@ module ConsoleKit
         (override ? client.use(override) : client).database
       end
 
-      def switch_message(db)
-        db ? "Switching to MongoDB client: #{db}" : 'Resetting MongoDB client to default'
+      def switch_mongo(db)
+        if db.nil?
+          Output.print_info('Resetting MongoDB client to default')
+          reset_overrides
+        elsif named_client?(db)
+          Output.print_info("Switching to MongoDB client: #{db}")
+          Mongoid.override_client(db)
+        else
+          Output.print_info("Switching to MongoDB database: #{db}")
+          Mongoid.override_database(db)
+        end
+      end
+
+      def reset_overrides
+        Mongoid.override_client(nil) if Mongoid.respond_to?(:override_client)
+        Mongoid.override_database(nil)
+      end
+
+      def named_client?(name)
+        Mongoid::Config.clients.key?(name.to_s)
+      rescue StandardError
+        false
       end
     end
   end
