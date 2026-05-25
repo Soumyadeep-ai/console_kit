@@ -3,6 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit do
+  include IntegrationTestHelper
+
   def self.build_context_class(*attrs)
     Class.new.tap do |klass|
       klass.singleton_class.attr_accessor(*attrs)
@@ -94,6 +96,36 @@ RSpec.describe ConsoleKit do
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
         expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
       end
+
+      it 'remains successful after configuring the same tenant twice' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
+        expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
+      end
+
+      it 'does not re-establish the connection when configuring the same tenant twice' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+        RSpec::Mocks.space.proxy_for(ApplicationRecord).reset
+        allow(ApplicationRecord).to receive(:establish_connection).and_call_original
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
+        expect(ApplicationRecord).not_to have_received(:establish_connection)
+      end
+
+      it 'does not crash when clearing an already cleared context' do
+        ConsoleKit::TenantConfigurator.clear
+        expect { ConsoleKit::TenantConfigurator.clear }.not_to raise_error
+      end
+
+      it 'does not re-run connection handlers if already cleared' do
+        ConsoleKit::TenantConfigurator.clear
+        # Reset mocks to track new calls
+        allow(ApplicationRecord).to receive(:establish_connection).and_call_original
+
+        ConsoleKit::TenantConfigurator.clear
+        expect(ApplicationRecord).not_to have_received(:establish_connection)
+      end
     end
 
     describe 'tenant switching' do
@@ -133,6 +165,14 @@ RSpec.describe ConsoleKit do
         allow(ApplicationRecord).to receive(:establish_connection).and_raise(StandardError, 'connection failed')
 
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
+        expect(ConsoleKit::TenantConfigurator.configuration_success).to be_falsey
+      end
+
+      it 'handles tenant config with invalid constants type' do
+        allow(described_class.configuration).to receive(:tenants).and_return({ 'bad' => { constants: 'not a hash' } })
+
+        ConsoleKit::TenantConfigurator.configure_tenant('bad')
 
         expect(ConsoleKit::TenantConfigurator.configuration_success).to be_falsey
       end
@@ -191,20 +231,11 @@ RSpec.describe ConsoleKit do
       it 'reconfigures without output', :aggregate_failures do
         ConsoleKit::Setup.setup
 
-        output = capture_output { ConsoleKit::Setup.reapply }
+        output = capture_all_output { ConsoleKit::Setup.reapply }
 
         expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_acme).twice
         expect(output).to be_empty
       end
-    end
-
-    def capture_output
-      original = $stdout
-      $stdout = StringIO.new
-      yield
-      $stdout.string
-    ensure
-      $stdout = original
     end
   end
 
@@ -308,20 +339,43 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    it 'sets Elasticsearch::Model.index_name_prefix when available' do
-      es_model = Module.new { class << self; attr_accessor :index_name_prefix; end }
-      stub_const('Elasticsearch::Model', es_model)
-      context_class.tenant_elasticsearch_prefix = 'acme_idx'
+    context 'when Elasticsearch::Model is available' do
+      let(:es_model) do
+        Module.new do
+          class << self
+            attr_accessor :index_name_prefix
+          end
+        end
+      end
 
-      ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+      before do
+        stub_const('Elasticsearch::Model', es_model)
+        context_class.tenant_elasticsearch_prefix = 'acme_idx'
+        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+      end
 
-      expect(Elasticsearch::Model.index_name_prefix).to eq('acme_idx')
+      it 'sets Elasticsearch::Model.index_name_prefix' do
+        expect(Elasticsearch::Model.index_name_prefix).to eq('acme_idx')
+      end
     end
   end
 
   describe 'dashboard' do
     let(:context_class) do
       self.class.build_context_class(:tenant_shard, :partner_identifier)
+    end
+    let(:connected_diag) { ->(name) { { name: name, status: :connected, latency_ms: 10, details: {} } } }
+    let(:stub_handlers) do
+      [
+        instance_double(ConsoleKit::Connections::SqlConnectionHandler,
+                        safe_diagnostics: connected_diag.call('SQL')),
+        instance_double(ConsoleKit::Connections::ElasticsearchConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Elasticsearch')),
+        instance_double(ConsoleKit::Connections::MongoConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Mongo')),
+        instance_double(ConsoleKit::Connections::RedisConnectionHandler,
+                        safe_diagnostics: connected_diag.call('Redis'))
+      ]
     end
 
     let(:pool) { double(size: 5) }
@@ -341,33 +395,33 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    it 'renders a dashboard table for available connections', :aggregate_failures do
-      allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+    context 'when all handlers report connected status' do
+      before do
+        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
+        allow(ConsoleKit::Connections::ConnectionManager)
+          .to receive(:available_handlers)
+          .and_return(stub_handlers)
+      end
 
-      output = capture_output { ConsoleKit::Connections::Dashboard.display }
+      it 'renders SQL in the dashboard table' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+        expect(output).to include('SQL')
+      end
 
-      expect(output).to include('SQL')
-      expect(output).to include('Connected')
-      expect(output).to include('PostgreSQL')
+      it 'renders Connected status in the dashboard table' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+        expect(output).to include('Connected')
+      end
     end
 
     it 'shows error status when connection fails', :aggregate_failures do
       allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'timeout')
       allow(ApplicationRecord).to receive(:connection_pool).and_return(double(size: 5))
 
-      output = capture_output { ConsoleKit::Connections::Dashboard.display }
+      output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
 
       expect(output).to include('SQL')
       expect(output).to include('Error')
-    end
-
-    def capture_output
-      original = $stdout
-      $stdout = StringIO.new
-      yield
-      $stdout.string
-    ensure
-      $stdout = original
     end
   end
 end

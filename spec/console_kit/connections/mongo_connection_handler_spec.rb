@@ -17,20 +17,41 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
 
   before do
     allow(Mongoid).to receive(:override_database)
+    allow(Mongoid).to receive(:override_client)
+    allow(Mongoid::Config).to receive(:clients).and_return({})
   end
 
   describe '#connect' do
-    it 'calls override_database with correct DB' do
+    it 'calls override_database when db is not a named client' do
       handler.connect
       expect(Mongoid).to have_received(:override_database).with('mongo_foo')
+    end
+
+    context 'when tenant_mongo_db matches a named Mongoid client' do
+      before { allow(Mongoid::Config).to receive(:clients).and_return({ 'mongo_foo' => {} }) }
+
+      it 'calls override_client with the client name' do
+        handler.connect
+        expect(Mongoid).to have_received(:override_client).with('mongo_foo')
+      end
+
+      it 'does not call override_database' do
+        handler.connect
+        expect(Mongoid).not_to have_received(:override_database)
+      end
     end
 
     context 'when tenant_mongo_db is empty' do
       let(:context) { instance_double(DummyContext, tenant_mongo_db: '') }
 
-      it 'calls override_database with nil' do
+      it 'resets override_database to nil' do
         handler.connect
         expect(Mongoid).to have_received(:override_database).with(nil)
+      end
+
+      it 'resets override_client to nil' do
+        handler.connect
+        expect(Mongoid).to have_received(:override_client).with(nil)
       end
     end
 
@@ -39,10 +60,9 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       expect { handler.connect }.to raise_error('mongo error')
     end
 
-    context 'when Mongoid does not support override_database' do
+    context 'when Mongoid does not support override methods' do
       before do
         mongo_class = Class.new
-        allow(mongo_class).to receive(:respond_to?).with(:override_database).and_return(false)
         stub_const('Mongoid', mongo_class)
       end
 
@@ -51,7 +71,7 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
 
         handler.connect
 
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(/override_database/)
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(/override/)
       end
     end
   end

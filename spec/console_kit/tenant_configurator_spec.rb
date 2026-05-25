@@ -40,6 +40,8 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       before do
         allow(ApplicationRecord).to receive(:establish_connection)
         allow(Mongoid).to receive(:override_database)
+        allow(Mongoid).to receive(:override_client)
+        allow(Mongoid::Config).to receive(:clients).and_return({})
         allow(ConsoleKit::Output).to receive(:print_success)
       end
 
@@ -48,9 +50,15 @@ RSpec.describe ConsoleKit::TenantConfigurator do
         expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_acme)
       end
 
-      it 'overrides Mongoid client with correct DB' do
+      it 'overrides Mongoid database when mongo_db is not a named client' do
         configure
         expect(Mongoid).to have_received(:override_database).with('acme_db')
+      end
+
+      it 'overrides Mongoid named client when mongo_db matches a configured client' do
+        allow(Mongoid::Config).to receive(:clients).and_return({ 'acme_db' => {} })
+        configure
+        expect(Mongoid).to have_received(:override_client).with('acme_db')
       end
 
       it 'prints success message' do
@@ -85,6 +93,61 @@ RSpec.describe ConsoleKit::TenantConfigurator do
 
       it 'returns true' do
         expect(configure).to be(true)
+      end
+    end
+
+    context 'with partner_identifier case mismatch' do
+      let(:valid_constants) do
+        { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'acme', redis_db: 1, elasticsearch_prefix: 'acme' }
+      end
+
+      before do
+        context_class.partner_identifier = 'ACME'
+        allow(ApplicationRecord).to receive(:establish_connection)
+        allow(Mongoid).to receive(:override_database)
+        allow(Mongoid).to receive(:override_client)
+        allow(Mongoid::Config).to receive(:clients).and_return({})
+        allow(ConsoleKit::Output).to receive(:print_success)
+        allow(ConsoleKit::Output).to receive(:print_warning)
+      end
+
+      it 'emits a case mismatch warning' do
+        configure
+        expect(ConsoleKit::Output).to have_received(:print_warning)
+          .with(a_string_including('partner_identifier case mismatch'))
+      end
+
+      it 'mentions the existing value in warning' do
+        configure
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('ACME'))
+      end
+
+      it 'mentions the configured value in warning' do
+        configure
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('acme'))
+      end
+
+      it 'still applies the configured value' do
+        configure
+        expect(context_class.partner_identifier).to eq('acme')
+      end
+    end
+
+    context 'with partner_identifier matching exactly' do
+      before do
+        context_class.partner_identifier = 'ACME'
+        allow(ApplicationRecord).to receive(:establish_connection)
+        allow(Mongoid).to receive(:override_database)
+        allow(Mongoid).to receive(:override_client)
+        allow(Mongoid::Config).to receive(:clients).and_return({})
+        allow(ConsoleKit::Output).to receive(:print_success)
+        allow(ConsoleKit::Output).to receive(:print_warning)
+      end
+
+      it 'does not emit a case mismatch warning' do
+        configure
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+          .with(a_string_including('case mismatch'))
       end
     end
 
@@ -189,6 +252,8 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       allow(ConsoleKit::Output).to receive(:print_info)
       allow(ApplicationRecord).to receive(:establish_connection)
       allow(Mongoid).to receive(:override_database)
+      allow(Mongoid).to receive(:override_client)
+      allow(Mongoid::Config).to receive(:clients).and_return({})
     end
 
     it 'prints info about clearing' do
@@ -201,9 +266,14 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       expect(ApplicationRecord).to have_received(:establish_connection).with(no_args)
     end
 
-    it 'resets Mongoid client override' do
+    it 'resets Mongoid database override to nil' do
       described_class.clear
       expect(Mongoid).to have_received(:override_database).with(nil)
+    end
+
+    it 'resets Mongoid named client override to nil' do
+      described_class.clear
+      expect(Mongoid).to have_received(:override_client).with(nil)
     end
 
     it 'resets tenant_shard to nil' do
@@ -258,24 +328,24 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  describe '.available_context_attributes' do
+  describe 'ContextWrapper.for_context attribute detection' do
     let(:full_ctx) do
       Class.new do
         class << self
-          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
-                        :tenant_elasticsearch_prefix, :partner_identifier
+          attr_accessor :partner_identifier, :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
+                        :tenant_elasticsearch_prefix
         end
       end
     end
 
     it 'skips attributes the context class does not support' do
-      partial_ctx = Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end }
-      attrs = described_class.send(:available_context_attributes, partial_ctx)
+      ctx = Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end }
+      attrs = ConsoleKit::TenantConfigurator::ContextWrapper.for_context(ctx).attributes
       expect(attrs).to contain_exactly(:partner_identifier, :tenant_shard)
     end
 
     it 'includes all attributes when context supports them' do
-      attrs = described_class.send(:available_context_attributes, full_ctx)
+      attrs = ConsoleKit::TenantConfigurator::ContextWrapper.for_context(full_ctx).attributes
       expect(attrs).to include(:partner_identifier, :tenant_shard, :tenant_mongo_db,
                                :tenant_redis_db, :tenant_elasticsearch_prefix)
     end

@@ -49,6 +49,11 @@ RSpec.describe ConsoleKit::Configuration do
       config.context_class = klass
       expect(config.context_class).to eq(klass)
     end
+
+    it 'raises error if constant cannot be resolved' do
+      config.context_class = 'NonExistentClass'
+      expect { config.context_class }.to raise_error(ConsoleKit::Error, /could not be found/)
+    end
   end
 
   describe '#validate!' do
@@ -56,6 +61,12 @@ RSpec.describe ConsoleKit::Configuration do
       config.tenants = nil
       config.context_class = 'Something'
       expect { config.validate! }.to raise_error(ConsoleKit::Error, /tenants.*not configured/)
+    end
+
+    it 'raises error if tenants is not a hash' do
+      config.tenants = %w[not a hash]
+      config.context_class = 'Something'
+      expect { config.validate! }.to raise_error(ConsoleKit::Error, /must be a Hash/)
     end
 
     it 'raises error if tenants is empty' do

@@ -8,34 +8,23 @@ RSpec.describe ConsoleKit::Output do
   let(:pretty_output) { true }
 
   shared_examples 'ConsoleKit output formatter' do |method, message:, symbol:, color_code: nil|
-    def expect_color(output, code)
-      expectation = expect(output)
-
-      if ConsoleKit.configuration.pretty_output && code
-        expectation.to match(/\e\[#{code}m.*\e\[0m/m)
-      else
-        expectation.not_to match(/\e\[[\d;]+m/)
-      end
-    end
+    let(:output) { OutputSpecHelper.capture_stdout { described_class.send(method, message) } }
 
     it "includes [ConsoleKit] tag in #{method} output" do
-      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect(output).to include('[ConsoleKit]')
     end
 
     it "includes symbol in #{method} output if provided" do
-      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect(output).to include(symbol) if symbol
     end
 
     it "includes formatted message for #{method}" do
-      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
       expect(output).to include(OutputSpecHelper.format_expected_line(method, message, symbol))
     end
 
-    it "handles ANSI color for #{method}" do
-      output = OutputSpecHelper.capture_stdout { described_class.send(method, message) }
-      expect_color(output, color_code)
+    it "handles ANSI color codes correctly for #{method}" do
+      use_color = ConsoleKit.configuration.pretty_output && color_code
+      expect(output).to(satisfy { |o| use_color ? o.match?(/\e\[#{color_code}m.*\e\[0m/m) : !o.match?(/\e\[[\d;]+m/) })
     end
   end
 

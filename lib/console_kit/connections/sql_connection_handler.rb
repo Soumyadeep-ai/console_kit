@@ -6,6 +6,16 @@ module ConsoleKit
   module Connections
     # Handles SQL connections
     class SqlConnectionHandler < BaseConnectionHandler
+      class << self
+        def sql_version(conn)
+          conn.select_value('SELECT version()')
+        rescue StandardError
+          nil
+        end
+
+        def base_class_name = ConsoleKit.configuration.sql_base_class
+      end
+
       def connect
         shard = context_attribute(:tenant_shard).presence&.to_sym
         Output.print_info("#{connection_message(shard)} via #{base_class}")
@@ -13,25 +23,26 @@ module ConsoleKit
         shard ? base_class.establish_connection(shard) : base_class.establish_connection
       end
 
-      def available? = sql_base_class_name.to_s.safe_constantize.present?
+      def available? = self.class.base_class_name.to_s.safe_constantize.present?
 
       def diagnostics
-        name = 'SQL'
-        return unavailable_diagnostics(name) unless available?
+        return unavailable_diagnostics('SQL') unless available?
 
-        conn = base_class.connection
-        latency = measure_latency { conn.execute('SELECT 1') }
-        build_sql_diagnostics(conn, latency)
+        perform_diagnostics
       rescue StandardError => e
-        error_diagnostics(name, e)
+        error_diagnostics('SQL', e)
       end
 
       private
 
-      def disconnect_existing_pool
-        return unless base_class.respond_to?(:connection_pool)
+      def perform_diagnostics
+        conn = base_class.connection
+        latency = measure_latency { conn.execute('SELECT 1') }
+        build_sql_diagnostics(conn, latency)
+      end
 
-        pool = base_class.connection_pool
+      def disconnect_existing_pool
+        pool = base_class.try(:connection_pool)
         pool&.disconnect!
       end
 
@@ -43,29 +54,22 @@ module ConsoleKit
           details: {
             adapter: conn.adapter_name,
             pool_size: base_class.connection_pool.size,
-            version: fetch_sql_version(conn).to_s.truncate(50)
+            version: self.class.sql_version(conn).to_s.truncate(50)
           }
         }
       end
 
-      def fetch_sql_version(conn)
-        conn.select_value('SELECT version()')
-      rescue StandardError
-        nil
-      end
-
       def base_class
-        klass = sql_base_class_name.to_s.safe_constantize
-        return klass if klass
-
-        raise Error, "ConsoleKit: sql_base_class '#{sql_base_class_name}' could not be found."
+        @base_class ||= begin
+          name = self.class.base_class_name
+          klass = name.to_s.safe_constantize
+          klass || raise(Error, "ConsoleKit: sql_base_class '#{name}' could not be found.")
+        end
       end
 
       def connection_message(shard)
         shard ? "Establishing SQL connection to shard: #{shard}" : 'Resetting SQL connection to default'
       end
-
-      def sql_base_class_name = ConsoleKit.configuration.sql_base_class
     end
   end
 end

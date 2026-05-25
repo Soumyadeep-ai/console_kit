@@ -155,6 +155,23 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  describe '.reset_configuration!' do
+    let(:tenant_configurator) do
+      result_store = {}
+      mod = Module.new
+      mod.define_singleton_method(:configuration_success=) { |v| result_store[:value] = v }
+      mod.define_singleton_method(:configuration_success) { result_store[:value] }
+      stub_const('ConsoleKit::TenantConfigurator', mod)
+      mod
+    end
+
+    it 'resets configuration success if TenantConfigurator is defined' do
+      tenant_configurator
+      described_class.reset_configuration!
+      expect(ConsoleKit::TenantConfigurator.configuration_success).to be false
+    end
+  end
+
   describe 'pretty_output toggle methods' do
     before do
       described_class.configure { |c| c.pretty_output = false }
