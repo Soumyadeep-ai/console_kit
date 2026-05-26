@@ -20,6 +20,7 @@ detectors:
     exclude:
       - ConsoleKit::PipelineContext#initialize
       - ConsoleKit::SwitchPipeline#run
+      - ConsoleKit::Output#print_with
   # rubocop:Style/Documentation conflict — RuboCop requires doc comments (Style/Documentation) on
   # every module/class, but adding module docs to tiny internal Structs clutters the code without
   # adding value.
@@ -28,12 +29,17 @@ detectors:
       - ConsoleKit::StepRegistry::Entry
       - ConsoleKit::Steps::Base::Result
   # rubocop:Metrics/CyclomaticComplexity conflict — print_banner uses style parameter to select color.
-  # This is intentional dispatch, not control flow smell.
+  # This is intentional dispatch, not control flow smell. build_message uses timestamp parameter to
+  # control whether to include time in output — intentional parameter dispatch, not control flow smell.
   ControlParameter:
     exclude:
       - ConsoleKit::Output#print_banner
+      - ConsoleKit::Output#build_message
   # rubocop:Metrics/MethodLength conflict — render_banner_lines unpacks context hash and renders
   # three output statements. Extracting further would reduce clarity without improving maintainability.
+  # rubocop:Metrics/MethodLength conflict — EnvResolver#call validates env variable, looks up tenant,
+  # and configures context. Extracting further would split cohesive validation logic unnecessarily.
   TooManyStatements:
     exclude:
       - ConsoleKit::Output#render_banner_lines
+      - ConsoleKit::Steps::EnvResolver#call
