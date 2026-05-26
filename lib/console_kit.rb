@@ -25,6 +25,8 @@ require_relative 'console_kit/prompt_builder'
 require_relative 'console_kit/steps/tenant_selector'
 require_relative 'console_kit/connections/connection_manager'
 require_relative 'console_kit/steps/tenant_configurator'
+require_relative 'console_kit/prompt'
+require_relative 'console_kit/steps/prompt_applier'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit

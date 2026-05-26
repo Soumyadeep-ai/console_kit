@@ -19,6 +19,10 @@ detectors:
       - ConsoleKit::FiberStorage#detect_fiber_capability
       - ConsoleKit::Steps::SafeguardCheck#current_env
       - ConsoleKit::Steps::TenantConfigurator#apply_context
+      # rubocop:Style/GuardClause conflict — Prompt#rails_or_env_var probes for Rails.env capability
+      # at runtime to handle environments where Rails may or may not be loaded. This intentional
+      # capability check is not a design smell but a necessary guard against missing dependencies.
+      - ConsoleKit::Prompt#rails_or_env_var
   MissingSafeMethod:
     exclude:
       - ConsoleKit::Context
@@ -81,6 +85,12 @@ detectors:
       - ConsoleKit::Steps::TenantSelector#aborted?
       - ConsoleKit::Steps::TenantConfigurator#case_mismatch?
       - ConsoleKit::Steps::TenantConfigurator#warn_case_mismatch
+      # rubocop:Naming/MethodName conflict — Prompt#rails_or_env_var reads global environment state
+      # to determine the deployment environment. It intentionally has no instance state because
+      # environment detection is a pure lookup. Placing it in Prompt keeps environment selection
+      # logic co-located with tenant_label; extracting it elsewhere would unnecessarily scatter
+      # prompt configuration logic across multiple classes.
+      - ConsoleKit::Prompt#rails_or_env_var
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:

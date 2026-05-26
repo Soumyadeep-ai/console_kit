@@ -11,8 +11,8 @@ module ConsoleKit
       def call
         config.hook_registry.run(:before_switch, ctx.resolved_tenant)
         success
-      rescue HookError => error
-        failure(error.message)
+      rescue HookError => e
+        failure(e.message)
       end
     end
   end
