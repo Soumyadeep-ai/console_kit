@@ -3,6 +3,9 @@ detectors:
   UncommunicativeVariableName:
     accept:
       - e
+  Attribute:
+    exclude:
+      - ConsoleKit::Configuration#pipeline_steps
   ManualDispatch:
     exclude:
       - ConsoleKit::FiberStorage#detect_fiber_capability
