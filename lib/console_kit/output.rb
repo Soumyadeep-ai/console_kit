@@ -26,6 +26,24 @@ module ConsoleKit
         exception&.backtrace&.each { |line| print_with(:trace, "    #{line}") }
       end
 
+      def print_banner(lines:, style: :danger)
+        color = style == :danger ? "\e[31m" : "\e[33m"
+        width = lines.map(&:length).max + 4
+        render_banner_lines({ color:, width:, padding: '═' * width, lines: })
+      end
+
+      def render_banner_lines(context)
+        reset = "\e[0m"
+        color = context[:color]
+        width = context[:width]
+        padding = context[:padding]
+        $stdout.puts "#{color}╔#{padding}╗#{reset}"
+        context[:lines].each do |line|
+          $stdout.puts "#{color}║#{"  ⚠  #{line}".ljust(width)}║#{reset}"
+        end
+        $stdout.puts "#{color}╚#{padding}╝#{reset}"
+      end
+
       private
 
       def print_with(type, text, timestamp: false)

@@ -118,6 +118,18 @@ RSpec.describe ConsoleKit::Output do
     end
   end
 
+  describe '.print_banner' do
+    it 'outputs bordered lines to stdout' do
+      expect { described_class.print_banner(lines: ['LINE ONE'], style: :danger) }
+        .to output(/LINE ONE/).to_stdout
+    end
+
+    it 'includes box border characters' do
+      expect { described_class.print_banner(lines: ['X'], style: :warn) }
+        .to output(/[╔╚║]/).to_stdout
+    end
+  end
+
   private
 
   def capture_stdout

@@ -27,3 +27,13 @@ detectors:
     exclude:
       - ConsoleKit::StepRegistry::Entry
       - ConsoleKit::Steps::Base::Result
+  # rubocop:Metrics/CyclomaticComplexity conflict — print_banner uses style parameter to select color.
+  # This is intentional dispatch, not control flow smell.
+  ControlParameter:
+    exclude:
+      - ConsoleKit::Output#print_banner
+  # rubocop:Metrics/MethodLength conflict — render_banner_lines unpacks context hash and renders
+  # three output statements. Extracting further would reduce clarity without improving maintainability.
+  TooManyStatements:
+    exclude:
+      - ConsoleKit::Output#render_banner_lines
