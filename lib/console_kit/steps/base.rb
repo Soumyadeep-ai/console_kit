@@ -30,8 +30,8 @@ module ConsoleKit
       attr_reader :ctx
 
       def config  = ctx.config
-      def success = Result.new(success: true)
-      def failure(msg) = Result.new(success: false, error: msg)
+      def success = self.class::Result.new(success: true)
+      def failure(msg) = self.class::Result.new(success: false, error: msg)
     end
   end
 end

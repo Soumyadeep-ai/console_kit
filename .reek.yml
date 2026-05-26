@@ -1,41 +1,28 @@
 ---
 detectors:
-  UncommunicativeVariableName:
-    accept:
-      - e
+  # rubocop:Style/AccessorGrouping conflict — RuboCop requires grouped attr_accessor which Reek
+  # then flags as Attribute smell. Suppressions below are for public mutable value-object fields
+  # that pipeline steps must read and write.
   Attribute:
     exclude:
       - ConsoleKit::Configuration#pipeline_steps
       - ConsoleKit::PipelineContext#resolved_tenant
       - ConsoleKit::PipelineContext#skip_selector
-      - ConsoleKit::PipelineContext#scoped
-      - ConsoleKit::PipelineContext#shard_strategy
-      - ConsoleKit::PipelineContext#resolved_shard
-      - ConsoleKit::PipelineContext#shard_active
-      - ConsoleKit::PipelineContext#config
   ManualDispatch:
     exclude:
       - ConsoleKit::FiberStorage#detect_fiber_capability
   MissingSafeMethod:
     exclude:
       - ConsoleKit::Context
-  TooManyInstanceVariables:
-    exclude:
-      - ConsoleKit::PipelineContext
+  # rubocop:Style/OptionalBooleanParameter conflict — RuboCop requires keyword boolean parameters
+  # (Style/OptionalBooleanParameter) which Reek then flags as BooleanParameter smell.
   BooleanParameter:
     exclude:
       - ConsoleKit::PipelineContext#initialize
-  NilCheck:
-    exclude:
-      - ConsoleKit::PipelineContext#initialize
-  DataClump:
-    exclude:
-      - ConsoleKit::StepRegistry
+  # rubocop:Style/Documentation conflict — RuboCop requires doc comments (Style/Documentation) on
+  # every module/class, but adding module docs to tiny internal Structs clutters the code without
+  # adding value.
   IrresponsibleModule:
     exclude:
       - ConsoleKit::StepRegistry::Entry
       - ConsoleKit::Steps::Base::Result
-  UtilityFunction:
-    exclude:
-      - ConsoleKit::Steps::Base#success
-      - ConsoleKit::Steps::Base#failure

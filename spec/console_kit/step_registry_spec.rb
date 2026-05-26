@@ -29,7 +29,7 @@ RSpec.describe ConsoleKit::StepRegistry do
 
     before do
       described_class.register(step_b, priority: 20)
-      described_class.insert_before(step_b, step_c, priority: 15)
+      described_class.insert_before(step_b, described_class::Entry.new(klass: step_c, priority: 15))
     end
 
     it 'inserts new step before target' do

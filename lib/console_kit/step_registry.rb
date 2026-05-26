@@ -16,18 +16,20 @@ module ConsoleKit
         registry.sort_by(&:priority).map(&:klass)
       end
 
-      def insert_before(target, klass, priority:)
-        target_entry = registry.find { |e| e.klass == target }
-        register(klass, priority: target_entry ? target_entry.priority - 0.5 : priority)
+      def insert_before(target, entry)
+        target_entry = registry.find { |existing| existing.klass == target }
+        effective_priority = target_entry ? target_entry.priority - 0.5 : entry.priority
+        registry << Entry.new(klass: entry.klass, priority: effective_priority)
       end
 
-      def insert_after(target, klass, priority:)
-        target_entry = registry.find { |e| e.klass == target }
-        register(klass, priority: target_entry ? target_entry.priority + 0.5 : priority)
+      def insert_after(target, entry)
+        target_entry = registry.find { |existing| existing.klass == target }
+        effective_priority = target_entry ? target_entry.priority + 0.5 : entry.priority
+        registry << Entry.new(klass: entry.klass, priority: effective_priority)
       end
 
       def remove(klass)
-        registry.reject! { |e| e.klass == klass }
+        registry.reject! { |entry| entry.klass == klass }
       end
 
       private
