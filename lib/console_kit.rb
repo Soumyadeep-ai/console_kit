@@ -23,6 +23,8 @@ require_relative 'console_kit/tenant_history'
 require 'tty-prompt'
 require_relative 'console_kit/prompt_builder'
 require_relative 'console_kit/steps/tenant_selector'
+require_relative 'console_kit/connections/connection_manager'
+require_relative 'console_kit/steps/tenant_configurator'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit

@@ -11,10 +11,14 @@ detectors:
   # rubocop:Style/ConditionalAssignment conflict — SafeguardCheck#current_env must check whether
   # Rails.env is available at runtime before calling it; this intentional capability probe is not
   # a design smell but a safe-guard against environments where Rails module exists but is not booted.
+  # rubocop:Style/ConditionalAssignment conflict — TenantConfigurator#apply_context uses respond_to?
+  # to probe the configured context class at runtime. The class is user-supplied and its methods
+  # are not known at load time; capability detection is required, not a design smell.
   ManualDispatch:
     exclude:
       - ConsoleKit::FiberStorage#detect_fiber_capability
       - ConsoleKit::Steps::SafeguardCheck#current_env
+      - ConsoleKit::Steps::TenantConfigurator#apply_context
   MissingSafeMethod:
     exclude:
       - ConsoleKit::Context
@@ -46,16 +50,27 @@ detectors:
   # rubocop:Metrics/MethodLength conflict — SafeguardCheck#call uses guard-clause style returns
   # (early return for scoped, no-op return for safe environments, conditional confirm). Each statement
   # is a distinct guard; collapsing them reduces readability of this intentional step logic.
+  # rubocop:Metrics/MethodLength conflict — TenantConfigurator#call performs three sequential guards
+  # before delegating; TenantConfigurator#configure_tenant orchestrates five cohesive side-effect
+  # steps (apply, connect, push, mark, print) that belong together as a single transaction-like unit;
+  # TenantConfigurator#apply_context iterates the field mapping and checks each attribute — splitting
+  # further would obscure the mapping logic.
   TooManyStatements:
     exclude:
       - ConsoleKit::Output#render_banner_lines
       - ConsoleKit::Steps::EnvResolver#call
       - ConsoleKit::Steps::SafeguardCheck#call
+      - ConsoleKit::Steps::TenantConfigurator#call
+      - ConsoleKit::Steps::TenantConfigurator#configure_tenant
+      - ConsoleKit::Steps::TenantConfigurator#apply_context
   # rubocop:Metrics/MethodLength conflict — SafeguardCheck#current_env reads global state (ENV/Rails)
   # to determine the current environment. It intentionally has no instance state dependency because
   # environment detection is a pure lookup — moving it out of the class would break encapsulation.
   # SafeguardCheck#confirmed? interacts with $stdin and Output to prompt the operator; it belongs
   # in the step class as part of the confirmation flow and needs no instance state by design.
+  # TenantConfigurator#case_mismatch? and #warn_case_mismatch are pure helper predicates/actions
+  # that operate only on their arguments. Extracting them to a separate class would break cohesion
+  # with apply_context which calls them as tightly coupled helpers.
   UtilityFunction:
     exclude:
       - ConsoleKit::Steps::SafeguardCheck#current_env
@@ -64,9 +79,12 @@ detectors:
       # keep resolve_tenant readable and avoid instance-variable assumption smells. It is a pure
       # guard predicate that belongs in the step class; extracting it elsewhere would break cohesion.
       - ConsoleKit::Steps::TenantSelector#aborted?
+      - ConsoleKit::Steps::TenantConfigurator#case_mismatch?
+      - ConsoleKit::Steps::TenantConfigurator#warn_case_mismatch
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:
     exclude:
       - ConsoleKit::Steps::BeforeHooks#call
       - ConsoleKit::Steps::AfterHooks#call
+      - ConsoleKit::Steps::TenantConfigurator#call
