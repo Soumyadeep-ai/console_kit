@@ -23,6 +23,10 @@ detectors:
       # at runtime to handle environments where Rails may or may not be loaded. This intentional
       # capability check is not a design smell but a necessary guard against missing dependencies.
       - ConsoleKit::Prompt#rails_or_env_var
+      # rubocop:Style/GuardClause conflict — RailsConnectedToStrategy#available? probes for the
+      # presence of ActiveRecord::Base and Rails::VERSION at runtime. Sharding support depends on
+      # optional Rails dependencies, so capability detection is intentional, not a design smell.
+      - ConsoleKit::Connections::RailsConnectedToStrategy#available?
   MissingSafeMethod:
     exclude:
       - ConsoleKit::Context
@@ -47,6 +51,10 @@ detectors:
     exclude:
       - ConsoleKit::Output#print_banner
       - ConsoleKit::Output#build_message
+      # rubocop:Style/MethodParameters conflict — ShardResolver#resolve is a pure lookup keyed by
+      # tenant_key. The parameter selects which tenant entry to look up; this is the public API,
+      # not a control-flow smell.
+      - ConsoleKit::Connections::ShardResolver#resolve
   # rubocop:Metrics/MethodLength conflict — render_banner_lines unpacks context hash and renders
   # three output statements. Extracting further would reduce clarity without improving maintainability.
   # rubocop:Metrics/MethodLength conflict — EnvResolver#call validates env variable, looks up tenant,
@@ -91,6 +99,14 @@ detectors:
       # logic co-located with tenant_label; extracting it elsewhere would unnecessarily scatter
       # prompt configuration logic across multiple classes.
       - ConsoleKit::Prompt#rails_or_env_var
+      # rubocop:Style/ClassMethodsDefinitions conflict — NullShardStrategy and
+      # RailsConnectedToStrategy are stateless Strategy objects by design (Null Object and
+      # Strategy patterns). Their public interface methods operate only on their arguments and
+      # global Rails state; promoting them to module functions would break ShardStrategyFactory's
+      # polymorphic dispatch.
+      - ConsoleKit::Connections::NullShardStrategy#wrap
+      - ConsoleKit::Connections::RailsConnectedToStrategy#available?
+      - ConsoleKit::Connections::RailsConnectedToStrategy#wrap
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:
@@ -98,3 +114,4 @@ detectors:
       - ConsoleKit::Steps::BeforeHooks#call
       - ConsoleKit::Steps::AfterHooks#call
       - ConsoleKit::Steps::TenantConfigurator#call
+      - ConsoleKit::Connections::RailsConnectedToStrategy#wrap
