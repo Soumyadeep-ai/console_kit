@@ -1,0 +1,8 @@
+---
+detectors:
+  UncommunicativeVariableName:
+    accept:
+      - e
+  ManualDispatch:
+    exclude:
+      - ConsoleKit::FiberStorage#detect_fiber_capability
