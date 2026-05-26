@@ -15,6 +15,7 @@ require_relative 'console_kit/pipeline_context'
 require_relative 'console_kit/steps/base'
 require_relative 'console_kit/switch_pipeline'
 require_relative 'console_kit/setup'
+require_relative 'console_kit/tenant_history'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit
