@@ -6,9 +6,36 @@ detectors:
   Attribute:
     exclude:
       - ConsoleKit::Configuration#pipeline_steps
+      - ConsoleKit::PipelineContext#resolved_tenant
+      - ConsoleKit::PipelineContext#skip_selector
+      - ConsoleKit::PipelineContext#scoped
+      - ConsoleKit::PipelineContext#shard_strategy
+      - ConsoleKit::PipelineContext#resolved_shard
+      - ConsoleKit::PipelineContext#shard_active
+      - ConsoleKit::PipelineContext#config
   ManualDispatch:
     exclude:
       - ConsoleKit::FiberStorage#detect_fiber_capability
   MissingSafeMethod:
     exclude:
       - ConsoleKit::Context
+  TooManyInstanceVariables:
+    exclude:
+      - ConsoleKit::PipelineContext
+  BooleanParameter:
+    exclude:
+      - ConsoleKit::PipelineContext#initialize
+  NilCheck:
+    exclude:
+      - ConsoleKit::PipelineContext#initialize
+  DataClump:
+    exclude:
+      - ConsoleKit::StepRegistry
+  IrresponsibleModule:
+    exclude:
+      - ConsoleKit::StepRegistry::Entry
+      - ConsoleKit::Steps::Base::Result
+  UtilityFunction:
+    exclude:
+      - ConsoleKit::Steps::Base#success
+      - ConsoleKit::Steps::Base#failure

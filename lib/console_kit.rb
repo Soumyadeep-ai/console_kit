@@ -10,6 +10,9 @@ require_relative 'console_kit/fiber_storage'
 require_relative 'console_kit/context'
 require_relative 'console_kit/hook_registry'
 require_relative 'console_kit/configuration'
+require_relative 'console_kit/step_registry'
+require_relative 'console_kit/pipeline_context'
+require_relative 'console_kit/steps/base'
 require_relative 'console_kit/setup'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
