@@ -1,16 +1,19 @@
 # frozen_string_literal: true
 
+# Main module for console kit
+module ConsoleKit
+  class Error < StandardError; end
+end
+
 require_relative 'console_kit/version'
 require_relative 'console_kit/fiber_storage'
 require_relative 'console_kit/context'
+require_relative 'console_kit/hook_registry'
 require_relative 'console_kit/configuration'
 require_relative 'console_kit/setup'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
-# Main module for console kit
 module ConsoleKit
-  class Error < StandardError; end
-
   class << self
     def configure = yield(configuration)
 
