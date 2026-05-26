@@ -31,6 +31,8 @@ require_relative 'console_kit/steps/shard_connector'
 require_relative 'console_kit/steps/tenant_configurator'
 require_relative 'console_kit/prompt'
 require_relative 'console_kit/steps/prompt_applier'
+require_relative 'console_kit/output'
+require_relative 'console_kit/status'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit
