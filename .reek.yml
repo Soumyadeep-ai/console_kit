@@ -60,6 +60,10 @@ detectors:
     exclude:
       - ConsoleKit::Steps::SafeguardCheck#current_env
       - ConsoleKit::Steps::SafeguardCheck#confirmed?
+      # rubocop:Style/MethodParameters conflict — TenantSelector#aborted? takes a key parameter to
+      # keep resolve_tenant readable and avoid instance-variable assumption smells. It is a pure
+      # guard predicate that belongs in the step class; extracting it elsewhere would break cohesion.
+      - ConsoleKit::Steps::TenantSelector#aborted?
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:
