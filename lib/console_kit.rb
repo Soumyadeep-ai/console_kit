@@ -17,6 +17,8 @@ require_relative 'console_kit/steps/env_resolver'
 require_relative 'console_kit/switch_pipeline'
 require_relative 'console_kit/setup'
 require_relative 'console_kit/tenant_history'
+require 'tty-prompt'
+require_relative 'console_kit/prompt_builder'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit
