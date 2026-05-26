@@ -19,6 +19,7 @@ detectors:
   BooleanParameter:
     exclude:
       - ConsoleKit::PipelineContext#initialize
+      - ConsoleKit::SwitchPipeline#run
   # rubocop:Style/Documentation conflict — RuboCop requires doc comments (Style/Documentation) on
   # every module/class, but adding module docs to tiny internal Structs clutters the code without
   # adding value.
