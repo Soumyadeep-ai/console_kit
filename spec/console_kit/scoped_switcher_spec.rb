@@ -1,0 +1,71 @@
+# spec/console_kit/scoped_switcher_spec.rb
+# frozen_string_literal: true
+
+require 'spec_helper'
+
+RSpec.describe ConsoleKit::ScopedSwitcher do
+  let(:config) { ConsoleKit.configuration }
+
+  before do
+    ConsoleKit.configure do |c|
+      c.tenants = { tenant_a: { constants: { shard: 's', partner_code: 'p' } },
+                    tenant_b: { constants: { shard: 's2', partner_code: 'p2' } } }
+      c.context_class = 'Object'
+      c.use_rails_sharding = false
+    end
+    allow(ConsoleKit::SwitchPipeline).to receive(:run).and_return(
+      ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a)
+    )
+  end
+
+  describe '.for' do
+    it 'returns DefaultScopedSwitcher when sharding disabled' do
+      config.use_rails_sharding = false
+      expect(described_class.for(config)).to be_a(ConsoleKit::DefaultScopedSwitcher)
+    end
+
+    context 'when sharding is enabled and available' do
+      let(:sharded_strategy) do
+        instance_double(ConsoleKit::Connections::RailsConnectedToStrategy, available?: true)
+      end
+
+      before do
+        config.use_rails_sharding = true
+        allow(ConsoleKit::Connections::ShardStrategyFactory).to receive(:build).and_return(sharded_strategy)
+      end
+
+      it 'returns ShardedScopedSwitcher' do
+        expect(described_class.for(config)).to be_a(ConsoleKit::ShardedScopedSwitcher)
+      end
+    end
+  end
+
+  describe ConsoleKit::DefaultScopedSwitcher do
+    subject(:switcher) { described_class.new(config) }
+
+    it 'yields block' do
+      result = nil
+      switcher.with(:tenant_a) { result = :yielded }
+      expect(result).to eq(:yielded)
+    end
+
+    it 'restores previous tenant after block' do
+      ConsoleKit::Context.push(:tenant_b)
+      switcher.with(:tenant_a) { :noop }
+      expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+    end
+
+    context 'when the block raises an exception' do
+      before { ConsoleKit::Context.push(:tenant_b) }
+
+      it 're-raises the exception' do
+        expect { switcher.with(:tenant_a) { raise 'boom' } }.to raise_error('boom')
+      end
+
+      it 'restores previous tenant after exception' do
+        switcher.with(:tenant_a) { raise 'boom' } rescue nil # rubocop:disable Style/RescueModifier
+        expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+      end
+    end
+  end
+end

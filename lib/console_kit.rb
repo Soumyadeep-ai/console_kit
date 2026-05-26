@@ -33,6 +33,7 @@ require_relative 'console_kit/prompt'
 require_relative 'console_kit/steps/prompt_applier'
 require_relative 'console_kit/output'
 require_relative 'console_kit/status'
+require_relative 'console_kit/scoped_switcher'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 module ConsoleKit
