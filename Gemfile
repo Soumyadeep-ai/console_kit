@@ -19,4 +19,5 @@ group :test do
   gem 'aruba'
   gem 'generator_spec'
   gem 'rspec_junit_formatter'
+  gem 'simplecov', require: false
 end

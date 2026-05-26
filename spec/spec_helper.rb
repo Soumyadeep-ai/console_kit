@@ -1,5 +1,20 @@
 # frozen_string_literal: true
 
+require 'simplecov'
+SimpleCov.start do
+  enable_coverage :branch
+  add_filter '/spec/'
+  track_files 'lib/**/*.rb'
+
+  add_group 'Core',        'lib/console_kit/'
+  add_group 'Connections', 'lib/console_kit/connections/'
+  add_group 'Steps',       'lib/console_kit/steps/'
+  add_group 'Doctor',      'lib/console_kit/doctor/'
+  add_group 'Generators',  'lib/generators/'
+
+  minimum_coverage line: 100, branch: 100
+end
+
 require 'console_kit'
 require 'generator_spec'
 
@@ -17,5 +32,11 @@ RSpec.configure do |config|
 
   config.expect_with :rspec do |c|
     c.syntax = :expect
+  end
+
+  config.after do
+    ConsoleKit.reset_configuration!
+    ConsoleKit::Context.reset! if defined?(ConsoleKit::Context)
+    Thread.current[:console_kit_silent] = nil
   end
 end

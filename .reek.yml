@@ -6,3 +6,6 @@ detectors:
   ManualDispatch:
     exclude:
       - ConsoleKit::FiberStorage#detect_fiber_capability
+  MissingSafeMethod:
+    exclude:
+      - ConsoleKit::Context
