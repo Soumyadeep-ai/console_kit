@@ -52,18 +52,11 @@ module ConsoleKit
       end
 
       def interactive_select
-        if tty_prompt_available?
+        if ::TTY_PROMPT_AVAILABLE
           PromptBuilder.new(config, history).select
         else
           LegacyTenantSelector.select
         end
-      end
-
-      def tty_prompt_available?
-        require 'tty-prompt'
-        true
-      rescue LoadError
-        false
       end
 
       def history

@@ -4,7 +4,6 @@ PATH
     console_kit (2.0.0)
       mongoid
       rails (>= 7.2.1)
-      tty-prompt (~> 0.23)
 
 GEM
   remote: https://rubygems.org/

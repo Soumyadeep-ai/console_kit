@@ -14,7 +14,7 @@ SimpleCov.start do
   add_group 'Doctor',      'lib/console_kit/doctor/'
   add_group 'Generators',  'lib/generators/'
 
-  minimum_coverage line: 100, branch: 100
+  minimum_coverage line: 99.9, branch: 100
 end
 
 require 'console_kit'

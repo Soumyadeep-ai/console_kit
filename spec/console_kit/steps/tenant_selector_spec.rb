@@ -66,43 +66,18 @@ RSpec.describe ConsoleKit::Steps::TenantSelector do
     end
 
     it 'uses LegacyTenantSelector when tty-prompt unavailable' do
-      allow(multi_step).to receive(:tty_prompt_available?).and_return(false)
+      stub_const('TTY_PROMPT_AVAILABLE', false)
       allow(ConsoleKit::LegacyTenantSelector).to receive(:select).and_return(:t2)
       result = multi_step.call
       expect(result.success?).to be true
     end
 
     it 'uses PromptBuilder when tty-prompt is available' do
-      allow(multi_step).to receive(:tty_prompt_available?).and_return(true)
+      stub_const('TTY_PROMPT_AVAILABLE', true)
       prompt_builder = instance_double(ConsoleKit::PromptBuilder, select: :t1)
       allow(ConsoleKit::PromptBuilder).to receive(:new).and_return(prompt_builder)
       result = multi_step.call
       expect(result.success?).to be true
-    end
-  end
-
-  context 'when tty-prompt is not installed' do
-    let(:alt_step) { described_class.new(ctx) }
-
-    before do
-      ConsoleKit.configure do |c|
-        c.tenants = {
-          t1: { constants: { shard: 's', partner_code: 'p' } },
-          t2: { constants: { shard: 's', partner_code: 'p' } }
-        }
-        c.context_class = 'Object'
-      end
-    end
-
-    it 'returns false from tty_prompt_available? when require raises LoadError' do
-      allow(alt_step).to receive(:require).with('tty-prompt').and_raise(LoadError)
-      expect(alt_step.send(:tty_prompt_available?)).to be false
-    end
-  end
-
-  context 'when tty-prompt is installed' do
-    it 'returns true from tty_prompt_available? when require succeeds' do
-      expect(step.send(:tty_prompt_available?)).to be true
     end
   end
 
