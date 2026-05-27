@@ -150,7 +150,7 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
     let(:ctx) do
       obj = Object.new
       obj.define_singleton_method(:tenant_shard) { raise StandardError, 'read error' }
-      obj.define_singleton_method(:tenant_shard=) { |_v| }
+      obj.define_singleton_method(:tenant_shard=) { |_v| nil }
       obj
     end
     let(:attrs) { [:tenant_shard] }

@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
       (f == gemspec) ||
         f.start_with?(*%w[bin/ test/ spec/ features/ .git .github .ruby-lsp
                           benchmark/ docs/ gemfiles/ sig/]) ||
-        f.end_with?('.md') ||
+        f.end_with?('.md', '.gem') ||
         %w[.gitignore .reek.yml .rubocop.yml .rspec Rakefile
            Gemfile Gemfile.lock reproduce_issues.rb].include?(f)
     end

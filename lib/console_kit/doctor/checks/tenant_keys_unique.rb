@@ -28,7 +28,7 @@ module ConsoleKit
 
         def duplicate_keys
           string_keys = config.tenant_resolver_instance.all_keys.map(&:to_s)
-          string_keys.group_by(&:itself).select { |_, occurrences| occurrences.size > 1 }.keys
+          string_keys.group_by(&:itself).select { |_key, occurrences| occurrences.size > 1 }.keys
         end
       end
     end

@@ -6,7 +6,13 @@ module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
+      def initialize(context)
+        super
+        @mongoid = nil
+      end
+
       def connect
+        @mongoid = Mongoid
         db = context_attribute(:tenant_mongo_db).presence
         switch_mongo(db)
       rescue NoMethodError
@@ -48,25 +54,38 @@ module ConsoleKit
       end
 
       def switch_mongo(db)
-        if db.nil?
+        unless db
           Output.print_info('Resetting MongoDB client to default')
-          reset_overrides
-        elsif named_client?(db)
-          Output.print_info("Switching to MongoDB client: #{db}")
-          Mongoid.override_client(db)
+          return reset_overrides
+        end
+
+        if named_client?(db)
+          switch_to_named_client(db)
         else
-          Output.print_info("Switching to MongoDB database: #{db}")
-          Mongoid.override_database(db)
+          switch_to_database(db)
         end
       end
 
+      def switch_to_named_client(db)
+        Output.print_info("Switching to MongoDB client: #{db}")
+        @mongoid.override_client(db)
+      end
+
+      def switch_to_database(db)
+        Output.print_info("Switching to MongoDB database: #{db}")
+        @mongoid.override_database(db)
+      end
+
       def reset_overrides
-        Mongoid.override_client(nil) if Mongoid.respond_to?(:override_client)
-        Mongoid.override_database(nil)
+        @mongoid.override_client(nil)
+      rescue NoMethodError
+        nil
+      ensure
+        @mongoid.override_database(nil)
       end
 
       def named_client?(name)
-        Mongoid::Config.clients.key?(name.to_s)
+        @mongoid::Config.clients.key?(name.to_s)
       rescue StandardError
         false
       end

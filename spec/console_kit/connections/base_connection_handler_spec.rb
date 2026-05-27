@@ -87,17 +87,17 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
 
     context 'when diagnostics times out' do
-      let(:slow_handler_class) do
+      let(:slow_handler) do
         Class.new(described_class) do
           def self.name = 'SlowConnectionHandler'
           def available? = true
+
           def diagnostics
             sleep(0.5)
             { name: 'Slow', status: :connected, latency_ms: 1.0, details: {} }
           end
-        end
+        end.new(context)
       end
-      let(:slow_handler) { slow_handler_class.new(context) }
 
       it 'returns timeout diagnostics' do
         result = slow_handler.safe_diagnostics(timeout: 0.05)
@@ -111,16 +111,16 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
 
     context 'when diagnostics raises an error' do
-      let(:error_handler_class) do
+      let(:error_handler) do
         Class.new(described_class) do
           def self.name = 'ErrorConnectionHandler'
           def available? = true
+
           def diagnostics
             raise StandardError, 'connection failed'
           end
-        end
+        end.new(context)
       end
-      let(:error_handler) { error_handler_class.new(context) }
 
       it 'returns error diagnostics' do
         result = error_handler.safe_diagnostics(timeout: 2)
@@ -139,6 +139,7 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
       Class.new(described_class) do
         def available? = true
         def diagnostics = nil
+
         def test_measure_latency(&block)
           measure_latency(&block)
         end

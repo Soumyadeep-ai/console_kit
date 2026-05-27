@@ -175,6 +175,12 @@ RSpec.describe ConsoleKit::Output do
   end
 
   describe '.silence' do
+    def attempt_ignoring_error
+      yield
+    rescue StandardError
+      nil
+    end
+
     it 'suppresses output within the block' do
       output = capture_stdout do
         described_class.silence { described_class.print_info('should not appear') }
@@ -190,20 +196,20 @@ RSpec.describe ConsoleKit::Output do
 
     it 'restores silent even if block raises' do
       described_class.silent = nil
-      begin
-        described_class.silence { raise 'boom' }
-      rescue RuntimeError
-        nil
-      end
+      attempt_ignoring_error { described_class.silence { raise 'boom' } }
       expect(described_class.silent).to be_nil
     end
   end
 
   describe '.print_list' do
-    it 'prints each item' do
-      output = capture_stdout { described_class.print_list(%w[apple banana]) }
-      expect(output).to include('apple')
-      expect(output).to include('banana')
+    let(:list_output) { capture_stdout { described_class.print_list(%w[apple banana]) } }
+
+    it 'prints the first item' do
+      expect(list_output).to include('apple')
+    end
+
+    it 'prints the second item' do
+      expect(list_output).to include('banana')
     end
 
     it 'prints a header when provided' do

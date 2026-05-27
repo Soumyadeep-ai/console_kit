@@ -2,7 +2,7 @@
 
 # Mock for ApplicationRecord to support testing
 class ApplicationRecord
-  class << self 
+  class << self
     def establish_connection(*); end
     def connection; end
     def connection_pool; end
