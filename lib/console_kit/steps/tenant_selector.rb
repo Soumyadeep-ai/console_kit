@@ -19,7 +19,7 @@ module ConsoleKit
       private
 
       def resolve_tenant
-        key = auto_select? ? config.tenant_resolver_instance.all_keys.first : interactive_select
+        key = auto_select? ? single_tenant_key : interactive_select
         return failure('Tenant selection aborted.') if aborted?(key)
 
         apply_tenant(key)
@@ -36,7 +36,19 @@ module ConsoleKit
       end
 
       def auto_select?
+        return false if dynamic_tenants?
+
         config.tenant_resolver_instance.size == 1
+      end
+
+      def single_tenant_key
+        return nil if dynamic_tenants?
+
+        config.tenant_resolver_instance.all_keys.first
+      end
+
+      def dynamic_tenants?
+        config.tenants == :dynamic
       end
 
       def interactive_select

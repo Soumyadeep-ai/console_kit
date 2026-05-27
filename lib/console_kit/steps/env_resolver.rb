@@ -23,7 +23,11 @@ module ConsoleKit
       private
 
       def find_tenant(env_value)
-        config.tenant_resolver_instance.all_keys.find { |k| k.to_s.casecmp(env_value).zero? }
+        if config.tenants == :dynamic
+          env_value.to_sym
+        else
+          config.tenant_resolver_instance.all_keys.find { |key| key.to_s.casecmp(env_value).zero? }
+        end
       end
 
       def failure_message(env_value)

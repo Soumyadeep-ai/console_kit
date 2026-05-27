@@ -12,7 +12,12 @@ module ConsoleKit
     end
 
     def tenants
-      ConsoleKit.configuration.tenant_resolver_instance.all_keys
+      configuration = ConsoleKit.configuration
+      return [:dynamic_mode] if configuration.tenants == :dynamic
+
+      configuration.tenant_resolver_instance.all_keys
+    rescue ConsoleKit::Error
+      []
     end
   end
 end

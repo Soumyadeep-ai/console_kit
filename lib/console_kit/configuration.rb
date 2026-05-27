@@ -98,7 +98,8 @@ module ConsoleKit
 
     def validate!
       raise Error, 'ConsoleKit: `tenants` is not configured.' if tenants.blank?
-      raise Error, 'ConsoleKit: `tenants` must be a Hash.' unless tenants.is_a?(Hash)
+      raise Error, 'ConsoleKit: `tenants` must be a Hash, Array, or :dynamic.' \
+        unless tenants.is_a?(Hash) || tenants.is_a?(Array) || tenants == :dynamic
       raise Error, 'ConsoleKit: `context_class` is not configured.' if @data[:context_class].blank?
     end
 

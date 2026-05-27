@@ -46,6 +46,14 @@ RSpec.describe ConsoleKit::TenantResolver do
       r = described_class.build(%i[tenant_a], null_proc)
       expect(r.resolve(:tenant_a)).to be_nil
     end
+
+    it 'reports any? true' do
+      expect(resolver.any?).to be true
+    end
+
+    it 'reports correct size' do
+      expect(resolver.size).to eq(2)
+    end
   end
 
   describe '.build — :dynamic format' do
@@ -65,6 +73,14 @@ RSpec.describe ConsoleKit::TenantResolver do
     it 'raises when all_keys called' do
       expect { resolver.all_keys }
         .to raise_error(ConsoleKit::Error, /all_keys not available in :dynamic mode/)
+    end
+
+    it 'reports any? true' do
+      expect(resolver.any?).to be true
+    end
+
+    it 'raises for size' do
+      expect { resolver.size }.to raise_error(ConsoleKit::Error, /size not available in :dynamic mode/)
     end
   end
 
