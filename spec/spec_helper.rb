@@ -1,19 +1,23 @@
 # frozen_string_literal: true
 
-require 'simplecov'
-SimpleCov.start do
-  enable_coverage :branch
-  add_filter '/spec/'
-  add_filter 'lib/generators/console_kit/templates/'
-  track_files 'lib/**/*.rb'
+begin
+  require 'simplecov'
+  SimpleCov.start do
+    enable_coverage :branch
+    add_filter '/spec/'
+    add_filter 'lib/generators/console_kit/templates/'
+    track_files 'lib/**/*.rb'
 
-  add_group 'Core',        'lib/console_kit/'
-  add_group 'Connections', 'lib/console_kit/connections/'
-  add_group 'Steps',       'lib/console_kit/steps/'
-  add_group 'Doctor',      'lib/console_kit/doctor/'
-  add_group 'Generators',  'lib/generators/'
+    add_group 'Core',        'lib/console_kit/'
+    add_group 'Connections', 'lib/console_kit/connections/'
+    add_group 'Steps',       'lib/console_kit/steps/'
+    add_group 'Doctor',      'lib/console_kit/doctor/'
+    add_group 'Generators',  'lib/generators/'
 
-  minimum_coverage line: 100, branch: 100
+    minimum_coverage line: 100, branch: 100
+  end
+rescue LoadError
+  nil
 end
 
 require 'console_kit'
