@@ -33,6 +33,7 @@ require_relative 'console_kit/steps/tenant_configurator'
 require_relative 'console_kit/steps/shard_connector'
 require_relative 'console_kit/steps/prompt_applier'
 require_relative 'console_kit/steps/after_hooks'
+require_relative 'console_kit/console_helpers'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 require_relative 'console_kit/doctor/check_registry'
 require_relative 'console_kit/doctor/checks/base'

@@ -9,6 +9,19 @@ module ConsoleKit
     class NotConfigured < Error; end
 
     class << self
+      def configuration_success = Context.current.configuration_success
+
+      # :reek:ControlParameter -- shim setter; truthy val triggers mark_configured!
+      def configuration_success=(val)
+        Context.mark_configured! if val
+      end
+
+      def current_tenant_key = Context.current.tenant
+
+      def current_tenant_key=(_val)
+        nil
+      end
+
       def configure_tenant(key, tenants, context_class)
         constants = tenants[key]&.[](:constants)
         raise NotConfigured, key unless constants
