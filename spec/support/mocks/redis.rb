@@ -2,7 +2,10 @@
 
 # Mock for the Redis client to support testing
 class Redis
-  def self.current; end
+  class << self
+    def current; end
+  end
+
   def ping; end
   def info; end
   def select(*); end
