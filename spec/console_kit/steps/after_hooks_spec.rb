@@ -20,4 +20,15 @@ RSpec.describe ConsoleKit::Steps::AfterHooks do
     step.call
     expect(called).to be true
   end
+
+  it 'returns failure when an abort hook raises HookError' do
+    config.after_switch(on_error: :abort) { raise 'after hook failure' }
+    expect(step.call.failure?).to be true
+  end
+
+  it 'includes the hook error message in the failure' do
+    config.after_switch(on_error: :abort) { raise 'hook failed msg' }
+    result = step.call
+    expect(result.error).to include('hook failed msg')
+  end
 end

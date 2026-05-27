@@ -5,8 +5,9 @@ require 'spec_helper'
 
 RSpec.describe ConsoleKit::TenantResolver do
   describe '.build — Hash format' do
-    let(:tenants) { { tenant_a: { constants: { shard: 's', partner_code: 'p' } } } }
     subject(:resolver) { described_class.build(tenants, nil) }
+
+    let(:tenants) { { tenant_a: { constants: { shard: 's', partner_code: 'p' } } } }
 
     it 'returns all keys' do
       expect(resolver.all_keys).to eq([:tenant_a])
@@ -30,8 +31,9 @@ RSpec.describe ConsoleKit::TenantResolver do
   end
 
   describe '.build — Array format' do
-    let(:resolver_proc) { ->(key) { { constants: { shard: "#{key}_db", partner_code: key.to_s } } } }
     subject(:resolver) { described_class.build(%i[tenant_a tenant_b], resolver_proc) }
+
+    let(:resolver_proc) { ->(key) { { constants: { shard: "#{key}_db", partner_code: key.to_s } } } }
 
     it 'returns all keys from array' do
       expect(resolver.all_keys).to eq(%i[tenant_a tenant_b])
@@ -42,8 +44,13 @@ RSpec.describe ConsoleKit::TenantResolver do
     end
 
     it 'returns nil when proc returns nil' do
-      null_proc = ->(_key) { nil }
+      null_proc = ->(_key) {}
       r = described_class.build(%i[tenant_a], null_proc)
+      expect(r.resolve(:tenant_a)).to be_nil
+    end
+
+    it 'returns nil when resolver_proc is nil (safe navigation &.)' do
+      r = described_class.build(%i[tenant_a], nil)
       expect(r.resolve(:tenant_a)).to be_nil
     end
 
@@ -57,10 +64,11 @@ RSpec.describe ConsoleKit::TenantResolver do
   end
 
   describe '.build — :dynamic format' do
+    subject(:resolver) { described_class.build(:dynamic, resolver_proc) }
+
     let(:resolver_proc) do
       ->(key) { key == :tenant_a ? { constants: { shard: 'db_a', partner_code: 'pa' } } : nil }
     end
-    subject(:resolver) { described_class.build(:dynamic, resolver_proc) }
 
     it 'resolves via proc' do
       expect(resolver.resolve(:tenant_a)).not_to be_nil
@@ -81,6 +89,11 @@ RSpec.describe ConsoleKit::TenantResolver do
 
     it 'raises for size' do
       expect { resolver.size }.to raise_error(ConsoleKit::Error, /size not available in :dynamic mode/)
+    end
+
+    it 'returns nil when resolver_proc is nil (safe navigation &.)' do
+      r = described_class.build(:dynamic, nil)
+      expect(r.resolve(:any_key)).to be_nil
     end
   end
 

@@ -13,11 +13,12 @@ module ConsoleKit
 
       def copy_initializer
         initializer_path = Rails.root.join('config', 'initializers', 'console_kit.rb')
+        force = options[:force]
 
-        if File.exist?(initializer_path) && !options[:force]
+        if File.exist?(initializer_path) && !force
           say_status :skipped, "Initializer already exists: #{initializer_path}", :yellow
         else
-          template 'console_kit.rb', 'config/initializers/console_kit.rb', force: options[:force]
+          template 'console_kit.rb', 'config/initializers/console_kit.rb', force: force
           say_status :created, "Initializer generated at #{initializer_path}", :green
         end
       end

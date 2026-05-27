@@ -48,4 +48,26 @@ RSpec.describe ConsoleKit::Steps::EnvResolver do
     step.call
     expect(ctx.resolved_tenant).to eq(:tenant_a)
   end
+
+  context 'when tenants is :dynamic' do
+    before do
+      ConsoleKit.configure do |c|
+        c.tenants = :dynamic
+        c.tenant_resolver = ->(key) { key }
+        c.context_class = 'Object'
+      end
+      ENV['CONSOLE_KIT_TENANT'] = 'any_tenant'
+    end
+
+    after { ENV.delete('CONSOLE_KIT_TENANT') }
+
+    it 'resolves the env value directly as a symbol' do
+      step.call
+      expect(ctx.resolved_tenant).to eq(:any_tenant)
+    end
+
+    it 'returns success' do
+      expect(step.call.success?).to be true
+    end
+  end
 end

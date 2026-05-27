@@ -6,6 +6,7 @@ require 'spec_helper'
 RSpec.describe ConsoleKit::StepRegistry do
   let(:step_a) { Class.new { def self.priority = 10 } }
   let(:step_b) { Class.new { def self.priority = 20 } }
+  let(:step_c) { Class.new }
 
   before { described_class.send(:registry).clear }
   after { described_class.send(:registry).clear }
@@ -26,8 +27,6 @@ RSpec.describe ConsoleKit::StepRegistry do
   end
 
   describe '.insert_before' do
-    let(:step_c) { Class.new }
-
     before do
       described_class.register(step_b, priority: 20)
       described_class.insert_before(step_b, described_class::Entry.new(klass: step_c, priority: 15))
@@ -35,6 +34,31 @@ RSpec.describe ConsoleKit::StepRegistry do
 
     it 'inserts new step before target' do
       expect(described_class.ordered.index(step_c)).to be < described_class.ordered.index(step_b)
+    end
+
+    it 'falls back to entry priority when target not found' do
+      step_d = Class.new
+      step_missing = Class.new
+      described_class.insert_before(step_missing, described_class::Entry.new(klass: step_d, priority: 99))
+      expect(described_class.ordered).to include(step_d)
+    end
+  end
+
+  describe '.insert_after' do
+    before do
+      described_class.register(step_a, priority: 10)
+    end
+
+    it 'inserts new step after target' do
+      described_class.insert_after(step_a, described_class::Entry.new(klass: step_c, priority: 5))
+      expect(described_class.ordered.index(step_a)).to be < described_class.ordered.index(step_c)
+    end
+
+    it 'falls back to entry priority when target not found' do
+      step_missing = Class.new
+      step_d = Class.new
+      described_class.insert_after(step_missing, described_class::Entry.new(klass: step_d, priority: 1))
+      expect(described_class.ordered).to include(step_d)
     end
   end
 

@@ -56,6 +56,18 @@ RSpec.describe ConsoleKit::Steps::SafeguardCheck do
         allow(ConsoleKit::Output).to receive(:print_prompt)
         expect(step.call.failure?).to be true
       end
+
+      it 'returns false when Interrupt is raised during confirmation' do
+        allow($stdin).to receive(:gets).and_raise(Interrupt)
+        allow(ConsoleKit::Output).to receive(:print_prompt)
+        expect(step.call.failure?).to be true
+      end
+
+      it 'returns failure when gets returns nil (EOF)' do
+        allow($stdin).to receive(:gets).and_return(nil)
+        allow(ConsoleKit::Output).to receive(:print_prompt)
+        expect(step.call.failure?).to be true
+      end
     end
   end
 
@@ -78,6 +90,46 @@ RSpec.describe ConsoleKit::Steps::SafeguardCheck do
 
     it 'skips check and returns success' do
       stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'production', 'RACK_ENV' => 'production'))
+      expect(step.call.success?).to be true
+    end
+  end
+
+  context 'when Rails responds to :env and returns production' do
+    before do
+      rails_mock = double('Rails', env: double('env', to_s: 'production')) # rubocop:disable RSpec/VerifiedDoubles
+      stub_const('Rails', rails_mock)
+      config.production_environments = ['production']
+      allow(ConsoleKit::Output).to receive(:print_banner)
+    end
+
+    it 'detects production via Rails.env' do
+      config.confirm_dangerous_context = false
+      step.call
+      expect(ConsoleKit::Output).to have_received(:print_banner)
+    end
+  end
+
+  context 'when Rails is not defined and only RACK_ENV is set' do
+    before do
+      allow(Rails).to receive(:respond_to?).with(:env).and_return(false)
+      stub_const('ENV', { 'RACK_ENV' => 'production' })
+      allow(ConsoleKit::Output).to receive(:print_banner)
+    end
+
+    it 'detects production via RACK_ENV' do
+      config.confirm_dangerous_context = false
+      step.call
+      expect(ConsoleKit::Output).to have_received(:print_banner)
+    end
+  end
+
+  context 'when Rails is not defined and no env vars set' do
+    before do
+      allow(Rails).to receive(:respond_to?).with(:env).and_return(false)
+      stub_const('ENV', {})
+    end
+
+    it 'defaults to development and returns success' do
       expect(step.call.success?).to be true
     end
   end

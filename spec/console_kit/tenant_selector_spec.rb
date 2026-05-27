@@ -44,40 +44,57 @@ RSpec.describe ConsoleKit::TenantSelector do
 
     it 'reprints the menu after invalid inputs before final retry' do
       allow($stdin).to receive(:gets).and_return("bad\n", "nope\n", "0\n")
-
       allow(ConsoleKit::Output).to receive(:print_info)
-      expect(ConsoleKit::Output).to receive(:print_header).exactly(3).times # once + 2 reprints
+      allow(ConsoleKit::Output).to receive(:print_header)
       described_class.select(tenants, keys)
+      expect(ConsoleKit::Output).to have_received(:print_header).exactly(3).times # once + 2 reprints
     end
   end
 
-  context 'input validation' do
-    it 'returns -1 for non-digit inputs' do
+  context 'when validating integer inputs' do
+    it 'returns false for non-digit inputs' do
       expect(described_class.send(:valid_integer?, 'bad')).to be false
+    end
+
+    it 'returns false for alphanumeric inputs' do
       expect(described_class.send(:valid_integer?, '123abc')).to be false
+    end
+
+    it 'returns false for empty string' do
       expect(described_class.send(:valid_integer?, '')).to be false
     end
 
-    it 'returns true for valid digit strings' do
+    it 'returns true for zero' do
       expect(described_class.send(:valid_integer?, '0')).to be true
+    end
+
+    it 'returns true for multi-digit numbers' do
       expect(described_class.send(:valid_integer?, '15')).to be true
     end
 
     it 'uses "1" when user presses enter (empty input)' do
+      allow(ConsoleKit::Output).to receive(:print_prompt)
       allow($stdin).to receive(:gets).and_return("\n")
-      expect(ConsoleKit::Output).to receive(:print_prompt)
       expect(described_class.select(tenants, keys)).to eq('alpha')
     end
 
     it 'warns about input selection being out of range' do
       allow($stdin).to receive(:gets).and_return("9\n", "1\n")
-      expect(ConsoleKit::Output).to receive(:print_warning).with('Selection must be between 0 and 2.')
+      allow(ConsoleKit::Output).to receive(:print_warning).with('Selection must be between 0 and 2.')
       described_class.select(tenants, keys)
+      expect(ConsoleKit::Output).to have_received(:print_warning).with('Selection must be between 0 and 2.')
     end
 
     it 'strips surrounding whitespace from input' do
       allow($stdin).to receive(:gets).and_return(" 2 \n")
       expect(described_class.select(tenants, keys)).to eq('beta')
+    end
+
+    it 'treats nil from gets as empty input and defaults to first tenant' do
+      # gets returns nil at EOF — normalize_input treats nil.to_s as empty, so uses default '1'
+      allow($stdin).to receive(:gets).and_return(nil)
+      result = described_class.select(tenants, keys)
+      expect(result).to eq('alpha')
     end
   end
 end

@@ -53,9 +53,14 @@ RSpec.describe ConsoleKit::Setup do
 
   describe '.setup' do
     it 'delegates to TenantOrchestrator.run' do
-      expect(ConsoleKit::TenantOrchestrator).to receive(:run).and_return(success_result)
-      result = described_class.setup
-      expect(result).to eq(success_result)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:run).and_return(success_result)
+      described_class.setup
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:run)
+    end
+
+    it 'returns result from TenantOrchestrator.run' do
+      allow(ConsoleKit::TenantOrchestrator).to receive(:run).and_return(success_result)
+      expect(described_class.setup).to eq(success_result)
     end
 
     it 'returns a SwitchPipeline::Result' do
@@ -66,22 +71,34 @@ RSpec.describe ConsoleKit::Setup do
 
   describe '.reapply' do
     it 'delegates to TenantOrchestrator.reapply' do
-      expect(ConsoleKit::TenantOrchestrator).to receive(:reapply)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:reapply)
       described_class.reapply
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:reapply)
     end
   end
 
   describe '.reset_current_tenant' do
     it 'delegates to TenantOrchestrator.reset' do
-      expect(ConsoleKit::TenantOrchestrator).to receive(:reset).and_return(failure_result)
-      result = described_class.reset_current_tenant
-      expect(result).to eq(failure_result)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:reset).and_return(failure_result)
+      described_class.reset_current_tenant
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:reset)
+    end
+
+    it 'returns result from TenantOrchestrator.reset' do
+      allow(ConsoleKit::TenantOrchestrator).to receive(:reset).and_return(failure_result)
+      expect(described_class.reset_current_tenant).to eq(failure_result)
     end
   end
 
   describe '.auto_select?' do
     it 'delegates to TenantOrchestrator.auto_select?' do
-      expect(ConsoleKit::TenantOrchestrator).to receive(:auto_select?).and_return(true)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:auto_select?).and_return(true)
+      described_class.auto_select?
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:auto_select?)
+    end
+
+    it 'returns result from TenantOrchestrator.auto_select?' do
+      allow(ConsoleKit::TenantOrchestrator).to receive(:auto_select?).and_return(true)
       expect(described_class.auto_select?).to be true
     end
   end

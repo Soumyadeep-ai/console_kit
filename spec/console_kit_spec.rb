@@ -244,4 +244,36 @@ RSpec.describe ConsoleKit do
       expect(described_class.current_tenant).to eq(:tenant_a)
     end
   end
+
+  describe '.show_dashboard=' do
+    it 'sets show_dashboard on configuration' do
+      described_class.show_dashboard = true
+      expect(described_class.show_dashboard).to be true
+    end
+  end
+
+  describe '.pretty_output=' do
+    it 'sets pretty_output on configuration' do
+      described_class.pretty_output = false
+      expect(described_class.pretty_output).to be false
+    end
+  end
+
+  describe '.switch_tenant!' do
+    before do
+      described_class.configure do |c|
+        c.tenants = { tenant_a: { constants: { shard: 's', partner_code: 'p' } } }
+        c.context_class = 'Object'
+      end
+    end
+
+    after { ConsoleKit::Context.reset! }
+
+    it 'runs SwitchPipeline and returns a result' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      result = described_class.switch_tenant!
+      expect(result).to be_a(ConsoleKit::SwitchPipeline::Result)
+    end
+  end
 end

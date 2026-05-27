@@ -37,5 +37,16 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
     it 'returns tenant keys as array' do
       expect(obj.tenants).to eq(%i[tenant_a tenant_b])
     end
+
+    it 'returns [:dynamic_mode] when tenants is :dynamic' do
+      ConsoleKit.configure { |c| c.tenants = :dynamic }
+      expect(obj.tenants).to eq([:dynamic_mode])
+    end
+
+    it 'returns empty array when ConsoleKit::Error is raised' do
+      allow(ConsoleKit.configuration).to receive(:tenant_resolver_instance)
+        .and_raise(ConsoleKit::Error, 'no tenants')
+      expect(obj.tenants).to eq([])
+    end
   end
 end

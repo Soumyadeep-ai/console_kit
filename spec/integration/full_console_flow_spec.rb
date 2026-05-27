@@ -78,11 +78,7 @@ RSpec.describe 'Full console flow', type: :integration do
 
     it 'restores tenant after exception in block' do
       ConsoleKit::Context.push(:tenant_a)
-      begin
-        ConsoleKit.with(:tenant_b) { raise 'oops' }
-      rescue RuntimeError
-        nil
-      end
+      ConsoleKit.with(:tenant_b) { raise 'oops' } rescue nil # rubocop:disable Style/RescueModifier
       expect(ConsoleKit.current_tenant).to eq(:tenant_a)
     end
 

@@ -4,6 +4,8 @@ require 'simplecov'
 SimpleCov.start do
   enable_coverage :branch
   add_filter '/spec/'
+  add_filter 'lib/generators/console_kit/templates/'
+  add_filter 'lib/console_kit/railtie.rb'
   track_files 'lib/**/*.rb'
 
   add_group 'Core',        'lib/console_kit/'

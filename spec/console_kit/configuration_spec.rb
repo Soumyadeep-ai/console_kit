@@ -4,9 +4,9 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit::Configuration do
-  describe 'new config options' do
-    subject(:config) { described_class.new }
+  subject(:config) { described_class.new }
 
+  describe 'new config options' do
     it 'defaults env_tenant_key to CONSOLE_KIT_TENANT' do
       expect(config.env_tenant_key).to eq('CONSOLE_KIT_TENANT')
     end
@@ -71,6 +71,97 @@ RSpec.describe ConsoleKit::Configuration do
       config.after_switch { called = true }
       config.hook_registry.run(:after_switch, :tenant_a)
       expect(called).to be true
+    end
+  end
+
+  describe '#tenant_resolver=' do
+    it 'clears cached tenant_resolver_instance' do
+      config.tenants = { a: {} }
+      _first = config.tenant_resolver_instance
+      config.tenant_resolver = ->(key) { key }
+      # After setting tenant_resolver, a new instance is built
+      expect(config.tenant_resolver).not_to be_nil
+    end
+  end
+
+  describe '#context_class' do
+    it 'returns nil when not set' do
+      expect(config.context_class).to be_nil
+    end
+
+    it 'returns class directly when context_class is already a Class' do
+      config.context_class = String
+      expect(config.context_class).to eq(String)
+    end
+
+    it 'resolves context_class from String name' do
+      config.context_class = 'String'
+      expect(config.context_class).to eq(String)
+    end
+
+    it 'resolves context_class from Symbol name' do
+      config.context_class = :String
+      expect(config.context_class).to eq(String)
+    end
+
+    it 'raises Error when String name cannot be resolved' do
+      config.context_class = 'NonExistentClass::Totally::Made::Up'
+      expect { config.context_class }
+        .to raise_error(ConsoleKit::Error, /could not be found/)
+    end
+  end
+
+  describe '#pipeline_steps' do
+    it 'returns StepRegistry.ordered by default' do
+      expect(config.pipeline_steps).to eq(ConsoleKit::StepRegistry.ordered)
+    end
+
+    it 'returns custom steps when pipeline_steps is set' do
+      custom_steps = [instance_double(ConsoleKit::Steps::Base)]
+      config.pipeline_steps = custom_steps
+      expect(config.pipeline_steps).to eq(custom_steps)
+    end
+  end
+
+  describe '#validate!' do
+    it 'raises Error when tenants is nil' do
+      config.context_class = 'Object'
+      expect { config.validate! }.to raise_error(ConsoleKit::Error, /tenants.*not configured/)
+    end
+
+    it 'raises Error when tenants is blank' do
+      config.tenants = {}
+      config.context_class = 'Object'
+      expect { config.validate! }.to raise_error(ConsoleKit::Error, /tenants.*not configured/)
+    end
+
+    it 'raises Error when tenants is not Hash/Array/:dynamic' do
+      config.tenants = 'bad_value'
+      config.context_class = 'Object'
+      expect { config.validate! }.to raise_error(ConsoleKit::Error, /must be a Hash, Array, or :dynamic/)
+    end
+
+    it 'raises Error when context_class is blank' do
+      config.tenants = { a: {} }
+      expect { config.validate! }.to raise_error(ConsoleKit::Error, /context_class.*not configured/)
+    end
+
+    it 'does not raise when fully configured' do
+      config.tenants = { a: {} }
+      config.context_class = 'Object'
+      expect { config.validate! }.not_to raise_error
+    end
+  end
+
+  describe '#validate' do
+    it 'returns true when valid' do
+      config.tenants = { a: {} }
+      config.context_class = 'Object'
+      expect(config.validate).to be true
+    end
+
+    it 'returns false when invalid' do
+      expect(config.validate).to be false
     end
   end
 end

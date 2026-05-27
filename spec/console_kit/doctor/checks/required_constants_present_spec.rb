@@ -62,4 +62,19 @@ RSpec.describe ConsoleKit::Doctor::Checks::RequiredConstantsPresent do
       expect(check.call.status).to eq(:warn)
     end
   end
+
+  context 'when tenants is an Array (not a Hash)' do
+    before do
+      config.tenants = %i[tenant_a tenant_b]
+      config.tenant_resolver = ->(key) { key }
+    end
+
+    it 'skips the check and returns ok' do
+      expect(check.call.status).to eq(:ok)
+    end
+
+    it 'returns skipped message' do
+      expect(check.call.message).to include('not a Hash')
+    end
+  end
 end

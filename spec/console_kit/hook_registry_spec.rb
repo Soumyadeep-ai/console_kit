@@ -84,5 +84,20 @@ RSpec.describe ConsoleKit::HookRegistry do
       registry.run(:before_switch, :tenant_a)
       expect(called).to be false
     end
+
+    it 'prints warning when on_error is :warn and hook raises' do
+      allow(ConsoleKit::Output).to receive(:print_warning)
+      registry.register(:before_switch, on_error: :warn) { raise 'warn-me' }
+      registry.run(:before_switch, :tenant_a)
+      expect(ConsoleKit::Output).to have_received(:print_warning)
+        .with(/before_switch hook error \(continuing\): warn-me/)
+    end
+  end
+
+  describe '#handle_hook_error (private)' do
+    it 'does nothing for unrecognised on_error value (defensive else branch)' do
+      hook = ConsoleKit::HookRegistry::Hook.new(event: :before_switch, block: proc {}, on_error: :silent)
+      expect { registry.send(:handle_hook_error, hook, :before_switch, 'msg') }.not_to raise_error
+    end
   end
 end

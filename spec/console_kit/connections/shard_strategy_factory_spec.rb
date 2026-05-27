@@ -18,5 +18,12 @@ RSpec.describe ConsoleKit::Connections::ShardStrategyFactory do
       allow(ConsoleKit::Connections::RailsConnectedToStrategy).to receive(:new).and_return(unavailable_strategy)
       expect(described_class.build(config)).to be_a(ConsoleKit::Connections::NullShardStrategy)
     end
+
+    it 'returns RailsConnectedToStrategy when use_rails_sharding is true and strategy is available' do
+      config.use_rails_sharding = true
+      available_strategy = instance_double(ConsoleKit::Connections::RailsConnectedToStrategy, available?: true)
+      allow(ConsoleKit::Connections::RailsConnectedToStrategy).to receive(:new).and_return(available_strategy)
+      expect(described_class.build(config)).to eq(available_strategy)
+    end
   end
 end

@@ -13,3 +13,8 @@ Metrics/BlockLength:
 RSpec/DescribeClass:
   Exclude:
     - 'spec/integration/**/*_spec.rb'
+    - 'spec/console_kit/railtie_spec.rb'
+
+RSpec/SpecFilePathFormat:
+  Exclude:
+    - 'spec/generators/**/*_spec.rb'
