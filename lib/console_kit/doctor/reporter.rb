@@ -25,7 +25,8 @@ module ConsoleKit
       end
 
       def summary
-        "#{@results.size} checks#{formatted_errors}#{formatted_warnings}"
+        count = @results.size
+        "#{count} #{count == 1 ? 'check' : 'checks'}#{formatted_errors}#{formatted_warnings}"
       end
 
       def formatted_errors

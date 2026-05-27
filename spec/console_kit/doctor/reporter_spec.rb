@@ -31,7 +31,7 @@ RSpec.describe ConsoleKit::Doctor::Reporter do
       end
 
       it 'prints summary with check count' do
-        expect { reporter.print }.to output(/1 checks/).to_stdout
+        expect { reporter.print }.to output(/1 check\b/).to_stdout
       end
     end
 

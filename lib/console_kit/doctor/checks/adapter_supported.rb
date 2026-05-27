@@ -25,7 +25,7 @@ module ConsoleKit
         def detected_adapter
           ActiveRecord::Base.connection_db_config.adapter
         rescue StandardError
-          config && nil
+          nil
         end
       end
     end

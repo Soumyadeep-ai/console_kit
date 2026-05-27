@@ -20,6 +20,10 @@ module ConsoleKit
       @hooks[event] << Hook.new(event: event, block: block, on_error: on_error)
     end
 
+    def hooks_for(event)
+      @hooks[event] || []
+    end
+
     def run(event, tenant)
       @hooks[event].each do |hook|
         hook.block.call(tenant)

@@ -14,6 +14,24 @@ RSpec.describe ConsoleKit::HookRegistry do
     end
   end
 
+  describe '#hooks_for' do
+    it 'returns an empty array for an event with no hooks' do
+      expect(registry.hooks_for(:before_switch)).to eq([])
+    end
+
+    it 'returns registered hooks for an event' do
+      noop = proc {}
+      registry.register(:before_switch, &noop)
+      expect(registry.hooks_for(:before_switch).size).to eq(1)
+    end
+
+    it 'does not return hooks for a different event' do
+      noop = proc {}
+      registry.register(:after_switch, &noop)
+      expect(registry.hooks_for(:before_switch)).to be_empty
+    end
+  end
+
   describe '#run' do
     it 'calls registered hook with tenant' do
       received = nil

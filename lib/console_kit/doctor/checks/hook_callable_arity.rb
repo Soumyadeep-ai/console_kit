@@ -19,8 +19,7 @@ module ConsoleKit
         private
 
         def collect_issues
-          hooks_hash = config.hook_registry.instance_variable_get(:@hooks)
-          HOOK_EVENTS.flat_map { |event| arity_issues_for(hooks_hash[event] || [], event) }
+          HOOK_EVENTS.flat_map { |event| arity_issues_for(config.hook_registry.hooks_for(event), event) }
         end
 
         def arity_issues_for(hooks, event)
@@ -28,7 +27,7 @@ module ConsoleKit
             arity = hook.block.arity
             next if VALID_ARITIES.include?(arity)
 
-            "#{config && event} hook arity #{arity} (expected 1 or -1)"
+            "#{event} hook arity #{arity} (expected 1 or -1)"
           end
         end
       end

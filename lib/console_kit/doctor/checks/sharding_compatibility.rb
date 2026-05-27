@@ -22,7 +22,7 @@ module ConsoleKit
         def rails_version_sufficient?
           return false unless defined?(Rails::VERSION::STRING)
 
-          Gem::Version.new(Rails::VERSION::STRING) >= Gem::Version.new(config && MIN_RAILS_VERSION)
+          Gem::Version.new(Rails::VERSION::STRING) >= Gem::Version.new(MIN_RAILS_VERSION)
         end
       end
     end
