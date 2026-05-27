@@ -70,6 +70,22 @@ RSpec.describe 'Full console flow', type: :integration do
       expect { ConsoleKit.with(:tenant_b) { raise 'oops' } }.to raise_error('oops')
     end
 
+    it 'restores tenant after block completes' do
+      ConsoleKit::Context.push(:tenant_a)
+      ConsoleKit.with(:tenant_b) { nil }
+      expect(ConsoleKit.current_tenant).to eq(:tenant_a)
+    end
+
+    it 'restores tenant after exception in block' do
+      ConsoleKit::Context.push(:tenant_a)
+      begin
+        ConsoleKit.with(:tenant_b) { raise 'oops' }
+      rescue RuntimeError
+        nil
+      end
+      expect(ConsoleKit.current_tenant).to eq(:tenant_a)
+    end
+
     it 'applies the requested tenant constants inside the block' do
       observed = nil
       ConsoleKit.with(:tenant_b) { observed = context_class.partner_code }

@@ -41,7 +41,7 @@ module ConsoleKit
       def configure_tenant(constants)
         apply_context(constants)
         setup_connections
-        Context.push(resolved_tenant)
+        Context.push(resolved_tenant) unless Context.current.tenant == resolved_tenant
         Context.mark_configured!
         Output.print_success("Tenant set to: #{resolved_tenant}")
         success
