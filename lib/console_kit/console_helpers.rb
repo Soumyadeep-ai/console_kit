@@ -11,6 +11,10 @@ module ConsoleKit
       ConsoleKit.status.print
     end
 
+    def dashboard
+      ConsoleKit::Connections::Dashboard.display
+    end
+
     def tenants
       configuration = ConsoleKit.configuration
       return [:dynamic_mode] if configuration.tenants == :dynamic

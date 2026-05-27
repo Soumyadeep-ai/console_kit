@@ -3,7 +3,7 @@ PATH
   specs:
     console_kit (2.0.0)
       mongoid
-      rails (>= 7.2.1)
+      rails (>= 6.1)
 
 GEM
   remote: https://rubygems.org/

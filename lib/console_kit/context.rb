@@ -37,8 +37,9 @@ module ConsoleKit
       end
 
       def reset!
-        FiberStorage[CURRENT_KEY] = nil
-        FiberStorage[STACK_KEY]   = nil
+        FiberStorage[CURRENT_KEY]                  = nil
+        FiberStorage[STACK_KEY]                    = nil
+        FiberStorage[:console_kit_resolved_shard]  = nil
       end
     end
 

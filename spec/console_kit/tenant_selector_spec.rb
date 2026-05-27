@@ -51,6 +51,64 @@ RSpec.describe ConsoleKit::TenantSelector do
     end
   end
 
+  context 'when called with no arguments (defaults from configuration)' do
+    before do
+      ConsoleKit.configure do |c|
+        c.tenants = { alpha: { constants: { partner_code: 'ALPHA' } } }
+        c.context_class = 'Object'
+      end
+    end
+
+    it 'resolves tenants and keys from configuration' do
+      allow($stdin).to receive(:gets).and_return("1\n")
+      expect(described_class.select).to eq(:alpha)
+    end
+  end
+
+  context 'when called with no arguments and tenants is :dynamic' do
+    before do
+      ConsoleKit.configure do |c|
+        c.tenants = :dynamic
+        c.tenant_resolver = ->(key) { key }
+        c.context_class = 'Object'
+      end
+    end
+
+    it 'uses empty keys list and returns nil' do
+      allow($stdin).to receive(:gets).and_return("0\n")
+      expect(described_class.select).to be_nil
+    end
+  end
+
+  context 'when tenants is not a Hash (non-Hash resolver)' do
+    let(:resolver) { instance_double(ConsoleKit::TenantResolver) }
+
+    before do
+      ConsoleKit.configure do |c|
+        c.tenants = { 'alpha' => { constants: { partner_code: 'ALPHA' } } }
+        c.context_class = 'Object'
+      end
+      allow(ConsoleKit.configuration).to receive(:tenant_resolver_instance).and_return(resolver)
+      allow(resolver).to receive(:all_keys).and_return(['alpha'])
+      allow(ConsoleKit::Output).to receive(:print_info)
+      allow(ConsoleKit::Output).to receive(:print_header)
+    end
+
+    it 'looks up partner code via resolver when tenants is not a Hash' do
+      allow(resolver).to receive(:resolve).with('alpha').and_return({ constants: { partner_code: 'ALPHA' } })
+      allow($stdin).to receive(:gets).and_return("1\n")
+      described_class.select('not_a_hash', ['alpha'])
+      expect(resolver).to have_received(:resolve).with('alpha')
+    end
+
+    it 'shows N/A when resolver returns nil for partner code' do
+      allow(resolver).to receive(:resolve).with('alpha').and_return(nil)
+      allow($stdin).to receive(:gets).and_return("1\n")
+      described_class.select('not_a_hash', ['alpha'])
+      expect(ConsoleKit::Output).to have_received(:print_info).with('  1. alpha (partner: N/A)')
+    end
+  end
+
   context 'when validating integer inputs' do
     it 'returns false for non-digit inputs' do
       expect(described_class.send(:valid_integer?, 'bad')).to be false

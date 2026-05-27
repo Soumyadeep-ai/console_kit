@@ -37,7 +37,9 @@ module ConsoleKit
     end
 
     def all_tenant_choices
-      @config.tenants.keys.map { |key| { name: key.to_s, value: key } }
+      @config.tenant_resolver_instance.all_keys.map { |key| { name: key.to_s, value: key } }
+    rescue ConsoleKit::Error
+      []
     end
   end
 end

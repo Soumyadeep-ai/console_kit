@@ -42,6 +42,11 @@ RSpec.describe ConsoleKit::PromptBuilder do
       values = choices.map { |c| c[:value] }
       expect(values.uniq).to eq(values)
     end
+
+    it 'returns empty array when resolver raises ConsoleKit::Error' do
+      allow(config.tenant_resolver_instance).to receive(:all_keys).and_raise(ConsoleKit::Error)
+      expect(builder.send(:all_tenant_choices)).to eq([])
+    end
   end
 
   describe '#select' do

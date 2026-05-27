@@ -8,8 +8,13 @@ RSpec.describe ConsoleKit::StepRegistry do
   let(:step_b) { Class.new { def self.priority = 20 } }
   let(:step_c) { Class.new }
 
-  before { described_class.send(:registry).clear }
-  after { described_class.send(:registry).clear }
+  around do |example|
+    saved = described_class.send(:registry).dup
+    described_class.send(:registry).clear
+    example.run
+  ensure
+    described_class.send(:registry).replace(saved)
+  end
 
   describe '.register' do
     it 'adds step to registry' do

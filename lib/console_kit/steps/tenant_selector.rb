@@ -52,11 +52,15 @@ module ConsoleKit
       end
 
       def interactive_select
-        if ::TTY_PROMPT_AVAILABLE
-          PromptBuilder.new(config, history).select
-        else
-          LegacyTenantSelector.select
-        end
+        return PromptBuilder.new(config, history).select if ::TTY_PROMPT_AVAILABLE
+
+        LegacyTenantSelector.select(*legacy_selector_args)
+      end
+
+      def legacy_selector_args
+        return [{}, []] if dynamic_tenants?
+
+        [config.tenants, config.tenant_resolver_instance.all_keys]
       end
 
       def history

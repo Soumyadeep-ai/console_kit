@@ -22,10 +22,15 @@ module ConsoleKit
 
       def apply_shard(strategy)
         shard = Connections::ShardResolver.new(config).resolve(ctx.resolved_tenant)
-        ctx.shard_strategy = strategy
-        ctx.resolved_shard = shard
+        persist_shard(shard, strategy)
         Output.print_info("Shard resolved: #{shard}")
         success
+      end
+
+      def persist_shard(shard, strategy)
+        ctx.shard_strategy = strategy
+        ctx.resolved_shard = shard
+        FiberStorage[:console_kit_resolved_shard] = shard
       end
     end
   end

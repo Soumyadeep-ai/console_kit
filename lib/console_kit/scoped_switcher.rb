@@ -28,7 +28,9 @@ module ConsoleKit
 
     def with(tenant_key, &block)
       Context.push(tenant_key)
-      SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
+      result = SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
+      raise ConsoleKit::Error, result.error unless result.success?
+
       block.call
     ensure
       previous = Context.pop
@@ -59,7 +61,9 @@ module ConsoleKit
 
     def scoped_run(tenant_key, &block)
       Context.push(tenant_key)
-      SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
+      result = SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
+      raise ConsoleKit::Error, result.error unless result.success?
+
       block.call
     ensure
       previous = Context.pop

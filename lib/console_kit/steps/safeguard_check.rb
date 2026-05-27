@@ -8,7 +8,7 @@ module ConsoleKit
     # Warns about dangerous environments (production or protected tenants) and
     # optionally requires the user to type CONFIRM before the pipeline continues.
     class SafeguardCheck < Base
-      register priority: 20
+      register priority: 35
 
       def call
         return success if ctx.scoped

@@ -23,10 +23,20 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
   end
 
   describe '.reset' do
+    before do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+    end
+
     it 'resets the Context' do
       ConsoleKit::Context.push(:tenant_a)
       described_class.reset
       expect(ConsoleKit::Context.current.tenant).to be_nil
+    end
+
+    it 're-runs SwitchPipeline after reset' do
+      described_class.reset
+      expect(ConsoleKit::SwitchPipeline).to have_received(:run)
     end
   end
 

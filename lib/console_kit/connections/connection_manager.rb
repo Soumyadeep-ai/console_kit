@@ -4,13 +4,15 @@
 module ConsoleKit
   module Connections
     # Discovers and returns connection handler objects for a given context class.
-    # Full implementation provided in Task 17 (ShardConnector).
     module ConnectionManager
       class << self
-        # Returns connection handlers that are applicable to +context_class+.
-        # Returns an empty array by default; overridden in Task 17.
-        def available_handlers(_context_class)
-          []
+        # Returns instantiated handlers from BaseConnectionHandler.registry
+        # that report available? for the given +context_class+.
+        def available_handlers(context_class)
+          BaseConnectionHandler.registry.filter_map do |handler_class|
+            handler = handler_class.new(context_class)
+            handler if handler.available?
+          end
         end
       end
     end

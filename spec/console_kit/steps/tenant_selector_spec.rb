@@ -101,5 +101,12 @@ RSpec.describe ConsoleKit::Steps::TenantSelector do
     it 'returns nil for single_tenant_key when dynamic' do
       expect(dynamic_step.send(:single_tenant_key)).to be_nil
     end
+
+    it 'passes empty tenants and keys to LegacyTenantSelector when tty-prompt unavailable' do
+      stub_const('TTY_PROMPT_AVAILABLE', false)
+      allow(ConsoleKit::LegacyTenantSelector).to receive(:select).and_return(:some_tenant)
+      dynamic_step.call
+      expect(ConsoleKit::LegacyTenantSelector).to have_received(:select).with({}, [])
+    end
   end
 end

@@ -55,15 +55,20 @@ RSpec.describe ConsoleKit::ScopedSwitcher do
       expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
     end
 
-    context 'when the block raises an exception' do
-      before { ConsoleKit::Context.push(:tenant_b) }
+    it 're-raises the exception' do
+      ConsoleKit::Context.push(:tenant_b)
+      expect { switcher.with(:tenant_a) { raise 'boom' } }.to raise_error('boom')
+    end
 
-      it 're-raises the exception' do
-        expect { switcher.with(:tenant_a) { raise 'boom' } }.to raise_error('boom')
+    context 'when block raises with previous tenant active' do
+      before do
+        ConsoleKit::Context.push(:tenant_b)
+        switcher.with(:tenant_a) { raise 'boom' }
+      rescue RuntimeError
+        nil
       end
 
       it 'restores previous tenant after exception' do
-        switcher.with(:tenant_a) { raise 'boom' } rescue nil # rubocop:disable Style/RescueModifier
         expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
       end
     end
@@ -72,6 +77,50 @@ RSpec.describe ConsoleKit::ScopedSwitcher do
       ConsoleKit::Context.push(:tenant_b)
       switcher.with(:tenant_a) { :noop }
       expect(ConsoleKit::SwitchPipeline).to have_received(:run).at_least(:twice)
+    end
+
+    context 'when the pipeline fails' do
+      let(:block_yield_result) do
+        yielded = false
+        begin
+          switcher.with(:tenant_a) { yielded = true }
+        rescue ConsoleKit::Error
+          nil
+        end
+        yielded
+      end
+
+      before do
+        allow(ConsoleKit::SwitchPipeline).to receive(:run).and_return(
+          ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'unknown tenant')
+        )
+      end
+
+      it 'raises ConsoleKit::Error' do
+        expect { switcher.with(:tenant_a) { :noop } }.to raise_error(ConsoleKit::Error, 'unknown tenant')
+      end
+
+      it 'does not yield the block' do
+        expect(block_yield_result).to be(false)
+      end
+    end
+
+    context 'when pipeline fails with previous tenant active' do
+      before do
+        allow(ConsoleKit::SwitchPipeline).to receive(:run).and_return(
+          ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'unknown tenant')
+        )
+        ConsoleKit::Context.push(:tenant_b)
+        begin
+          switcher.with(:tenant_a) { :noop }
+        rescue ConsoleKit::Error
+          nil
+        end
+      end
+
+      it 'restores context by popping the pushed tenant' do
+        expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+      end
     end
   end
 
@@ -114,15 +163,66 @@ RSpec.describe ConsoleKit::ScopedSwitcher do
       expect { switcher.with(:tenant_a) { raise 'shard_boom' } }.to raise_error('shard_boom')
     end
 
-    it 'restores previous tenant after exception' do
-      ConsoleKit::Context.push(:tenant_b)
-      switcher.with(:tenant_a) { raise 'boom' } rescue nil # rubocop:disable Style/RescueModifier
-      expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+    context 'when previous tenant active and block raises' do
+      before do
+        ConsoleKit::Context.push(:tenant_b)
+        switcher.with(:tenant_a) { raise 'boom' }
+      rescue RuntimeError
+        nil
+      end
+
+      it 'restores previous tenant after exception' do
+        expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+      end
     end
 
     it 'resolves shard for the tenant key' do
       switcher.with(:tenant_a) { :noop }
       expect(shard_resolver).to have_received(:resolve).with(:tenant_a)
+    end
+
+    context 'when the pipeline fails' do
+      let(:block_yield_result) do
+        yielded = false
+        begin
+          switcher.with(:tenant_a) { yielded = true }
+        rescue ConsoleKit::Error
+          nil
+        end
+        yielded
+      end
+
+      before do
+        allow(ConsoleKit::SwitchPipeline).to receive(:run).and_return(
+          ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'unknown shard tenant')
+        )
+      end
+
+      it 'raises ConsoleKit::Error' do
+        expect { switcher.with(:tenant_a) { :noop } }.to raise_error(ConsoleKit::Error, 'unknown shard tenant')
+      end
+
+      it 'does not yield the block' do
+        expect(block_yield_result).to be(false)
+      end
+    end
+
+    context 'when pipeline fails with previous tenant active' do
+      before do
+        allow(ConsoleKit::SwitchPipeline).to receive(:run).and_return(
+          ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'unknown shard tenant')
+        )
+        ConsoleKit::Context.push(:tenant_b)
+        begin
+          switcher.with(:tenant_a) { :noop }
+        rescue ConsoleKit::Error
+          nil
+        end
+      end
+
+      it 'restores context by popping the pushed tenant' do
+        expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+      end
     end
   end
 end

@@ -8,7 +8,10 @@ module ConsoleKit
         SwitchPipeline.run(config: ConsoleKit.configuration)
       end
 
-      def reset = Context.reset!
+      def reset
+        Context.reset!
+        SwitchPipeline.run(config: ConsoleKit.configuration)
+      end
 
       def reapply
         SwitchPipeline.run(config: ConsoleKit.configuration) if Context.current.configured?

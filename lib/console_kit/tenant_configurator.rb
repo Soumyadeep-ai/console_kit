@@ -22,7 +22,26 @@ module ConsoleKit
         nil
       end
 
-      def configure_tenant(key, tenants, context_class)
+      def configure_tenant(key, tenants = nil, context_class = nil)
+        tenants, context_class = resolve_defaults(tenants, context_class)
+        run_tenant_setup(key, tenants, context_class)
+      end
+
+      def clear(context_class)
+        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+          context_class.public_send("#{attr}=", nil)
+        end
+        Output.print_info('Tenant context has been cleared.')
+      end
+
+      private
+
+      def resolve_defaults(tenants, context_class)
+        config = ConsoleKit.configuration
+        [tenants || config.tenants, context_class || config.context_class]
+      end
+
+      def run_tenant_setup(key, tenants, context_class)
         constants = tenants[key]&.[](:constants)
         raise NotConfigured, key unless constants
 
@@ -35,15 +54,6 @@ module ConsoleKit
         handle_error(e, key)
         false
       end
-
-      def clear(context_class)
-        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
-          context_class.public_send("#{attr}=", nil)
-        end
-        Output.print_info('Tenant context has been cleared.')
-      end
-
-      private
 
       def setup_tenant(key, constants, context_class)
         validate_constants!(constants)

@@ -9,16 +9,27 @@ module ConsoleKit
     private_constant :MAX_ATTEMPTS
 
     class << self
-      def select(tenants, keys)
+      def select(tenants = nil, keys = nil)
+        config = ConsoleKit.configuration
+        tenants ||= config.tenants
+        keys ||= (tenants == :dynamic ? [] : config.tenant_resolver_instance.all_keys)
         MAX_ATTEMPTS.times do
-          print_tenant_selection_menu(tenants, keys)
-          result = attempt_selection(keys)
+          result = attempt_with_menu(tenants, keys)
           return result unless result == :retry
         end
         nil
       end
 
       private
+
+      def attempt_with_menu(tenants, keys)
+        Output.print_header('Multiple tenants detected. Please choose one:')
+        Output.print_info('  0. Load without tenant (no tenant configuration)')
+        keys.each_with_index do |key, idx|
+          Output.print_info("  #{idx + 1}. #{key} (partner: #{partner_code(tenants, key)})")
+        end
+        attempt_selection(keys)
+      end
 
       def attempt_selection(keys)
         index = prompt_user_for_selection(keys.size)
@@ -28,13 +39,10 @@ module ConsoleKit
         :retry
       end
 
-      def print_tenant_selection_menu(tenants, keys)
-        Output.print_header('Multiple tenants detected. Please choose one:')
-        Output.print_info('  0. Load without tenant (no tenant configuration)')
-        keys.each_with_index do |key, idx|
-          partner = tenants.dig(key, :constants, :partner_code) || 'N/A'
-          Output.print_info("  #{idx + 1}. #{key} (partner: #{partner})")
-        end
+      def partner_code(tenants, key)
+        return tenants.dig(key, :constants, :partner_code) || 'N/A' if tenants.is_a?(Hash)
+
+        ConsoleKit.configuration.tenant_resolver_instance.resolve(key)&.dig(:constants, :partner_code) || 'N/A'
       end
 
       def prompt_user_for_selection(max_index)

@@ -15,6 +15,14 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
 
   after { ConsoleKit::Context.reset! }
 
+  describe '#dashboard' do
+    it 'delegates to ConsoleKit::Connections::Dashboard.display' do
+      allow(ConsoleKit::Connections::Dashboard).to receive(:display)
+      obj.dashboard
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display)
+    end
+  end
+
   describe '#switch_tenant' do
     it 'delegates to ConsoleKit.switch_tenant!' do
       allow(ConsoleKit).to receive(:switch_tenant!)
