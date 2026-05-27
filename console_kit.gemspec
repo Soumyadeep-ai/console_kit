@@ -37,6 +37,7 @@ Gem::Specification.new do |spec|
   # spec.add_dependency "example-gem", "~> 1.0"
   spec.add_dependency 'mongoid'
   spec.add_dependency 'rails', '>= 7.2.1'
+  spec.add_dependency 'tty-prompt', '~> 0.23'
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
