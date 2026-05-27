@@ -28,7 +28,8 @@ module ConsoleKit
       default_shard: :default,
       shard_role: :writing,
       recent_tenant_history_path: '~/.console_kit_history',
-      recent_tenant_limit: 5
+      recent_tenant_limit: 5,
+      benchmark: false
     }.freeze
 
     DEFAULTS.each_key do |attr|

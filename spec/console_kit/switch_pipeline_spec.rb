@@ -40,6 +40,15 @@ RSpec.describe ConsoleKit::SwitchPipeline do
       expect(result.error).to eq('step failed')
     end
 
+    context 'when config.benchmark is true' do
+      before { config.benchmark = true }
+
+      it 'outputs timing report after successful run' do
+        allow(config).to receive(:pipeline_steps).and_return([passing_step])
+        expect { described_class.run(config: config) }.to output(/ms/).to_stdout
+      end
+    end
+
     context 'when an early step fails' do
       let(:calls) { [] }
 

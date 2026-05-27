@@ -29,11 +29,30 @@ module ConsoleKit
     end
 
     def call
+      bench = build_benchmarker
+      bench.start_memory_tracking
+      run_steps(bench) || finish(bench)
+    end
+
+    private
+
+    def build_benchmarker
+      @ctx.config.benchmark ? Benchmarker.new : NullBenchmarker.new
+    end
+
+    def run_steps(bench)
       @ctx.config.pipeline_steps.each do |step_class|
-        result = step_class.new(@ctx).call
+        name   = step_class.name&.split('::')&.last || step_class.to_s
+        result = bench.wrap(name) { step_class.new(@ctx).call }
         return Result.new(success: false, error: result.error) if result.failure?
       end
-      Result.new(success: true, tenant: @ctx.resolved_tenant)
+      nil
+    end
+
+    def finish(bench)
+      resolved = @ctx.resolved_tenant
+      bench.report(resolved)
+      Result.new(success: true, tenant: resolved)
     end
   end
 end

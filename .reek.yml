@@ -92,6 +92,15 @@ detectors:
       # two rescue clauses for distinct error types (missing config vs general error). Each rescue
       # is a separate concern; merging them would obscure error-type differentiation.
       - ConsoleKit::TenantConfigurator#configure_tenant
+      # rubocop:Metrics/MethodLength conflict — print_step_timings pre-computes slowest_name once
+      # and iterates sorted timings to emit one line per step. Extracting the block body to a helper
+      # causes ControlParameter (boolean marker arg) and FeatureEnvy smells on the extracted method.
+      # Collapsing further would require passing slowest into each sub-method, restoring the smell.
+      - ConsoleKit::Benchmarker#print_step_timings
+      # rubocop:Metrics/MethodLength conflict — run_steps iterates pipeline_steps and returns early
+      # on first failure. Extracting run_step as a separate method causes two FeatureEnvy warnings
+      # (refers to step_class and result more than self). Keeping it inline is the cleanest design.
+      - ConsoleKit::SwitchPipeline#run_steps
   # rubocop:Metrics/MethodLength conflict — SafeguardCheck#current_env reads global state (ENV/Rails)
   # to determine the current environment. It intentionally has no instance state dependency because
   # environment detection is a pure lookup — moving it out of the class would break encapsulation.
@@ -136,6 +145,11 @@ detectors:
       # Reporter#format_count is a tiny string-formatting helper that belongs with the reporter's
       # output logic; extracting it to a separate class would scatter presentation concerns.
       - ConsoleKit::Doctor::Reporter#format_count
+      # rubocop:Metrics/MethodLength conflict — clock_ms is a single-line timing helper that reads
+      # a global clock. It has no instance state to reference by design (clocks are stateless reads).
+      # Extracting it to a module function would break private encapsulation; inlining it causes
+      # Reek's DuplicateMethodCall smell. Suppressing UtilityFunction is the only clean path.
+      - ConsoleKit::Benchmarker#clock_ms
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:
