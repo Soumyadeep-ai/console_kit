@@ -102,6 +102,9 @@ detectors:
   # with apply_context which calls them as tightly coupled helpers.
   UtilityFunction:
     exclude:
+      - ConsoleKit::ConsoleHelpers#switch_tenant
+      - ConsoleKit::ConsoleHelpers#tenant_info
+      - ConsoleKit::ConsoleHelpers#tenants
       - ConsoleKit::Steps::SafeguardCheck#current_env
       - ConsoleKit::Steps::SafeguardCheck#confirmed?
       # rubocop:Style/MethodParameters conflict — TenantSelector#aborted? takes a key parameter to

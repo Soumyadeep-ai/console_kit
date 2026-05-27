@@ -4,11 +4,11 @@ module ConsoleKit
   # Helpers mixed into the Rails console session.
   module ConsoleHelpers
     def switch_tenant
-      ConsoleKit::SwitchPipeline.run(config: ConsoleKit.configuration)
+      ConsoleKit.switch_tenant!
     end
 
     def tenant_info
-      ConsoleKit.status.display
+      ConsoleKit.status.print
     end
 
     def tenants

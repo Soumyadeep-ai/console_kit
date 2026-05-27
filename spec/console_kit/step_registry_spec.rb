@@ -7,6 +7,7 @@ RSpec.describe ConsoleKit::StepRegistry do
   let(:step_a) { Class.new { def self.priority = 10 } }
   let(:step_b) { Class.new { def self.priority = 20 } }
 
+  before { described_class.send(:registry).clear }
   after { described_class.send(:registry).clear }
 
   describe '.register' do
