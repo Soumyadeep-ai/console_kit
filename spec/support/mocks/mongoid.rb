@@ -2,14 +2,16 @@
 
 # Mock for Mongoid module to support testing
 module Mongoid
-  def self.override_database(*); end
-  def self.override_client(*); end
-  def self.default_client; end
+  class << self
+    def override_database(*); end
+    def override_client(*); end
+    def default_client; end
+  end
 
   # Mock for Mongoid::Config
   module Config
-    def self.clients
-      {}
+    class << self
+      def clients = {}
     end
   end
 
