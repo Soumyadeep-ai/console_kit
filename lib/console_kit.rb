@@ -35,6 +35,18 @@ require_relative 'console_kit/output'
 require_relative 'console_kit/status'
 require_relative 'console_kit/scoped_switcher'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
+require_relative 'console_kit/doctor/check_registry'
+require_relative 'console_kit/doctor/checks/base'
+require_relative 'console_kit/doctor/checks/tenants_configured'
+require_relative 'console_kit/doctor/checks/tenant_keys_unique'
+require_relative 'console_kit/doctor/checks/context_class_resolvable'
+require_relative 'console_kit/doctor/checks/required_constants_present'
+require_relative 'console_kit/doctor/checks/adapter_supported'
+require_relative 'console_kit/doctor/checks/sharding_compatibility'
+require_relative 'console_kit/doctor/checks/hook_callable_arity'
+require_relative 'console_kit/doctor/checks/history_path_writable'
+require_relative 'console_kit/doctor/check_runner'
+require_relative 'console_kit/doctor/reporter'
 
 module ConsoleKit
   class << self

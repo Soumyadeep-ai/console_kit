@@ -37,6 +37,10 @@ detectors:
       - ConsoleKit::PipelineContext#initialize
       - ConsoleKit::SwitchPipeline#run
       - ConsoleKit::Output#print_with
+      # rubocop:Style/OptionalBooleanParameter conflict — Reporter#initialize uses verbose: keyword
+      # (RuboCop-preferred form) to toggle detailed output; this is an intentional API flag, not
+      # a control-flow smell.
+      - ConsoleKit::Doctor::Reporter#initialize
   # rubocop:Style/Documentation conflict — RuboCop requires doc comments (Style/Documentation) on
   # every module/class, but adding module docs to tiny internal Structs clutters the code without
   # adding value.
@@ -44,6 +48,9 @@ detectors:
     exclude:
       - ConsoleKit::StepRegistry::Entry
       - ConsoleKit::Steps::Base::Result
+      # rubocop:Style/Documentation conflict — Base::Result is a tiny internal Struct that carries
+      # check output; adding a module doc comment adds no value and clutters the code.
+      - ConsoleKit::Doctor::Checks::Base::Result
   # rubocop:Metrics/CyclomaticComplexity conflict — print_banner uses style parameter to select color.
   # This is intentional dispatch, not control flow smell. build_message uses timestamp parameter to
   # control whether to include time in output — intentional parameter dispatch, not control flow smell.
@@ -55,6 +62,12 @@ detectors:
       # tenant_key. The parameter selects which tenant entry to look up; this is the public API,
       # not a control-flow smell.
       - ConsoleKit::Connections::ShardResolver#resolve
+  FeatureEnvy:
+    exclude:
+      # Reporter#print_result formats and prints a single Result value object. Accessing its three
+      # fields (status, message, check) is the definition of formatting a value object — this is
+      # not envy but intentional presenter logic that belongs in Reporter, not in Result.
+      - ConsoleKit::Doctor::Reporter#print_result
   # rubocop:Metrics/MethodLength conflict — render_banner_lines unpacks context hash and renders
   # three output statements. Extracting further would reduce clarity without improving maintainability.
   # rubocop:Metrics/MethodLength conflict — EnvResolver#call validates env variable, looks up tenant,
@@ -107,6 +120,15 @@ detectors:
       - ConsoleKit::Connections::NullShardStrategy#wrap
       - ConsoleKit::Connections::RailsConnectedToStrategy#available?
       - ConsoleKit::Connections::RailsConnectedToStrategy#wrap
+      # Doctor check helpers that probe external state (ActiveRecord, Rails, hook registry) are
+      # intentionally stateless at the Ruby level — they act on global singletons, not instance
+      # variables. Extracting them to separate classes would fragment cohesive check logic.
+      - ConsoleKit::Doctor::Checks::AdapterSupported#detected_adapter
+      - ConsoleKit::Doctor::Checks::ShardingCompatibility#rails_version_sufficient?
+      - ConsoleKit::Doctor::Checks::HookCallableArity#arity_issues_for
+      # Reporter#format_count is a tiny string-formatting helper that belongs with the reporter's
+      # output logic; extracting it to a separate class would scatter presentation concerns.
+      - ConsoleKit::Doctor::Reporter#format_count
   # RuboCop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
   # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
   UncommunicativeVariableName:
@@ -115,3 +137,6 @@ detectors:
       - ConsoleKit::Steps::AfterHooks#call
       - ConsoleKit::Steps::TenantConfigurator#call
       - ConsoleKit::Connections::RailsConnectedToStrategy#wrap
+      # rubocop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
+      # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
+      - ConsoleKit::Doctor::Checks::ContextClassResolvable#call
