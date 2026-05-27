@@ -14,4 +14,16 @@ RSpec.describe ConsoleKit::NullBenchmarker do
   it 'returns empty timings' do
     expect(bm.timings).to eq({})
   end
+
+  it 'returns nil for slowest_step' do
+    expect(bm.slowest_step).to be_nil
+  end
+
+  it 'does not raise on start_memory_tracking' do
+    expect { bm.start_memory_tracking }.not_to raise_error
+  end
+
+  it 'does not raise on report' do
+    expect { bm.report(:any_tenant) }.not_to raise_error
+  end
 end

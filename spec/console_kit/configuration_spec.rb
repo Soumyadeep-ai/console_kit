@@ -47,6 +47,10 @@ RSpec.describe ConsoleKit::Configuration do
       expect(config.recent_tenant_limit).to eq(5)
     end
 
+    it 'defaults benchmark to false' do
+      expect(config.benchmark).to be false
+    end
+
     it 'defaults context_field_mapping with partner_identifier key' do
       expect(config.context_field_mapping).to include(partner_identifier: :partner_code)
     end

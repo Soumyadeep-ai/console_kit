@@ -60,6 +60,11 @@ RSpec.describe ConsoleKit::Benchmarker do
         expect { bm.report(:tenant_a) }.not_to output(/Allocated objects delta/).to_stdout
       end
     end
+
+    it 'does not raise when no steps were recorded' do
+      bm.start_memory_tracking
+      expect { bm.report(:tenant_a) }.to output(/Tenant switch/).to_stdout
+    end
   end
 
   describe '#slowest_step' do
