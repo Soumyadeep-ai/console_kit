@@ -1,39 +1,38 @@
 # frozen_string_literal: true
 
-# Main module for console kit
-module ConsoleKit
-  class Error < StandardError; end
-end
+require 'active_support/core_ext/object/blank'
+require 'active_support/core_ext/object/inclusion'
+require 'active_support/core_ext/string/inflections'
 
+require_relative 'console_kit/errors'
 require_relative 'console_kit/version'
 require_relative 'console_kit/fiber_storage'
 require_relative 'console_kit/context'
 require_relative 'console_kit/hook_registry'
-require_relative 'console_kit/configuration'
 require_relative 'console_kit/step_registry'
 require_relative 'console_kit/pipeline_context'
-require_relative 'console_kit/steps/base'
-require_relative 'console_kit/steps/env_resolver'
-require_relative 'console_kit/steps/safeguard_check'
-require_relative 'console_kit/steps/before_hooks'
-require_relative 'console_kit/steps/after_hooks'
 require_relative 'console_kit/switch_pipeline'
+require_relative 'console_kit/scoped_switcher'
+require_relative 'console_kit/status'
+require_relative 'console_kit/configuration'
 require_relative 'console_kit/setup'
+require_relative 'console_kit/prompt'
+require_relative 'console_kit/output'
 require_relative 'console_kit/tenant_history'
-require 'tty-prompt'
 require_relative 'console_kit/prompt_builder'
-require_relative 'console_kit/steps/tenant_selector'
 require_relative 'console_kit/connections/connection_manager'
 require_relative 'console_kit/connections/shard_resolver'
 require_relative 'console_kit/connections/shard_strategy'
 require_relative 'console_kit/connections/shard_strategy_factory'
-require_relative 'console_kit/steps/shard_connector'
+require_relative 'console_kit/steps/base'
+require_relative 'console_kit/steps/env_resolver'
+require_relative 'console_kit/steps/safeguard_check'
+require_relative 'console_kit/steps/tenant_selector'
+require_relative 'console_kit/steps/before_hooks'
 require_relative 'console_kit/steps/tenant_configurator'
-require_relative 'console_kit/prompt'
+require_relative 'console_kit/steps/shard_connector'
 require_relative 'console_kit/steps/prompt_applier'
-require_relative 'console_kit/output'
-require_relative 'console_kit/status'
-require_relative 'console_kit/scoped_switcher'
+require_relative 'console_kit/steps/after_hooks'
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 require_relative 'console_kit/doctor/check_registry'
 require_relative 'console_kit/doctor/checks/base'
@@ -48,22 +47,65 @@ require_relative 'console_kit/doctor/checks/history_path_writable'
 require_relative 'console_kit/doctor/check_runner'
 require_relative 'console_kit/doctor/reporter'
 
+# Top-level namespace and public API for ConsoleKit.
 module ConsoleKit
   class << self
-    def configure = yield(configuration)
-
-    def configuration = Thread.current[:console_kit_configuration] ||= Configuration.new
-    def reset_configuration! = Thread.current[:console_kit_configuration] = nil
-
-    %i[pretty_output tenants context_class].each do |name|
-      define_method(name) { configuration.public_send(name) }
-      define_method("#{name}=") { |val| configuration.public_send("#{name}=", val) }
+    def configure
+      yield(configuration)
     end
 
-    def current_tenant = Setup.current_tenant
-    def reset_current_tenant = Setup.reset_current_tenant
+    def configuration
+      @configuration ||= Configuration.new
+    end
 
-    def enable_pretty_output = configuration.pretty_output = true
-    def disable_pretty_output = configuration.pretty_output = false
+    def reset_configuration!
+      @configuration = nil
+      Context.reset!
+    end
+
+    # Existing accessors (backward-compat)
+    def pretty_output         = configuration.pretty_output
+    def tenants               = configuration.tenants
+    def context_class         = configuration.context_class
+    def show_dashboard        = configuration.show_dashboard
+    def current_tenant        = Context.current.tenant
+    def reset_current_tenant  = Setup.reset_current_tenant
+
+    def pretty_output=(val)
+      configuration.pretty_output = val
+    end
+
+    def tenants=(val)
+      configuration.tenants = val
+    end
+
+    def context_class=(val)
+      configuration.context_class = val
+    end
+
+    def show_dashboard=(val)
+      configuration.show_dashboard = val
+    end
+
+    def enable_pretty_output
+      configuration.pretty_output = true
+    end
+
+    def disable_pretty_output
+      configuration.pretty_output = false
+    end
+
+    # v2.0.0 public API
+    def with(tenant_key, &)
+      ScopedSwitcher.for(configuration).with(tenant_key, &)
+    end
+
+    def switch_tenant!
+      SwitchPipeline.run(config: configuration)
+    end
+
+    def status
+      Status.build
+    end
   end
 end

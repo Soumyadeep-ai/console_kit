@@ -5,17 +5,19 @@ require_relative 'output'
 module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
+    # Raised internally when tenant constants are absent.
+    class NotConfigured < Error; end
+
     class << self
       def configure_tenant(key, tenants, context_class)
         constants = tenants[key]&.[](:constants)
-        return missing_config_error(key) unless constants
+        raise NotConfigured, key unless constants
 
-        validate_constants!(constants)
-        apply_context(context_class, constants)
-        setup_connections(context_class)
-
-        Output.print_success("Tenant set to: #{key}")
+        setup_tenant(key, constants, context_class)
         true
+      rescue NotConfigured => e
+        Output.print_error("No configuration found for tenant: #{e.message}")
+        false
       rescue StandardError => e
         handle_error(e, key)
         false
@@ -30,14 +32,16 @@ module ConsoleKit
 
       private
 
+      def setup_tenant(key, constants, context_class)
+        validate_constants!(constants)
+        apply_context(context_class, constants)
+        setup_connections(context_class)
+        Output.print_success("Tenant set to: #{key}")
+      end
+
       def validate_constants!(constants)
         missing = %i[shard partner_code] - constants.keys
         raise "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
-      end
-
-      def missing_config_error(key)
-        Output.print_error("No configuration found for tenant: #{key}")
-        false
       end
 
       def apply_context(ctx, constant)
@@ -46,21 +50,16 @@ module ConsoleKit
         ctx.partner_identifier = constant[:partner_code]
       end
 
+      # :reek:ManualDispatch -- necessary for Rails/Mongoid detection compatibility
+      # :reek:NilCheck -- nil-check is idiomatic for optional mongo_db config
       def setup_connections(ctx)
         ApplicationRecord.establish_connection(ctx.tenant_shard.to_sym) if defined?(ApplicationRecord)
         return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
-        return if ctx.tenant_mongo_db.nil? || ctx.tenant_mongo_db.empty?
 
-        client = ctx.tenant_mongo_db.to_s
-        Mongoid.override_client(client)
-      end
+        mongo_db = ctx.tenant_mongo_db
+        return if mongo_db.nil? || mongo_db.empty?
 
-      def setup_database_connections(context_class)
-        ApplicationRecord.establish_connection(context_class.tenant_shard.to_sym) if defined?(ApplicationRecord)
-        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
-        return if context_class.tenant_mongo_db.nil? || context_class.tenant_mongo_db.empty?
-
-        Mongoid.override_client(context_class.tenant_mongo_db.to_s)
+        Mongoid.override_client(mongo_db.to_s)
       end
 
       def handle_error(error, key)

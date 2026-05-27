@@ -1,6 +1,8 @@
 # lib/console_kit/prompt_builder.rb
 # frozen_string_literal: true
 
+require 'tty-prompt'
+
 module ConsoleKit
   # Wraps TTY::Prompt to present a filterable tenant selection list,
   # showing recently-used tenants first.

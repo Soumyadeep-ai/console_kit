@@ -88,6 +88,10 @@ detectors:
       - ConsoleKit::Steps::TenantConfigurator#call
       - ConsoleKit::Steps::TenantConfigurator#configure_tenant
       - ConsoleKit::Steps::TenantConfigurator#apply_context
+      # rubocop:Metrics/MethodLength conflict — TenantConfigurator#configure_tenant orchestrates
+      # two rescue clauses for distinct error types (missing config vs general error). Each rescue
+      # is a separate concern; merging them would obscure error-type differentiation.
+      - ConsoleKit::TenantConfigurator#configure_tenant
   # rubocop:Metrics/MethodLength conflict — SafeguardCheck#current_env reads global state (ENV/Rails)
   # to determine the current environment. It intentionally has no instance state dependency because
   # environment detection is a pure lookup — moving it out of the class would break encapsulation.
@@ -143,3 +147,6 @@ detectors:
       # rubocop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
       # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
       - ConsoleKit::HookRegistry#run
+      # rubocop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
+      # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
+      - ConsoleKit::TenantConfigurator#configure_tenant

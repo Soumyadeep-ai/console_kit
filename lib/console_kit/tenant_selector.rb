@@ -5,47 +5,58 @@ require_relative 'output'
 module ConsoleKit
   # For tenant selection
   module TenantSelector
+    MAX_ATTEMPTS = 3
+    private_constant :MAX_ATTEMPTS
+
     class << self
       def select(tenants, keys)
-        print_tenant_selection_menu(tenants, keys)
-
-        3.times do |attempt|
-          index = prompt_user_for_selection(keys.size)
-          return nil if index.zero?
-          return keys[index - 1] if index.positive?
-
-          print_tenant_selection_menu(tenants, keys) if attempt < 2
+        MAX_ATTEMPTS.times do
+          print_tenant_selection_menu(tenants, keys)
+          result = attempt_selection(keys)
+          return result unless result == :retry
         end
-
         nil
       end
 
       private
 
+      def attempt_selection(keys)
+        index = prompt_user_for_selection(keys.size)
+        return nil if index.zero?
+        return keys[index - 1] if index.positive?
+
+        :retry
+      end
+
       def print_tenant_selection_menu(tenants, keys)
         Output.print_header('Multiple tenants detected. Please choose one:')
         Output.print_info('  0. Load without tenant (no tenant configuration)')
-
-        keys.each_with_index do |key, index|
+        keys.each_with_index do |key, idx|
           partner = tenants.dig(key, :constants, :partner_code) || 'N/A'
-          Output.print_info("  #{index + 1}. #{key} (partner: #{partner})")
+          Output.print_info("  #{idx + 1}. #{key} (partner: #{partner})")
         end
       end
 
       def prompt_user_for_selection(max_index)
         Output.print_prompt("\nEnter the number of the tenant you want (or press Enter for default '1'): ")
-        input = $stdin.gets&.chomp&.strip
-        input = '1' if input.to_s.empty?
+        input = normalize_input($stdin.gets&.chomp&.strip)
         return invalid_input_response unless valid_integer?(input)
 
-        parsed_index = input.to_i
-        return invalid_range_response(max_index) unless parsed_index.between?(0, max_index)
+        validate_range(input.to_i, max_index)
+      end
 
-        parsed_index
+      def validate_range(parsed, max_index)
+        return invalid_range_response(max_index) unless parsed.between?(0, max_index)
+
+        parsed
+      end
+
+      def normalize_input(raw)
+        raw.to_s.empty? ? '1' : raw
       end
 
       def valid_integer?(input) = input.match?(/\A\d+\z/)
-      def invalid_input_response = Output.print_warning('Invalid input. Please enter a number.').then { - 1 }
+      def invalid_input_response = Output.print_warning('Invalid input. Please enter a number.').then { -1 }
 
       def invalid_range_response(max_index)
         Output.print_warning("Selection must be between 0 and #{max_index}.")
@@ -54,3 +65,5 @@ module ConsoleKit
     end
   end
 end
+
+ConsoleKit::LegacyTenantSelector = ConsoleKit::TenantSelector

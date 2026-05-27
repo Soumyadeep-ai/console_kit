@@ -36,7 +36,7 @@ module ConsoleKit
       end
 
       def auto_select?
-        config.tenants.size == 1
+        config.tenants&.size == 1
       end
 
       def interactive_select
