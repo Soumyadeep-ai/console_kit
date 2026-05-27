@@ -1,0 +1,89 @@
+name: Update SECURITY.md with New Version
+
+on:
+  pull_request:
+    paths:
+      - 'lib/console_kit/version.rb'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-version-update-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-security-md:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Pull latest changes with rebase
+        run: git pull --rebase origin ${{ github.head_ref }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+
+      - name: Get current version from version.rb
+        id: version
+        run: |
+          VERSION_LINE=$(grep VERSION lib/console_kit/version.rb)
+          VERSION=$(echo $VERSION_LINE | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "Detected version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update SECURITY.md
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.version }}"
+          SECURITY_FILE="SECURITY.md"
+
+          echo "📦 New version: $NEW_VERSION"
+
+          awk -v new_ver="$NEW_VERSION" '
+            BEGIN {
+              in_table = 0
+              inserted = 0
+            }
+            {
+              # Start of version table
+              if ($0 ~ /^\|[[:space:]]*Version[[:space:]]*\|[[:space:]]*Supported[[:space:]]*\|[[:space:]]*$/) {
+                in_table = 1
+                print $0
+                next
+              }
+
+              # Separator row
+              if (in_table == 1 && $0 ~ /^\|[[:space:]]*-+[[:space:]]*\|[[:space:]]*-+[[:space:]]*\|[[:space:]]*$/) {
+                print $0
+                if (!inserted) {
+                  printf "| %-7s | %-18s |\n", new_ver, ":white_check_mark:"
+                  inserted = 1
+                }
+                next
+              }
+
+              # Inside the table: update all rows to :x:
+              if (in_table == 1 && $0 ~ /^\|[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*\|/) {
+                match($0, /^\|[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*\|/, m)
+                if (m[1] != new_ver) {
+                  printf "| %-7s | %-18s |\n", m[1], ":x:"
+                }
+                next
+              }
+
+              # After table
+              print $0
+            }
+          ' "$SECURITY_FILE" > tmpfile && mv tmpfile "$SECURITY_FILE"
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore(security): update SECURITY.md for version bump"
+          commit_user_name: github-actions[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          push_options: '--force-with-lease'

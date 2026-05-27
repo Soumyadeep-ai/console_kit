@@ -15,15 +15,48 @@ module ConsoleKit
     }.freeze
 
     class << self
+      def silent = Thread.current[:console_kit_silent]
+
+      def silent=(val)
+        Thread.current[:console_kit_silent] = val
+      end
+
+      def silence
+        old_silent = silent
+        self.silent = true
+        yield
+      ensure
+        self.silent = old_silent
+      end
+
       TYPES.each_key do |type|
-        define_method("print_#{type}") do |text|
-          formatted = (type == :header ? "\n=== #{text} ===" : text)
-          print_with(type, formatted)
+        define_method("print_#{type}") do |text, timestamp: false, newline: (type != :prompt)|
+          return if silent
+
+          formatted = (type == :header ? "\n--- #{text} ---" : text)
+          print_with(type, formatted, timestamp: timestamp, newline: newline)
         end
       end
 
+      def print_list(items, header: nil)
+        return if silent
+
+        print_header(header) if header
+        items.each { |item| puts "  #{item}" }
+      end
+
+      def print_raw(text)
+        return if silent
+
+        puts text
+      end
+
       def print_backtrace(exception)
-        exception&.backtrace&.each { |line| print_with(:trace, "    #{line}") }
+        return if silent
+
+        exception&.backtrace&.each do |line|
+          print_with(:trace, "    #{line}")
+        end
       end
 
       def print_banner(lines:, style: :danger)
@@ -46,23 +79,32 @@ module ConsoleKit
 
       private
 
-      def print_with(type, text, timestamp: false)
-        meta = TYPES[type]
+      def print_with(type, text, options = {})
+        opts = options.is_a?(Hash) ? options : { timestamp: options }
+        message = build_formatted_message(type, text, opts[:timestamp])
+
+        opts.fetch(:newline, true) ? puts(message) : print(message)
+      end
+
+      def build_formatted_message(type, text, timestamp)
+        meta = TYPES.fetch(type)
         message = build_message(text, meta[:symbol], timestamp)
-        output(message, meta[:color])
+        colorize(message, meta[:color])
+      end
+
+      def colorize(message, color)
+        return message unless ConsoleKit.configuration.pretty_output && color
+
+        "\e[#{color}m#{message}\e[0m"
       end
 
       def build_message(text, symbol, timestamp)
-        time = timestamp ? "[#{Time.current.strftime('%Y-%m-%d %H:%M:%S')}] " : ''
-        sym = symbol ? "#{symbol} " : ''
-        "#{PREFIX} #{time}#{sym}#{text}"
+        "#{PREFIX} #{timestamp_prefix(timestamp)}#{symbol_prefix(symbol)}#{text}"
       end
 
-      def output(message, color)
-        return puts message unless ConsoleKit.configuration.pretty_output && color
-
-        puts "\e[#{color}m#{message}\e[0m"
-      end
+      def prefix_for(value) = value ? yield(value) : ''
+      def timestamp_prefix(timestamp) = prefix_for(timestamp) { Time.current.strftime('[%Y-%m-%d %H:%M:%S] ') }
+      def symbol_prefix(symbol) = prefix_for(symbol) { |sym| "#{sym} " }
     end
   end
 end

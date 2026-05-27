@@ -2,8 +2,11 @@
 
 source 'https://rubygems.org'
 
-# Specify your gem's dependencies in console_kit.gemspec
-gemspec
+gem 'activerecord', '~> 8.0.0'
+gem 'activesupport', '~> 8.0.0'
+gem 'railties', '~> 8.0.0'
+
+gemspec path: '..'
 
 gem 'irb'
 gem 'rake', '~> 13.3'
@@ -14,13 +17,10 @@ group :development, :test do
   gem 'rubocop', '~> 1.85'
   gem 'rubocop-rake'
   gem 'rubocop-rspec'
-  gem 'rubycritic', require: false
-  gem 'tty-prompt', '~> 0.23'
 end
 
 group :test do
   gem 'aruba'
   gem 'generator_spec'
   gem 'rspec_junit_formatter'
-  gem 'simplecov', require: false
 end

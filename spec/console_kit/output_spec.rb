@@ -150,4 +150,138 @@ RSpec.describe ConsoleKit::Output do
         .to output(/[╔╚║]/).to_stdout
     end
   end
+
+  describe '.silent' do
+    it 'returns nil by default' do
+      expect(described_class.silent).to be_nil
+    end
+
+    it 'returns true after silent= true' do
+      described_class.silent = true
+      expect(described_class.silent).to be(true)
+    end
+  end
+
+  describe '.silent=' do
+    it 'sets the thread-local silent flag' do
+      described_class.silent = true
+      expect(Thread.current[:console_kit_silent]).to be(true)
+    end
+
+    it 'can be set back to false' do
+      described_class.silent = false
+      expect(described_class.silent).to be(false)
+    end
+  end
+
+  describe '.silence' do
+    it 'suppresses output within the block' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_info('should not appear') }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'restores silent to previous value after block' do
+      described_class.silent = false
+      described_class.silence { nil }
+      expect(described_class.silent).to be(false)
+    end
+
+    it 'restores silent even if block raises' do
+      described_class.silent = nil
+      begin
+        described_class.silence { raise 'boom' }
+      rescue RuntimeError
+        nil
+      end
+      expect(described_class.silent).to be_nil
+    end
+  end
+
+  describe '.print_list' do
+    it 'prints each item' do
+      output = capture_stdout { described_class.print_list(%w[apple banana]) }
+      expect(output).to include('apple')
+      expect(output).to include('banana')
+    end
+
+    it 'prints a header when provided' do
+      output = capture_stdout { described_class.print_list(%w[x], header: 'My Header') }
+      expect(output).to include('My Header')
+    end
+
+    it 'suppresses output when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_list(%w[item]) }
+      end
+      expect(output).to be_empty
+    end
+  end
+
+  describe '.print_raw' do
+    it 'outputs the text' do
+      output = capture_stdout { described_class.print_raw('raw text here') }
+      expect(output).to include('raw text here')
+    end
+
+    it 'suppresses output when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_raw('suppressed') }
+      end
+      expect(output).to be_empty
+    end
+  end
+
+  describe '.print_backtrace when silent' do
+    let(:exception) do
+      e = RuntimeError.new('oops')
+      e.set_backtrace(['lib/foo.rb:1'])
+      e
+    end
+
+    it 'suppresses backtrace output when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_backtrace(exception) }
+      end
+      expect(output).to be_empty
+    end
+  end
+
+  describe 'print_* methods when silent' do
+    it 'suppresses print_error when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_error('error msg') }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'suppresses print_success when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_success('ok') }
+      end
+      expect(output).to be_empty
+    end
+  end
+
+  describe '#print_with newline: false' do
+    it 'uses print instead of puts when newline: false' do
+      output = capture_stdout { described_class.send(:print_with, :info, 'inline', newline: false) }
+      expect(output).not_to end_with("\n")
+    end
+
+    it 'uses puts when newline: true' do
+      output = capture_stdout { described_class.send(:print_with, :info, 'line', newline: true) }
+      expect(output).to end_with("\n")
+    end
+  end
+
+  describe '#print_with non-hash options (legacy)' do
+    it 'treats non-hash options as timestamp value' do
+      now = Time.new(2025, 1, 1, 12, 0, 0)
+      allow(Time).to receive(:current).and_return(now)
+      output = capture_stdout { described_class.send(:print_with, :info, 'msg', true) }
+      expect(output).to include('[2025-01-01 12:00:00]')
+    end
+  end
 end

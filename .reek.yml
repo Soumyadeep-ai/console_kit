@@ -167,3 +167,5 @@ detectors:
       # rubocop:Naming/RescuedExceptionsVariableName requires 'e' for rescued exception variables.
       # Reek flags 'e' as uncommunicative, but this is the standard naming convention.
       - ConsoleKit::TenantConfigurator#configure_tenant
+    accept:
+      - e

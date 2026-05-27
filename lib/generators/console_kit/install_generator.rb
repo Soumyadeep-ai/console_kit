@@ -12,6 +12,7 @@ module ConsoleKit
       class_option :force, type: :boolean, default: false, desc: 'Overwrite existing files'
 
       def copy_initializer
+        force = options[:force]
         initializer_path = Rails.root.join('config', 'initializers', 'console_kit.rb')
         force = options[:force]
 

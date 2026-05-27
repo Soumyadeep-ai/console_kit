@@ -11,24 +11,35 @@ Rails.application.config.after_initialize do
     #     constants: {
     #       shard: :shard_1,
     #       mongo_db: 'mongo_db_1',
-    #       partner_code: 'partner_a'
+    #       partner_code: 'partner_a',
+    #       redis_db: 1,
+    #       elasticsearch_prefix: 'tenant_a',
+    #       environment: 'production'
     #     }
     #   },
     #   tenant_b: {
     #     constants: {
     #       shard: :shard_2,
     #       mongo_db: 'mongo_db_2',
-    #       partner_code: 'partner_b'
+    #       partner_code: 'partner_b',
+    #       redis_db: 2,
+    #       elasticsearch_prefix: 'tenant_b',
+    #       environment: 'staging'
     #     }
     #   }
     # }
     config.tenants = nil
 
-    # TODO: Set your context class (e.g., CurrentContext)
+    # TODO: Set your context class (e.g., 'CurrentContext')
+    # Recommendation: Use a String to ensure the class is correctly re-resolved after `reload!`
     config.context_class = nil
 
     # Toggle pretty output on/off (default: true)
     config.pretty_output = true
+
+    # Show connection dashboard on tenant switch (default: false)
+    # When false, use the `dashboard` command in the console to display on-demand
+    # config.show_dashboard = true
 
     if config.tenants.nil?
       warn '[ConsoleKit] Warning: `tenants` is not configured. ' \
