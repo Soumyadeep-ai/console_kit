@@ -4,7 +4,9 @@
 module Elasticsearch
   # Mock for Elasticsearch::Model to support testing
   module Model
-    def self.client; end
-    def self.index_name_prefix=(*); end
+    class << self
+      def client; end
+      def index_name_prefix=(*); end
+    end
   end
 end
