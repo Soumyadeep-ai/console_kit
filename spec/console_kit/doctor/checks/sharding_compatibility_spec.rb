@@ -24,4 +24,10 @@ RSpec.describe ConsoleKit::Doctor::Checks::ShardingCompatibility do
     stub_const('Rails::VERSION::STRING', '6.1.0')
     expect(check.call.status).to eq(:ok)
   end
+
+  it 'returns error when sharding enabled but Rails not defined' do
+    config.use_rails_sharding = true
+    hide_const('Rails::VERSION::STRING')
+    expect(check.call.status).to eq(:error)
+  end
 end
