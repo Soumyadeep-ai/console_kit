@@ -12,7 +12,7 @@ module ConsoleKit
       end
 
       def resolve(tenant_key)
-        @config.tenants&.dig(tenant_key, :constants, :shard) || @config.default_shard
+        @config.tenant_resolver_instance.resolve(tenant_key)&.dig(:constants, :shard) || @config.default_shard
       end
     end
   end

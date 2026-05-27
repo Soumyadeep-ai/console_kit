@@ -12,7 +12,7 @@ module ConsoleKit
     end
 
     def tenants
-      ConsoleKit.configuration.tenants&.keys || []
+      ConsoleKit.configuration.tenant_resolver_instance.all_keys
     end
   end
 end

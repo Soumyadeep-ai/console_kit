@@ -9,6 +9,7 @@ module ConsoleKit
     DEFAULTS = {
       pretty_output: true,
       tenants: nil,
+      tenant_resolver: nil,
       sql_base_class: 'ApplicationRecord',
       show_dashboard: false,
       env_tenant_key: 'CONSOLE_KIT_TENANT',
@@ -44,6 +45,23 @@ module ConsoleKit
     end
 
     attr_reader :hook_registry
+
+    def tenant_resolver_instance
+      @tenant_resolver_instance ||= TenantResolver.build(
+        @data[:tenants] || {},
+        @data[:tenant_resolver]
+      )
+    end
+
+    def tenants=(val)
+      @data[:tenants] = val
+      @tenant_resolver_instance = nil
+    end
+
+    def tenant_resolver=(val)
+      @data[:tenant_resolver] = val
+      @tenant_resolver_instance = nil
+    end
 
     def context_class
       val = @data[:context_class]

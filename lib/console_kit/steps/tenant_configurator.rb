@@ -30,7 +30,7 @@ module ConsoleKit
       end
 
       def tenant_constants
-        config.tenants.dig(resolved_tenant, :constants)
+        config.tenant_resolver_instance.resolve(resolved_tenant)&.[](:constants)
       end
 
       def missing_keys_error(constants)
