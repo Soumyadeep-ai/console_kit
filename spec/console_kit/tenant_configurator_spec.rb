@@ -175,6 +175,12 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
+  describe '.current_tenant_key=' do
+    it 'is a no-op shim that returns nil' do
+      expect(described_class.send(:current_tenant_key=, :anything)).to be_nil
+    end
+  end
+
   describe '.configure_tenant with nil mongo_db' do
     before do
       allow(ApplicationRecord).to receive(:establish_connection)
