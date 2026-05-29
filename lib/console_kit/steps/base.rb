@@ -32,6 +32,14 @@ module ConsoleKit
       def config  = ctx.config
       def success = self.class::Result.new(success: true)
       def failure(msg) = self.class::Result.new(success: false, error: msg)
+
+      def current_env
+        if defined?(Rails) && Rails.respond_to?(:env)
+          Rails.env.to_s
+        else
+          ENV.fetch('RAILS_ENV', nil) || ENV.fetch('RACK_ENV', nil) || 'development'
+        end
+      end
     end
   end
 end

@@ -76,13 +76,16 @@ Run `rails c`. ConsoleKit intercepts startup, prompts for a tenant, wires up the
 ```
 rails c
   │
-  ├─ 1. ENV check ────────── CONSOLE_KIT_TENANT=acme skips the prompt
-  ├─ 2. Tenant selection ─── fuzzy interactive picker, recent-tenant memory
-  ├─ 3. Safety gate ──────── banner + CONFIRM required if env/tenant protected
-  ├─ 4. Readonly mode ─────── AR writes blocked in production (hard error)
-  ├─ 5. Connection setup ──── SQL, Mongo, Redis, Elasticsearch, Apartment, ActsAsTenant
-  ├─ 6. Prompt ────────────── [tenant][env] set in IRB/Pry
-  └─ 7. Audit log ─────────── session entry written to disk
+  ├─ 1. Welcome banner ───── "ConsoleKit v2.1.0  |  production"
+  ├─ 2. Role preset ──────── CONSOLE_KIT_ROLE=support applies config overrides
+  ├─ 3. ENV check ────────── CONSOLE_KIT_TENANT=acme skips the prompt
+  ├─ 4. Tenant selection ─── fuzzy interactive picker, recent-tenant memory
+  ├─ 5. Safety gate ──────── banner + CONFIRM required if env/tenant protected
+  ├─ 6. Readonly mode ─────── AR writes blocked in production (hard error)
+  ├─ 7. Connection setup ──── SQL, Mongo, Redis, Elasticsearch, Apartment, ActsAsTenant
+  ├─ 8. Prompt ────────────── [tenant][env] set in IRB/Pry
+  ├─ 9. Audit log ─────────── session entry written to disk
+  └─10. Ready summary ─────── "[✓] acme  |  production  |  readonly: ON"
 ```
 
 ---

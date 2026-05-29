@@ -35,17 +35,9 @@ module ConsoleKit
         ar_available? && !dynamic_mode? && (config.readonly_mode || env_enforced?)
       end
 
-      def ar_available?  = defined?(ActiveRecord::Base)
-      def dynamic_mode?  = config.tenants == :dynamic
-      def env_enforced?  = config.readonly_environments.include?(current_env)
-
-      def current_env
-        if defined?(Rails) && Rails.respond_to?(:env)
-          Rails.env.to_s
-        else
-          ENV.fetch('RAILS_ENV', nil) || ENV.fetch('RACK_ENV', nil) || 'development'
-        end
-      end
+      def ar_available? = defined?(ActiveRecord::Base)
+      def dynamic_mode? = config.tenants == :dynamic
+      def env_enforced? = config.readonly_environments.include?(current_env)
     end
   end
 end
