@@ -30,6 +30,12 @@ jobs:
           - rails: "8.0"
             ruby: "3.4"
             gemfile: gemfiles/rails_8_0.gemfile
+          - rails: "8.0"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_8_0.gemfile
+          - rails: "8.1"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_8_1.gemfile
 
     name: Rails ${{ matrix.rails }} / Ruby ${{ matrix.ruby }}
 
