@@ -76,7 +76,7 @@ Run `rails c`. ConsoleKit intercepts startup, prompts for a tenant, wires up the
 ```
 rails c
   │
-  ├─ 1. Welcome banner ───── "ConsoleKit v2.1.0  |  production"
+  ├─ 1. Welcome banner ───── "ConsoleKit v2.0.0  |  production"
   ├─ 2. Role preset ──────── CONSOLE_KIT_ROLE=support applies config overrides
   ├─ 3. ENV check ────────── CONSOLE_KIT_TENANT=acme skips the prompt
   ├─ 4. Tenant selection ─── fuzzy interactive picker, recent-tenant memory
