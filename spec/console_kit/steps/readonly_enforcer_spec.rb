@@ -31,10 +31,21 @@ RSpec.describe ConsoleKit::Steps::ReadonlyEnforcer do
   end
 
   context 'when readonly_mode is true' do
+    let(:ar_base) do
+      Class.new do
+        def self.save
+          :saved
+        end
+      end
+    end
+
     before do
       config.readonly_mode = true
-      stub_const('ActiveRecord::Base', Class.new)
+      stub_const('ActiveRecord::Base', ar_base)
+      ConsoleKit::ReadonlyMode.instance_variable_set(:@installed, false)
     end
+
+    after { ConsoleKit::ReadonlyMode.instance_variable_set(:@installed, false) }
 
     it 'returns success' do
       expect(step.call.success?).to be true
@@ -48,6 +59,12 @@ RSpec.describe ConsoleKit::Steps::ReadonlyEnforcer do
     it 'prints readonly banner' do
       step.call
       expect(ConsoleKit::Output).to have_received(:print_banner)
+    end
+
+    it 'blocks AR instance write methods after call' do
+      step.call
+      record = ar_base.new
+      expect { record.save }.to raise_error(ConsoleKit::ReadonlyViolation)
     end
   end
 

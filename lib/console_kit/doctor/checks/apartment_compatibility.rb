@@ -11,7 +11,7 @@ module ConsoleKit
 
         def call
           return pass('apartment_schema not configured') unless apartment_schema_used?
-          return pass('Apartment not loaded') unless defined?(Apartment)
+          return warn('Apartment gem not loaded but apartment_schema is configured') unless defined?(Apartment)
           return pass("Apartment #{apartment_version} compatible") if version_sufficient?
 
           error("Apartment gem >= #{MIN_VERSION} required; found #{apartment_version}")

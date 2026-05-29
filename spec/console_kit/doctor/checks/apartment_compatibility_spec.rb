@@ -32,9 +32,14 @@ RSpec.describe ConsoleKit::Doctor::Checks::ApartmentCompatibility do
       config.tenants = { acme: { constants: { apartment_schema: 'acme', shard: 's1', partner_code: 'acme' } } }
     end
 
-    it 'returns ok when Apartment not loaded (not installed is fine)' do
+    it 'returns warn when Apartment not loaded but schema is configured' do
       hide_const('Apartment')
-      expect(check.call.status).to eq(:ok)
+      expect(check.call.status).to eq(:warn)
+    end
+
+    it 'includes helpful message when Apartment not loaded' do
+      hide_const('Apartment')
+      expect(check.call.message).to include('not loaded')
     end
 
     it 'returns ok when loaded and version sufficient' do

@@ -12,6 +12,7 @@ module ConsoleKit
       def call
         return success unless should_activate?
 
+        ReadonlyMode.install!
         ReadonlyMode.activate!
         print_readonly_banner
         success
