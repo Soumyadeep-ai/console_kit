@@ -87,6 +87,10 @@ RSpec.describe ConsoleKit::Configuration do
       expect(config.acts_as_tenant_finder).to be_nil
     end
 
+    it 'defaults presets to empty hash' do
+      expect(config.presets).to eq({})
+    end
+
     it 'exposes hook_registry' do
       expect(config.hook_registry).to be_a(ConsoleKit::HookRegistry)
     end

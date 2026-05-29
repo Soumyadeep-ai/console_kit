@@ -31,12 +31,30 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
     end
   end
 
+  describe '#ck_switch' do
+    it 'is an alias for switch_tenant' do
+      allow(ConsoleKit).to receive(:switch_tenant!)
+      obj.ck_switch
+      expect(ConsoleKit).to have_received(:switch_tenant!)
+    end
+  end
+
   describe '#tenant_info' do
     it 'calls print on the status object' do
       status = instance_double(ConsoleKit::Status)
       allow(ConsoleKit).to receive(:status).and_return(status)
       allow(status).to receive(:print)
       obj.tenant_info
+      expect(status).to have_received(:print)
+    end
+  end
+
+  describe '#ck_status' do
+    it 'is an alias for tenant_info' do
+      status = instance_double(ConsoleKit::Status)
+      allow(ConsoleKit).to receive(:status).and_return(status)
+      allow(status).to receive(:print)
+      obj.ck_status
       expect(status).to have_received(:print)
     end
   end

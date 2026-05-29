@@ -7,9 +7,13 @@ module ConsoleKit
       ConsoleKit.switch_tenant!
     end
 
+    alias ck_switch switch_tenant
+
     def tenant_info
       ConsoleKit.status.print
     end
+
+    alias ck_status tenant_info
 
     def dashboard
       ConsoleKit::Connections::Dashboard.display

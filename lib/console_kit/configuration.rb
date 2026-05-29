@@ -37,7 +37,8 @@ module ConsoleKit
       audit_log: false,
       audit_log_path: '~/.console_kit_audit.log',
       acts_as_tenant_model: nil,
-      acts_as_tenant_finder: nil
+      acts_as_tenant_finder: nil,
+      presets: {}
     }.freeze
 
     DEFAULTS.each_key do |attr|

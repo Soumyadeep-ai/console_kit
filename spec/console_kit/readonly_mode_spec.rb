@@ -24,7 +24,12 @@ RSpec.describe ConsoleKit::ReadonlyMode do
 
   describe '.install!' do
     context 'when ActiveRecord::Base is not defined' do
-      before { hide_const('ActiveRecord::Base') }
+      before do
+        hide_const('ActiveRecord::Base')
+        described_class.instance_variable_set(:@installed, false)
+      end
+
+      after { described_class.instance_variable_set(:@installed, false) }
 
       it 'does not raise' do
         expect { described_class.install! }.not_to raise_error
