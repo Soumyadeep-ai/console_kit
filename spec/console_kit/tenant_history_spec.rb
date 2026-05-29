@@ -42,5 +42,20 @@ RSpec.describe ConsoleKit::TenantHistory do
       bad_history = described_class.new('/nonexistent/path/history', 5)
       expect { bad_history.record(:tenant_a) }.not_to raise_error
     end
+
+    it 'sanitizes newlines in tenant name to prevent history injection' do
+      history.record("acme\nevil")
+      expect(history.recent).to eq(['acme_evil'])
+    end
+
+    it 'does not create extra entries when tenant contains newline' do
+      history.record("acme\nevil")
+      expect(history.recent.length).to eq(1)
+    end
+
+    it 'sanitizes carriage return in tenant name' do
+      history.record("acme\revil")
+      expect(history.recent).to eq(['acme_evil'])
+    end
   end
 end

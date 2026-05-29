@@ -8,7 +8,9 @@ module ConsoleKit
         Connections::SqlConnectionHandler => :tenant_shard,
         Connections::MongoConnectionHandler => :tenant_mongo_db,
         Connections::RedisConnectionHandler => :tenant_redis_db,
-        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
+        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix,
+        Connections::ApartmentConnectionHandler => :tenant_apartment_schema,
+        Connections::ActsAsTenantConnectionHandler => :tenant_acts_as_tenant_id
       }.freeze
 
       attr_reader :ctx, :attributes

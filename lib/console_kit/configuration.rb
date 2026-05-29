@@ -22,14 +22,22 @@ module ConsoleKit
         tenant_shard: :shard,
         tenant_mongo_db: :mongo_db,
         tenant_redis_db: :redis_db,
-        tenant_elasticsearch_prefix: :elasticsearch_prefix
+        tenant_elasticsearch_prefix: :elasticsearch_prefix,
+        tenant_apartment_schema: :apartment_schema,
+        tenant_acts_as_tenant_id: :acts_as_tenant_id
       },
       use_rails_sharding: false,
       default_shard: :default,
       shard_role: :writing,
       recent_tenant_history_path: '~/.console_kit_history',
       recent_tenant_limit: 5,
-      benchmark: false
+      benchmark: false,
+      readonly_mode: false,
+      readonly_environments: [],
+      audit_log: false,
+      audit_log_path: '~/.console_kit_audit.log',
+      acts_as_tenant_model: nil,
+      acts_as_tenant_finder: nil
     }.freeze
 
     DEFAULTS.each_key do |attr|

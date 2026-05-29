@@ -96,6 +96,14 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  describe '.reset_configuration!' do
+    it 'deactivates readonly mode' do
+      ConsoleKit::ReadonlyMode.activate!
+      described_class.reset_configuration!
+      expect(ConsoleKit::ReadonlyMode.active?).to be false
+    end
+  end
+
   describe 'configuration sharing' do
     after { described_class.reset_configuration! }
 
@@ -256,6 +264,19 @@ RSpec.describe ConsoleKit do
     it 'sets pretty_output on configuration' do
       described_class.pretty_output = false
       expect(described_class.pretty_output).to be false
+    end
+  end
+
+  describe '.readonly?' do
+    after { ConsoleKit::ReadonlyMode.deactivate! }
+
+    it 'returns false when readonly mode is inactive' do
+      expect(described_class.readonly?).to be false
+    end
+
+    it 'returns true when readonly mode is active' do
+      ConsoleKit::ReadonlyMode.activate!
+      expect(described_class.readonly?).to be true
     end
   end
 

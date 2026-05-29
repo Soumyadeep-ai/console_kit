@@ -5,6 +5,7 @@ require 'active_support/core_ext/object/inclusion'
 require 'active_support/core_ext/string/inflections'
 
 require_relative 'console_kit/errors'
+require_relative 'console_kit/readonly_mode'
 require_relative 'console_kit/version'
 require_relative 'console_kit/fiber_storage'
 require_relative 'console_kit/context'
@@ -21,6 +22,7 @@ require_relative 'console_kit/setup'
 require_relative 'console_kit/prompt'
 require_relative 'console_kit/output'
 require_relative 'console_kit/tenant_history'
+require_relative 'console_kit/audit_logger'
 require_relative 'console_kit/prompt_builder'
 require_relative 'console_kit/connections/connection_manager'
 require_relative 'console_kit/connections/shard_resolver'
@@ -32,6 +34,8 @@ require_relative 'console_kit/connections/mongo_connection_handler'
 require_relative 'console_kit/connections/redis_connection_handler'
 require_relative 'console_kit/connections/elasticsearch_connection_handler'
 require_relative 'console_kit/connections/sql_connection_handler'
+require_relative 'console_kit/connections/apartment_connection_handler'
+require_relative 'console_kit/connections/acts_as_tenant_connection_handler'
 require_relative 'console_kit/connections/table_formatter'
 require_relative 'console_kit/connections/table_renderer'
 require_relative 'console_kit/connections/dashboard'
@@ -45,6 +49,8 @@ require_relative 'console_kit/steps/tenant_configurator'
 require_relative 'console_kit/steps/shard_connector'
 require_relative 'console_kit/steps/prompt_applier'
 require_relative 'console_kit/steps/after_hooks'
+require_relative 'console_kit/steps/readonly_enforcer'
+require_relative 'console_kit/steps/audit_log_writer'
 require_relative 'console_kit/console_helpers'
 # :nocov:
 require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
@@ -59,6 +65,10 @@ require_relative 'console_kit/doctor/checks/adapter_supported'
 require_relative 'console_kit/doctor/checks/sharding_compatibility'
 require_relative 'console_kit/doctor/checks/hook_callable_arity'
 require_relative 'console_kit/doctor/checks/history_path_writable'
+require_relative 'console_kit/doctor/checks/readonly_mode_compatibility'
+require_relative 'console_kit/doctor/checks/audit_log_path_writable'
+require_relative 'console_kit/doctor/checks/apartment_compatibility'
+require_relative 'console_kit/doctor/checks/acts_as_tenant_compatibility'
 require_relative 'console_kit/doctor/check_runner'
 require_relative 'console_kit/doctor/reporter'
 
@@ -76,7 +86,10 @@ module ConsoleKit
     def reset_configuration!
       @configuration = nil
       Context.reset!
+      ReadonlyMode.deactivate!
     end
+
+    def readonly? = ReadonlyMode.active?
 
     # Existing accessors (backward-compat)
     def pretty_output         = configuration.pretty_output

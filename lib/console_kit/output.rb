@@ -59,10 +59,18 @@ module ConsoleKit
         end
       end
 
+      def sanitize_display(str)
+        str.to_s
+           .gsub(/\e\[[0-9;]*[a-zA-Z]/, '')
+           .gsub(/\e\][^\a]*\a/, '')
+           .gsub(/[\x00-\x1F\x7F]/, '')
+      end
+
       def print_banner(lines:, style: :danger)
-        color = style == :danger ? "\e[31m" : "\e[33m"
-        width = lines.map(&:length).max + 4
-        render_banner_lines({ color:, width:, padding: '═' * width, lines: })
+        color      = style == :danger ? "\e[31m" : "\e[33m"
+        safe_lines = lines.map { |l| sanitize_display(l) }
+        width      = safe_lines.map(&:length).max + 4
+        render_banner_lines({ color:, width:, padding: '═' * width, lines: safe_lines })
       end
 
       def render_banner_lines(context)

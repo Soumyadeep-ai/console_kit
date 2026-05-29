@@ -39,9 +39,12 @@ module ConsoleKit
     end
 
     def tenant_label
-      tenant = Context.current.tenant
-      env = rails_or_env_var
-      tenant ? "[#{tenant}][#{env}]" : '[no-tenant]'
+      raw_tenant = Context.current.tenant
+      env        = Output.sanitize_display(rails_or_env_var)
+      return '[no-tenant]' unless raw_tenant
+
+      tenant = Output.sanitize_display(raw_tenant.to_s)
+      "[#{tenant}][#{env}]"
     end
 
     private

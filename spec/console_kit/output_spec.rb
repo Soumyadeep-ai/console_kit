@@ -139,6 +139,32 @@ RSpec.describe ConsoleKit::Output do
     end
   end
 
+  describe '.sanitize_display' do
+    it 'strips CSI ANSI escape sequences' do
+      expect(described_class.sanitize_display("\e[31mred\e[0m")).to eq('red')
+    end
+
+    it 'strips OSC terminal control sequences' do
+      expect(described_class.sanitize_display("\e]0;title\a")).to eq('')
+    end
+
+    it 'strips control characters including newline and carriage return' do
+      expect(described_class.sanitize_display("foo\r\nbar")).to eq('foobar')
+    end
+
+    it 'strips null bytes' do
+      expect(described_class.sanitize_display("foo\x00bar")).to eq('foobar')
+    end
+
+    it 'leaves normal text unchanged' do
+      expect(described_class.sanitize_display('acme-tenant_1')).to eq('acme-tenant_1')
+    end
+
+    it 'calls to_s on non-string input' do
+      expect(described_class.sanitize_display(:symbol_value)).to eq('symbol_value')
+    end
+  end
+
   describe '.print_banner' do
     it 'outputs bordered lines to stdout' do
       expect { described_class.print_banner(lines: ['LINE ONE'], style: :danger) }
@@ -148,6 +174,11 @@ RSpec.describe ConsoleKit::Output do
     it 'includes box border characters' do
       expect { described_class.print_banner(lines: ['X'], style: :warn) }
         .to output(/[╔╚║]/).to_stdout
+    end
+
+    it 'strips ANSI escapes from banner lines' do
+      expect { described_class.print_banner(lines: ["\e[31mDANGER\e[0m"], style: :danger) }
+        .to output(/DANGER/).to_stdout
     end
   end
 

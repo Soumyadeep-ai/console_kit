@@ -40,6 +40,7 @@ RSpec.configure do |config|
   config.after do
     ConsoleKit.reset_configuration!
     ConsoleKit::Context.reset! if defined?(ConsoleKit::Context)
+    ConsoleKit::ReadonlyMode.deactivate! if defined?(ConsoleKit::ReadonlyMode)
     Thread.current[:console_kit_silent] = nil
   end
 end

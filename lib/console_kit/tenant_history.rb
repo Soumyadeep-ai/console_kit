@@ -17,7 +17,8 @@ module ConsoleKit
     end
 
     def record(tenant)
-      entries = ([tenant.to_s] + recent).uniq.first(@limit)
+      sanitized = tenant.to_s.gsub(/[\r\n]/, '_')
+      entries   = ([sanitized] + recent).uniq.first(@limit)
       write_atomic("#{entries.join("\n")}\n")
     rescue Errno::EACCES, Errno::ENOENT
       nil

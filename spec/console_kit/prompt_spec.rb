@@ -30,6 +30,22 @@ RSpec.describe ConsoleKit::Prompt do
       prompt = described_class.new
       expect(prompt.tenant_label).to match(/\[tenant_b\]\[.+\]/)
     end
+
+    it 'strips ANSI escape sequences from tenant name' do
+      context_ansi = ConsoleKit::Context.new(tenant: "\e[31mhacked\e[0m")
+      allow(ConsoleKit::Context).to receive(:current).and_return(context_ansi)
+      prompt = described_class.new
+      expect(prompt.tenant_label).not_to include("\e")
+    end
+
+    it 'strips ANSI escape sequences from env' do # rubocop:disable RSpec/ExampleLength
+      rails_mock = double('Rails') # rubocop:disable RSpec/VerifiedDoubles
+      allow(rails_mock).to receive_messages(
+        respond_to?: true, env: double('env', to_s: "\e[31mprod\e[0m") # rubocop:disable RSpec/VerifiedDoubles
+      )
+      stub_const('Rails', rails_mock)
+      expect(described_class.new.tenant_label).not_to include("\e")
+    end
   end
 
   describe '.apply' do

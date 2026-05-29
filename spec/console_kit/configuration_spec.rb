@@ -55,6 +55,38 @@ RSpec.describe ConsoleKit::Configuration do
       expect(config.context_field_mapping).to include(partner_identifier: :partner_code)
     end
 
+    it 'includes tenant_apartment_schema in context_field_mapping' do
+      expect(config.context_field_mapping).to include(tenant_apartment_schema: :apartment_schema)
+    end
+
+    it 'includes tenant_acts_as_tenant_id in context_field_mapping' do
+      expect(config.context_field_mapping).to include(tenant_acts_as_tenant_id: :acts_as_tenant_id)
+    end
+
+    it 'defaults readonly_mode to false' do
+      expect(config.readonly_mode).to be false
+    end
+
+    it 'defaults readonly_environments to empty array' do
+      expect(config.readonly_environments).to eq([])
+    end
+
+    it 'defaults audit_log to false' do
+      expect(config.audit_log).to be false
+    end
+
+    it 'defaults audit_log_path to ~/.console_kit_audit.log' do
+      expect(config.audit_log_path).to eq('~/.console_kit_audit.log')
+    end
+
+    it 'defaults acts_as_tenant_model to nil' do
+      expect(config.acts_as_tenant_model).to be_nil
+    end
+
+    it 'defaults acts_as_tenant_finder to nil' do
+      expect(config.acts_as_tenant_finder).to be_nil
+    end
+
     it 'exposes hook_registry' do
       expect(config.hook_registry).to be_a(ConsoleKit::HookRegistry)
     end
