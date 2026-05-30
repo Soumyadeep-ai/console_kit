@@ -18,8 +18,11 @@ RSpec.describe ConsoleKit do
       expect(ConsoleKit::Setup).to respond_to(:setup)
     end
 
-    it 'calls setup without raising errors' do
-      expect { ConsoleKit::Setup.setup }.not_to raise_error
+    it 'returns a SwitchPipeline::Result' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'no tenants'))
+      result = ConsoleKit::Setup.setup
+      expect(result).to be_a(ConsoleKit::SwitchPipeline::Result)
     end
   end
 
@@ -28,7 +31,7 @@ RSpec.describe ConsoleKit do
       expect(ConsoleKit::Error).to be < StandardError
     end
 
-    it 'can raise ConsoleKit::Error' do
+    it 'can raise and rescue ConsoleKit::Error' do
       expect do
         raise ConsoleKit::Error, 'Something went wrong'
       end.to raise_error(ConsoleKit::Error, 'Something went wrong')
@@ -71,7 +74,7 @@ RSpec.describe ConsoleKit do
 
     it 'allows setting and getting pretty_output' do
       described_class.configure { |config| config.pretty_output = true }
-      expect(described_class.pretty_output).to be(true)
+      expect(described_class.pretty_output).to be true
     end
   end
 
@@ -85,7 +88,7 @@ RSpec.describe ConsoleKit do
     end
 
     it 'defaults to pretty_output = false' do
-      expect(described_class.pretty_output).to be(false)
+      expect(described_class.pretty_output).to be false
     end
 
     it 'defaults tenants to nil or empty' do
@@ -93,161 +96,223 @@ RSpec.describe ConsoleKit do
     end
   end
 
-  describe 'thread safety' do
-    it 'shares configuration across threads' do
-      described_class.tenants = { 'main' => {} }
-      Thread.new { described_class.tenants = { 'thread' => {} } }.join
-      expect(described_class.tenants).to eq({ 'thread' => {} })
-    end
-
-    it 'isolates current_tenant across threads' do
-      ConsoleKit::Setup.current_tenant = 'main'
-      Thread.new { ConsoleKit::Setup.current_tenant = 'thread' }.join
-      expect(ConsoleKit::Setup.current_tenant).to eq('main')
-    end
-  end
-
-  describe 'delegated tenant methods' do
-    describe '.current_tenant' do
-      before { allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('tenant1') }
-
-      it 'calls ConsoleKit::Setup.current_tenant' do
-        described_class.current_tenant
-        expect(ConsoleKit::Setup).to have_received(:current_tenant)
-      end
-
-      it 'returns the tenant from ConsoleKit::Setup.current_tenant' do
-        expect(described_class.current_tenant).to eq('tenant1')
-      end
-
-      it 'returns nil when ConsoleKit::Setup.current_tenant returns nil' do
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
-        expect(described_class.current_tenant).to be_nil
-      end
-
-      it 'returns the tenant on any calls' do
-        described_class.current_tenant # call once to simulate first call
-        expect(described_class.current_tenant).to eq('tenant1')
-      end
-    end
-
-    describe '.reset_current_tenant' do
-      before { allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true) }
-
-      it 'calls ConsoleKit::Setup.reset_current_tenant' do
-        described_class.reset_current_tenant
-        expect(ConsoleKit::Setup).to have_received(:reset_current_tenant)
-      end
-
-      it 'returns true when ConsoleKit::Setup.reset_current_tenant returns true' do
-        expect(described_class.reset_current_tenant).to be(true)
-      end
-
-      it 'returns false when ConsoleKit::Setup.reset_current_tenant returns false' do
-        allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(false)
-        expect(described_class.reset_current_tenant).to be(false)
-      end
-
-      it 'returns true on any calls' do
-        described_class.reset_current_tenant
-        expect(described_class.reset_current_tenant).to be(true)
-      end
-    end
-  end
-
   describe '.reset_configuration!' do
-    let(:tenant_configurator) do
-      result_store = {}
-      mod = Module.new
-      mod.define_singleton_method(:configuration_success=) { |v| result_store[:value] = v }
-      mod.define_singleton_method(:configuration_success) { result_store[:value] }
-      stub_const('ConsoleKit::TenantConfigurator', mod)
-      mod
-    end
-
-    it 'resets configuration success if TenantConfigurator is defined' do
-      tenant_configurator
+    it 'deactivates readonly mode' do
+      ConsoleKit::ReadonlyMode.activate!
       described_class.reset_configuration!
-      expect(ConsoleKit::TenantConfigurator.configuration_success).to be false
+      expect(ConsoleKit::ReadonlyMode.active?).to be false
     end
   end
 
-  describe 'pretty_output toggle methods' do
-    before do
+  describe 'configuration sharing' do
+    after { described_class.reset_configuration! }
+
+    it 'shares configuration across threads (module-level config)' do
+      described_class.tenants = ['main']
+      thread = Thread.new { expect(described_class.tenants).to eq(['main']) }
+      thread.join
+    end
+
+    it 'retains the configured tenants after thread completes' do
+      described_class.tenants = ['main']
+      Thread.new { nil }.join
+      expect(described_class.tenants).to eq(['main'])
+    end
+  end
+
+  describe '.current_tenant' do
+    after { ConsoleKit::Context.reset! }
+
+    it 'reads from Context' do
+      ConsoleKit::Context.push(:my_tenant)
+      expect(described_class.current_tenant).to eq(:my_tenant)
+    end
+
+    it 'returns nil if no tenant is set' do
+      ConsoleKit::Context.reset!
+      expect(described_class.current_tenant).to be_nil
+    end
+
+    it 'reflects the latest pushed tenant' do
+      ConsoleKit::Context.push(:tenant1)
+      expect(described_class.current_tenant).to eq(:tenant1)
+    end
+  end
+
+  describe '.reset_current_tenant' do
+    it 'delegates to ConsoleKit::Setup.reset_current_tenant' do
+      allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true)
+      described_class.reset_current_tenant
+      expect(ConsoleKit::Setup).to have_received(:reset_current_tenant)
+    end
+
+    it 'returns the value from ConsoleKit::Setup.reset_current_tenant' do
+      allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(false)
+      expect(described_class.reset_current_tenant).to be false
+    end
+
+    it 'returns true when Setup succeeds' do
+      allow(ConsoleKit::Setup).to receive(:reset_current_tenant).and_return(true)
+      expect(described_class.reset_current_tenant).to be true
+    end
+  end
+
+  describe '.enable_pretty_output' do
+    before { described_class.configure { |c| c.pretty_output = false } }
+
+    it 'enables pretty_output' do
+      described_class.enable_pretty_output
+      expect(described_class.pretty_output).to be true
+    end
+
+    it 'keeps pretty_output true if already enabled' do
+      described_class.configure { |c| c.pretty_output = true }
+      described_class.enable_pretty_output
+      expect(described_class.pretty_output).to be true
+    end
+  end
+
+  describe '.disable_pretty_output' do
+    before { described_class.configure { |c| c.pretty_output = true } }
+
+    it 'disables pretty_output' do
+      described_class.disable_pretty_output
+      expect(described_class.pretty_output).to be false
+    end
+
+    it 'keeps pretty_output false if already disabled' do
       described_class.configure { |c| c.pretty_output = false }
-    end
-
-    it 'starts with pretty_output default as false' do
-      expect(described_class.pretty_output).to be(false)
-    end
-
-    it 'enables pretty_output when it is false' do
-      described_class.enable_pretty_output
-      expect(described_class.pretty_output).to be true
-    end
-
-    it 'keeps pretty_output enabled when already true' do
-      described_class.configure { |c| c.pretty_output = true }
-      described_class.enable_pretty_output
-      expect(described_class.pretty_output).to be true
-    end
-
-    it 'disables pretty_output when it is true' do
-      described_class.configure { |c| c.pretty_output = true }
       described_class.disable_pretty_output
       expect(described_class.pretty_output).to be false
     end
 
-    it 'keeps pretty_output disabled when already false' do
+    it 'does not affect tenants' do
+      described_class.configure { |c| c.tenants = %w[tenant1 tenant2] }
+      described_class.disable_pretty_output
+      expect(described_class.tenants).to eq(%w[tenant1 tenant2])
+    end
+
+    it 'does not affect context_class' do
+      described_class.configure { |c| c.context_class = Class.new }
+      described_class.disable_pretty_output
+      expect(described_class.context_class).not_to be_nil
+    end
+  end
+
+  describe 'pretty_output toggling' do
+    it 'goes from false to true after enable' do
+      described_class.configure { |c| c.pretty_output = false }
+      described_class.enable_pretty_output
+      expect(described_class.pretty_output).to be true
+    end
+
+    it 'goes from true to false after disable' do
+      described_class.configure { |c| c.pretty_output = true }
       described_class.disable_pretty_output
       expect(described_class.pretty_output).to be false
     end
+  end
 
-    context 'when toggling pretty_output' do
-      it 'toggles from false to true' do
-        described_class.configure { |c| c.pretty_output = false }
-        described_class.enable_pretty_output
-        expect(described_class.pretty_output).to be true
+  describe '.with' do
+    before do
+      described_class.configure do |c|
+        c.tenants = { tenant_a: { constants: { shard: 's', partner_code: 'p' } } }
+        c.context_class = 'Object'
       end
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+    end
 
-      it 'toggles from true to false' do
-        described_class.configure { |c| c.pretty_output = true }
-        described_class.disable_pretty_output
-        expect(described_class.pretty_output).to be false
+    after { ConsoleKit::Context.reset! }
+
+    it 'yields block' do
+      result = nil
+      described_class.with(:tenant_a) { result = :done }
+      expect(result).to eq(:done)
+    end
+
+    it 'restores tenant after block' do
+      ConsoleKit::Context.push(:tenant_b)
+      described_class.with(:tenant_a) { nil }
+      expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
+    end
+  end
+
+  describe '.status' do
+    it 'returns a Status instance' do
+      expect(described_class.status).to be_a(ConsoleKit::Status)
+    end
+  end
+
+  describe '.current_tenant (shim)' do
+    after { ConsoleKit::Context.reset! }
+
+    it 'reads from Context' do
+      ConsoleKit::Context.push(:tenant_a)
+      expect(described_class.current_tenant).to eq(:tenant_a)
+    end
+  end
+
+  describe '.show_dashboard=' do
+    it 'sets show_dashboard on configuration' do
+      described_class.show_dashboard = true
+      expect(described_class.show_dashboard).to be true
+    end
+  end
+
+  describe '.pretty_output=' do
+    it 'sets pretty_output on configuration' do
+      described_class.pretty_output = false
+      expect(described_class.pretty_output).to be false
+    end
+  end
+
+  describe '.readonly?' do
+    after { ConsoleKit::ReadonlyMode.deactivate! }
+
+    it 'returns false when readonly mode is inactive' do
+      expect(described_class.readonly?).to be false
+    end
+
+    it 'returns true when readonly mode is active' do
+      ConsoleKit::ReadonlyMode.activate!
+      expect(described_class.readonly?).to be true
+    end
+  end
+
+  describe '.switch_tenant!' do
+    before do
+      described_class.configure do |c|
+        c.tenants = { tenant_a: { constants: { shard: 's', partner_code: 'p' } } }
+        c.context_class = 'Object'
       end
     end
 
-    context 'when preserving configuration on toggle' do
-      let(:dummy_class) { Class.new }
+    after { ConsoleKit::Context.reset! }
 
-      before do
-        described_class.configure do |c|
-          c.tenants = %w[tenant1 tenant2]
-          c.context_class = dummy_class
-        end
-      end
+    it 'returns tenant key on success' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      expect(described_class.switch_tenant!).to eq(:tenant_a)
+    end
 
-      it 'preserves tenants when enabling pretty_output' do
-        described_class.enable_pretty_output
-        expect(described_class.tenants).to eq(%w[tenant1 tenant2])
-      end
+    it 'returns nil on failure' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, tenant: nil, error: 'aborted'))
+      expect(described_class.switch_tenant!).to be_nil
+    end
 
-      it 'preserves context_class when enabling pretty_output' do
-        described_class.enable_pretty_output
-        expect(described_class.context_class).to eq(dummy_class)
-      end
+    it 'accepts a tenant_key argument without raising' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      expect { described_class.switch_tenant!(:tenant_a) }.not_to raise_error
+    end
 
-      it 'preserves tenants when disabling pretty_output' do
-        described_class.configure { |c| c.pretty_output = true }
-        described_class.disable_pretty_output
-        expect(described_class.tenants).to eq(%w[tenant1 tenant2])
-      end
-
-      it 'preserves context_class when disabling pretty_output' do
-        described_class.configure { |c| c.pretty_output = true }
-        described_class.disable_pretty_output
-        expect(described_class.context_class).to eq(dummy_class)
-      end
+    it 'passes tenant_key to the pipeline' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      described_class.switch_tenant!(:tenant_a)
+      expect(ConsoleKit::SwitchPipeline).to have_received(:run).with(hash_including(tenant_key: :tenant_a))
     end
   end
 end

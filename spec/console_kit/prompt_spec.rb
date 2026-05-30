@@ -3,123 +3,229 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit::Prompt do
-  before do
-    allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('acme')
+  describe '#tenant_label' do
+    let(:context) { ConsoleKit::Context.new(tenant: :tenant_a) }
+
+    before do
+      allow(ConsoleKit::Context).to receive(:current).and_return(context)
+    end
+
+    it 'returns tenant with env label' do
+      stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'test'))
+      prompt = described_class.new
+      expect(prompt.tenant_label).to match(/\[tenant_a\]\[.+\]/)
+    end
+
+    it 'returns no-tenant when tenant is nil' do
+      context_without_tenant = ConsoleKit::Context.new(tenant: nil)
+      allow(ConsoleKit::Context).to receive(:current).and_return(context_without_tenant)
+      prompt = described_class.new
+      expect(prompt.tenant_label).to eq('[no-tenant]')
+    end
+
+    it 'includes tenant and env in label format' do
+      context_env = ConsoleKit::Context.new(tenant: :tenant_b)
+      allow(ConsoleKit::Context).to receive(:current).and_return(context_env)
+      stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'staging'))
+      prompt = described_class.new
+      expect(prompt.tenant_label).to match(/\[tenant_b\]\[.+\]/)
+    end
+
+    it 'strips ANSI escape sequences from tenant name' do
+      context_ansi = ConsoleKit::Context.new(tenant: "\e[31mhacked\e[0m")
+      allow(ConsoleKit::Context).to receive(:current).and_return(context_ansi)
+      prompt = described_class.new
+      expect(prompt.tenant_label).not_to include("\e")
+    end
+
+    it 'strips ANSI escape sequences from env' do # rubocop:disable RSpec/ExampleLength
+      rails_mock = double('Rails') # rubocop:disable RSpec/VerifiedDoubles
+      allow(rails_mock).to receive_messages(
+        respond_to?: true, env: double('env', to_s: "\e[31mprod\e[0m") # rubocop:disable RSpec/VerifiedDoubles
+      )
+      stub_const('Rails', rails_mock)
+      expect(described_class.new.tenant_label).not_to include("\e")
+    end
   end
 
   describe '.apply' do
+    let(:context) { ConsoleKit::Context.new(tenant: :tenant_a) }
+    let(:irb_conf) { {} }
+    let(:pry_config) { instance_double(Object, prompt: nil) }
+
+    before do
+      allow(ConsoleKit::Context).to receive(:current).and_return(context)
+      stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'test'))
+    end
+
+    it 'returns early when neither IRB nor Pry are defined' do
+      hide_const('IRB') if defined?(IRB)
+      hide_const('Pry') if defined?(Pry)
+      expect(described_class.apply).to be_nil
+    end
+
     context 'when IRB is defined' do
-      let(:irb_conf) { { PROMPT: {}, PROMPT_MODE: nil } }
-
       before do
-        irb_module = Module.new do
-          def self.conf; end
-        end
-        stub_const('IRB', irb_module)
-        allow(IRB).to receive(:conf).and_return(irb_conf)
+        hide_const('Pry') if defined?(Pry)
+        stub_const('IRB', double('IRB', conf: irb_conf)) # rubocop:disable RSpec/VerifiedDoubles
       end
 
-      it 'sets the IRB prompt' do
-        described_class.apply
-        expect(irb_conf[:PROMPT][:CONSOLE_KIT]).to be_a(Hash)
+      it 'does not raise' do
+        expect { described_class.apply }.not_to raise_error
       end
 
-      it 'includes the tenant name in the prompt' do
-        described_class.apply
-        expect(irb_conf[:PROMPT][:CONSOLE_KIT][:PROMPT_I]).to include('[acme]')
-      end
-
-      it 'sets CONSOLE_KIT as the prompt mode' do
+      it 'sets PROMPT_MODE to CONSOLE_KIT' do
         described_class.apply
         expect(irb_conf[:PROMPT_MODE]).to eq(:CONSOLE_KIT)
       end
     end
 
-    context 'when IRB is defined with nil PROMPT hash' do
-      let(:irb_conf) { { PROMPT: nil, PROMPT_MODE: nil } }
+    context 'when Pry is defined (legacy proc API)' do
+      let(:captured_prompt) { [] }
+      let(:pry_cfg) { double('pry_config') } # rubocop:disable RSpec/VerifiedDoubles
 
       before do
-        irb_module = Module.new do
-          def self.conf; end
-        end
-        stub_const('IRB', irb_module)
-        allow(IRB).to receive(:conf).and_return(irb_conf)
+        hide_const('IRB') if defined?(IRB)
+        allow(pry_cfg).to receive(:prompt=) { |p| captured_prompt << p }
+        stub_const('Pry', double('Pry', config: pry_cfg)) # rubocop:disable RSpec/VerifiedDoubles
       end
 
-      it 'initializes PROMPT hash and sets the prompt' do
+      it 'configures Pry prompt' do
         described_class.apply
-        expect(irb_conf[:PROMPT][:CONSOLE_KIT]).to be_a(Hash)
+        expect(captured_prompt).not_to be_empty
+      end
+
+      it 'prompt proc includes >' do
+        described_class.apply
+        result = captured_prompt.first&.call(nil, nil, nil)
+        expect(result).to include('>')
       end
     end
 
-    context 'when Pry is defined' do
-      let(:pry_config) { Struct.new(:prompt).new }
+    context 'when Pry::Prompt API is available' do
+      let(:pry_cfg) { double('pry_config') } # rubocop:disable RSpec/VerifiedDoubles
+      let(:captured_procs) { [] }
+      let(:prompt_instance) { double('prompt_instance') } # rubocop:disable RSpec/VerifiedDoubles
+      let(:pry_prompt_class) { double('Pry::Prompt class') } # rubocop:disable RSpec/VerifiedDoubles
 
       before do
-        pry_prompt_class = Class.new do
-          attr_reader :name, :description, :procs
-
-          def initialize(name, description, procs)
-            @name = name
-            @description = description
-            @procs = procs
-          end
+        hide_const('IRB') if defined?(IRB)
+        allow(pry_prompt_class).to receive(:new) do |_name, _desc, procs|
+          captured_procs.concat(procs)
+          prompt_instance
         end
-
-        pry_class = Class.new do
-          def self.config; end
-        end
-
-        stub_const('Pry', pry_class)
-        stub_const('Pry::Prompt', pry_prompt_class)
-        allow(Pry).to receive(:config).and_return(pry_config)
+        allow(pry_cfg).to receive(:prompt=)
+        pry_module = Module.new
+        pry_module.const_set(:Prompt, pry_prompt_class)
+        allow(pry_module).to receive(:config).and_return(pry_cfg)
+        stub_const('Pry', pry_module)
       end
 
-      it 'sets the Pry prompt' do
+      it 'sets prompt= with a Pry::Prompt instance' do
         described_class.apply
-        expect(pry_config.prompt).to be_a(Pry::Prompt)
+        expect(pry_cfg).to have_received(:prompt=).with(prompt_instance)
       end
 
-      it 'includes the tenant name in the prompt procs' do
+      it 'secondary prompt proc includes *' do
         described_class.apply
-        prompt_text = pry_config.prompt.procs[0].call('main', 0, nil)
-        expect(prompt_text).to include('[acme]')
+        expect(captured_procs.last&.call).to include('*')
       end
     end
 
-    context 'when Pry is defined but Pry::Prompt does not support .new' do
-      let(:pry_config) { Struct.new(:prompt).new }
+    context 'when IRB is defined with an active CurrentContext' do
+      let(:irb_context) { double('IRB::Context') } # rubocop:disable RSpec/VerifiedDoubles
 
       before do
-        pry_class = Class.new do
-          def self.config; end
-        end
-        stub_const('Pry', pry_class)
-        # Do NOT define Pry::Prompt — simulates old Pry
-        allow(Pry).to receive(:config).and_return(pry_config)
+        hide_const('Pry') if defined?(Pry)
+        allow(irb_context).to receive(:prompt_i=)
+        allow(irb_context).to receive(:prompt_n=)
+        allow(irb_context).to receive(:prompt_s=)
+        allow(irb_context).to receive(:prompt_c=)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: irb_context)) # rubocop:disable RSpec/VerifiedDoubles
       end
 
-      it 'sets the Pry prompt as an array' do
+      it 'updates prompt strings on the running context' do
         described_class.apply
-        expect(pry_config.prompt).to be_an(Array).and have_attributes(length: 2)
-      end
-
-      it 'uses procs for the prompt entries' do
-        described_class.apply
-        expect(pry_config.prompt.first).to be_a(Proc)
-      end
-
-      it 'includes the tenant name in the fallback prompt' do
-        described_class.apply
-        prompt_text = pry_config.prompt.first.call('main', 0, nil)
-        expect(prompt_text).to include('[acme]')
+        expect(irb_context).to have_received(:prompt_i=).with(a_string_including('['))
       end
     end
 
-    context 'when neither IRB nor Pry is defined' do
-      it 'does not raise an error' do
+    context 'when IRB is defined, CurrentContext is nil, MAIN_CONTEXT present' do
+      let(:irb_context) { double('IRB::Context') } # rubocop:disable RSpec/VerifiedDoubles
+
+      before do
+        hide_const('Pry') if defined?(Pry)
+        irb_conf[:MAIN_CONTEXT] = irb_context
+        allow(irb_context).to receive(:prompt_i=)
+        allow(irb_context).to receive(:prompt_n=)
+        allow(irb_context).to receive(:prompt_s=)
+        allow(irb_context).to receive(:prompt_c=)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: nil)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'falls back to MAIN_CONTEXT for prompt refresh' do
+        described_class.apply
+        expect(irb_context).to have_received(:prompt_i=)
+      end
+    end
+
+    context 'when IRB is defined but no active context anywhere' do
+      before do
+        hide_const('Pry') if defined?(Pry)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: nil)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'does not raise' do
         expect { described_class.apply }.not_to raise_error
       end
+    end
+
+    context 'when both IRB and Pry are defined' do
+      let(:pry_cfg) { double('pry_config') } # rubocop:disable RSpec/VerifiedDoubles
+
+      before do
+        stub_const('IRB', double('IRB', conf: irb_conf)) # rubocop:disable RSpec/VerifiedDoubles
+        allow(pry_cfg).to receive(:prompt=)
+        stub_const('Pry', double('Pry', config: pry_cfg)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'sets IRB PROMPT_MODE' do
+        described_class.apply
+        expect(irb_conf[:PROMPT_MODE]).to eq(:CONSOLE_KIT)
+      end
+
+      it 'configures Pry prompt' do
+        described_class.apply
+        expect(pry_cfg).to have_received(:prompt=)
+      end
+    end
+  end
+
+  describe 'rails_or_env_var' do
+    let(:context) { ConsoleKit::Context.new(tenant: :t) }
+
+    before { allow(ConsoleKit::Context).to receive(:current).and_return(context) }
+
+    it 'returns Rails.env when Rails responds to :env' do
+      rails_mock = double('Rails', env: double('env', to_s: 'production')) # rubocop:disable RSpec/VerifiedDoubles
+      stub_const('Rails', rails_mock)
+      prompt = described_class.new
+      result = prompt.send(:rails_or_env_var)
+      expect(result).to eq('production')
+    end
+
+    it 'returns RAILS_ENV from ENV when Rails not defined' do
+      hide_const('Rails') if defined?(Rails)
+      stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'staging'))
+      prompt = described_class.new
+      expect(prompt.send(:rails_or_env_var)).to eq('staging')
+    end
+
+    it 'returns unknown when Rails absent and no RAILS_ENV' do
+      hide_const('Rails') if defined?(Rails)
+      stub_const('ENV', ENV.to_h.except('RAILS_ENV'))
+      prompt = described_class.new
+      expect(prompt.send(:rails_or_env_var)).to eq('unknown')
     end
   end
 end

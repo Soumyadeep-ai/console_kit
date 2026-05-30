@@ -1,176 +1,132 @@
+# spec/integration/full_console_flow_spec.rb
 # frozen_string_literal: true
 
 require 'spec_helper'
 
-# Helper module for FullConsoleFlow integration tests
-module FullConsoleFlow
-end
-
-RSpec.describe FullConsoleFlow do
-  include IntegrationTestHelper
-
+RSpec.describe 'Full console flow', type: :integration do
   let(:context_class) do
     Class.new do
       class << self
-        attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
-                      :tenant_elasticsearch_prefix, :partner_identifier
+        attr_accessor :partner_code, :shard
       end
     end
   end
 
-  let(:tenants) do
-    {
-      'acme' => {
-        constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME',
-                     redis_db: 2, elasticsearch_prefix: 'acme_es' }
-      },
-      'globex' => {
-        constants: { shard: 'shard_globex', mongo_db: 'globex_db', partner_code: 'GBX',
-                     redis_db: 3, elasticsearch_prefix: 'globex_es' }
-      }
-    }
+  let(:full_pipeline_steps) do
+    [
+      ConsoleKit::Steps::EnvResolver,
+      ConsoleKit::Steps::SafeguardCheck,
+      ConsoleKit::Steps::TenantSelector,
+      ConsoleKit::Steps::BeforeHooks,
+      ConsoleKit::Steps::TenantConfigurator,
+      ConsoleKit::Steps::ShardConnector,
+      ConsoleKit::Steps::PromptApplier,
+      ConsoleKit::Steps::AfterHooks
+    ]
   end
 
   before do
-    ConsoleKit.configure do |config|
-      config.tenants = tenants
-      config.context_class = context_class
-      config.pretty_output = false
-      config.show_dashboard = true
+    stub_const('IntegrationContext', context_class)
+    ConsoleKit.configure do |c|
+      c.tenants = {
+        tenant_a: { constants: { partner_code: 'pa', shard: 'shard_01' } },
+        tenant_b: { constants: { partner_code: 'pb', shard: 'shard_02' } }
+      }
+      c.context_class = 'IntegrationContext'
+      c.context_field_mapping = { partner_code: :partner_code, shard: :shard }
+      c.pipeline_steps = full_pipeline_steps
     end
-
-    # Reset thread local state
-    ConsoleKit::Setup.current_tenant = nil
-    Thread.current[:console_kit_elasticsearch_prefix] = nil
-
-    # Mock all external dependencies
-    allow(ApplicationRecord).to receive(:establish_connection)
-    allow(ApplicationRecord).to receive_messages(connection_pool: double(disconnect!: true, size: 5),
-                                                 connection: double(
-                                                   adapter_name: 'PostgreSQL', execute: true, select_value: '14.0'
-                                                 ))
-
-    allow(Mongoid).to receive(:override_database)
-    mongo_db = instance_double(Mongoid::Database, name: 'acme_db', command: [{ 'version' => '6.0' }])
-    mongo_client = instance_double(Mongoid::Client)
-    allow(mongo_client).to receive(:use).with(any_args).and_return(mongo_client)
-    allow(mongo_client).to receive(:database).and_return(mongo_db)
-
-    allow(Mongoid).to receive(:default_client).and_return(mongo_client)
-
-    allow(Redis).to receive_messages(
-      respond_to?: true,
-      current: instance_double(Redis, select: true, ping: 'PONG',
-                                      info: { 'redis_version' => '7.0', 'used_memory_human' => '1MB' })
-    )
-
-    allow(Elasticsearch::Model).to receive(:index_name_prefix=)
-    allow(Elasticsearch::Model).to receive_messages(
-      respond_to?: true,
-      client: double(
-        ping: true,
-        cluster: double(health: { 'cluster_name' => 'test', 'status' => 'green' })
-      )
-    )
-
-    # Mock user input for TenantSelector
-    allow($stdin).to receive_messages(tty?: true, gets: '1')
+    allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([])
+    allow(ConsoleKit::Output).to receive(:print_success)
+    allow(ConsoleKit::Output).to receive(:print_info)
+    allow(ConsoleKit::Output).to receive(:print_warning)
+    allow(ConsoleKit::Output).to receive(:print_banner)
   end
 
-  describe 'Setup' do
-    before { ConsoleKit::Setup.setup }
+  describe 'ENV override skips selector' do
+    after { ENV.delete('CONSOLE_KIT_TENANT') }
 
-    it 'sets current_tenant to acme' do
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
-    end
-
-    it 'sets partner_identifier' do
-      expect(context_class.partner_identifier).to eq('ACME')
-    end
-
-    it 'sets tenant_shard' do
-      expect(context_class.tenant_shard).to eq('shard_acme')
+    it 'sets tenant from ENV' do
+      ENV['CONSOLE_KIT_TENANT'] = 'tenant_a'
+      ConsoleKit::SwitchPipeline.run(config: ConsoleKit.configuration)
+      expect(ConsoleKit.current_tenant).to eq(:tenant_a)
     end
   end
 
-  describe 'Switching' do
-    before do
-      ConsoleKit::Setup.setup
-      allow($stdin).to receive(:gets).and_return('2')
-      ConsoleKit::Setup.reset_current_tenant
+  describe 'ConsoleKit.with block switching' do
+    it 'sets tenant inside block' do
+      observed = nil
+      ConsoleKit.with(:tenant_b) { observed = ConsoleKit.current_tenant }
+      expect(observed).to eq(:tenant_b)
     end
 
-    it 'sets current_tenant to globex' do
-      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+    it 'yields control to the block' do
+      yielded = false
+      ConsoleKit.with(:tenant_b) { yielded = true }
+      expect(yielded).to be true
     end
 
-    it 'sets partner_identifier' do
-      expect(context_class.partner_identifier).to eq('GBX')
+    it 're-raises exceptions from the block' do
+      expect { ConsoleKit.with(:tenant_b) { raise 'oops' } }.to raise_error('oops')
     end
 
-    it 'sets tenant_shard' do
-      expect(context_class.tenant_shard).to eq('shard_globex')
+    it 'restores tenant after block completes' do
+      ConsoleKit::Context.push(:tenant_a)
+      ConsoleKit.with(:tenant_b) { nil }
+      expect(ConsoleKit.current_tenant).to eq(:tenant_a)
     end
 
-    context 'when switching to the same tenant again' do
-      let(:idempotent_output) do
-        allow($stdin).to receive(:gets).and_return('2') # select globex again
-        capture_all_output { ConsoleKit::Setup.reset_current_tenant }
-      end
+    it 'restores tenant after exception in block' do
+      ConsoleKit::Context.push(:tenant_a)
+      ConsoleKit.with(:tenant_b) { raise 'oops' } rescue nil # rubocop:disable Style/RescueModifier
+      expect(ConsoleKit.current_tenant).to eq(:tenant_a)
+    end
 
-      it 'prints an already-using message' do
-        expect(idempotent_output).to include('Already using tenant: globex')
-      end
-
-      it 'keeps current_tenant as globex' do
-        idempotent_output
-        expect(ConsoleKit::Setup.current_tenant).to eq('globex')
-      end
+    it 'applies the requested tenant constants inside the block' do
+      observed = nil
+      ConsoleKit.with(:tenant_b) { observed = context_class.partner_code }
+      expect(observed).to eq('pb')
     end
   end
 
-  it 'verifies helper output' do
-    output = capture_all_output { Object.new.extend(ConsoleKit::ConsoleHelpers).tenant_info }
-    expect(output).to include('No tenant is currently configured.')
+  describe 'before_switch hook fires' do
+    it 'calls hook with tenant key' do
+      received = nil
+      ConsoleKit.configuration.before_switch { |t| received = t }
+      ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_a, scoped: true, config: ConsoleKit.configuration)
+      expect(received).to eq(:tenant_a)
+    end
   end
 
-  describe 'Edge cases' do
-    it 'handles "none" selection by setting current_tenant to nil' do
-      allow($stdin).to receive(:gets).and_return('0')
-      ConsoleKit::Setup.setup
-      expect(ConsoleKit::Setup.current_tenant).to be_nil
+  describe 'before_switch hook with on_error :abort' do
+    it 'aborts switch when hook raises' do
+      ConsoleKit.configuration.before_switch(on_error: :abort) { raise 'veto' }
+      result = ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_a, scoped: true, config: ConsoleKit.configuration)
+      expect(result.failure?).to be true
+    end
+  end
+
+  describe 'ConsoleKit.status' do
+    it 'returns configured true after successful switch' do
+      ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_a, scoped: true, config: ConsoleKit.configuration)
+      expect(ConsoleKit.status.configured).to be true
     end
 
-    it 'handles "none" selection by printing a message' do
-      allow($stdin).to receive(:gets).and_return('0')
-      output = capture_all_output { ConsoleKit::Setup.setup }
-      expect(output).to include('No tenant selected')
+    it 'returns correct tenant after successful switch' do
+      ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_a, scoped: true, config: ConsoleKit.configuration)
+      expect(ConsoleKit.status.tenant).to eq(:tenant_a)
+    end
+  end
+
+  describe 'end-to-end tenant context application' do
+    it 'applies tenant constants to the configured context class' do
+      ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_a, scoped: true, config: ConsoleKit.configuration)
+      expect(context_class.partner_code).to eq('pa')
     end
 
-    it 'handles "none" selection by not setting context' do
-      allow($stdin).to receive(:gets).and_return('0')
-      ConsoleKit::Setup.setup
-      expect(context_class.partner_identifier).to be_nil
-    end
-
-    it 'handles abort/exit correctly' do
-      allow($stdin).to receive(:gets).and_return('exit')
-      allow(Kernel).to receive(:exit)
-      ConsoleKit::Setup.setup
-      expect(Kernel).to have_received(:exit)
-    end
-
-    it 'handles TenantSelector returning nil' do
-      allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-      # Setup will retry or fail if select returns nil
-      # We need to ensure it doesn't crash
-      expect { ConsoleKit::Setup.setup }.not_to raise_error
-    end
-
-    it 'logs error if configuration is invalid during setup' do
-      ConsoleKit.configuration.tenants = nil
-      output = capture_all_output { ConsoleKit::Setup.setup }
-      expect(output).to include('Error setting up tenant').and include('tenants` is not configured')
+    it 'applies shard constant to the configured context class' do
+      ConsoleKit::SwitchPipeline.run(tenant_key: :tenant_b, scoped: true, config: ConsoleKit.configuration)
+      expect(context_class.shard).to eq('shard_02')
     end
   end
 end

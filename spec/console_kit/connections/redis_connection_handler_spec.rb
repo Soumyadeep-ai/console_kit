@@ -168,4 +168,56 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       expect(bare_handler.send(:context_attribute, :tenant_redis_db)).to be_nil
     end
   end
+
+  describe '.warn_no_auto_select' do
+    it 'prints a warning about auto-select not supported' do
+      allow(ConsoleKit::Output).to receive(:print_warning)
+      described_class.warn_no_auto_select(3)
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/auto-select not supported/)
+    end
+  end
+
+  describe '#connect when Redis.current returns nil and RedisClient is defined' do
+    let(:context) { instance_double(DummyContext, tenant_redis_db: 3) }
+
+    before do
+      allow(Redis).to receive(:current).and_return(nil)
+      stub_const('RedisClient', Class.new)
+      allow(ConsoleKit::Output).to receive(:print_warning)
+    end
+
+    it 'calls warn_no_auto_select' do
+      allow(described_class).to receive(:warn_no_auto_select)
+      handler.connect
+      expect(described_class).to have_received(:warn_no_auto_select).with(3)
+    end
+  end
+
+  describe '#connect when Redis.current returns nil and db_index is DEFAULT_REDIS_DB' do
+    let(:context) { instance_double(DummyContext, tenant_redis_db: nil) }
+
+    before do
+      allow(Redis).to receive(:current).and_return(nil)
+      stub_const('RedisClient', Class.new)
+      allow(ConsoleKit::Output).to receive(:print_warning)
+    end
+
+    it 'does not call warn_no_auto_select (default db)' do
+      allow(described_class).to receive(:warn_no_auto_select)
+      handler.connect
+      expect(described_class).not_to have_received(:warn_no_auto_select)
+    end
+  end
+
+  describe '#switch_message' do
+    it 'returns switching message for non-nil db_index' do
+      msg = handler.send(:switch_message, 0)
+      expect(msg).to include('Switching to Redis DB: 0')
+    end
+
+    it 'returns reset message for nil db_index' do
+      msg = handler.send(:switch_message, nil)
+      expect(msg).to include('Resetting Redis connection to default')
+    end
+  end
 end

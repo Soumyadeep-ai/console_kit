@@ -44,13 +44,17 @@ module ConsoleKit
 
       def perform_diagnostics
         client = Elasticsearch::Model.client
-        latency = measure_latency do
+        latency = measure_ping_latency(client)
+        health = client.cluster.health
+        build_elasticsearch_diagnostics(health['cluster_name'], health['status'], latency)
+      end
+
+      def measure_ping_latency(client)
+        measure_latency do
           client.ping
         rescue StandardError
           nil
         end
-        health = client.cluster.health
-        build_elasticsearch_diagnostics(health['cluster_name'], health['status'], latency)
       end
 
       def build_elasticsearch_diagnostics(cluster, status, latency)

@@ -5,95 +5,87 @@ require_relative 'output'
 module ConsoleKit
   # For tenant selection
   module TenantSelector
-    RETRY_LIMIT = 3
-    DEFAULT_SELECTION = '1'
+    MAX_ATTEMPTS = 3
+    private_constant :MAX_ATTEMPTS
 
     class << self
-      def select
-        RETRY_LIMIT.times do
-          result = attempt_selection
+      def select(tenants = nil, keys = nil)
+        config = ConsoleKit.configuration
+        tenants ||= config.tenants
+        keys ||= (tenants == :dynamic ? [] : config.tenant_resolver_instance.all_keys)
+        MAX_ATTEMPTS.times do
+          result = attempt_with_menu(tenants, keys)
           return result unless result == :retry
         end
-        nil
-      end
-
-      private
-
-      def attempt_selection
-        print_tenant_selection_menu
-        process_selection(parse_user_selection)
-      end
-
-      def process_selection(selection)
-        return :retry unless selection
-        return selection if selection == :abort
-
-        selection.is_a?(Integer) ? resolve_selection(selection) : selection
-      end
-
-      def print_tenant_selection_menu
-        Output.print_header('Multiple tenants detected. Please choose one:')
-        Output.print_list(menu_items)
-      end
-
-      def menu_items
-        tenants = ConsoleKit.tenants.keys
-        items = ['0. Skip (load without tenant configuration)']
-        tenants.each_with_index.map do |key, index|
-          items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
-        end
-        items
-      end
-
-      def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'
-
-      def parse_user_selection
-        input = read_input_with_default
-        return :abort if input == :abort
-        return :exit if %w[exit quit].include?(input.downcase)
-        return find_tenant_by_name(input) unless valid_integer?(input)
-
-        validate_index_range(input.to_i)
-      end
-
-      def find_tenant_by_name(input)
-        match = ConsoleKit.tenants.keys.find { |key| key.to_s.casecmp(input).zero? }
-        return match if match
-
-        handle_invalid_input("Invalid selection: '#{input}'. Please enter a number or tenant name.")
-      end
-
-      def validate_index_range(index)
-        unless valid_selection_index?(index)
-          return handle_invalid_input("Selection must be between 0 and #{max_index}.")
-        end
-
-        index
-      end
-
-      def read_input_with_default
-        Output.print_prompt("Selection (number or name) [#{DEFAULT_SELECTION}]: ")
-        raw_input = $stdin.gets
-        raw_input ? normalize_input(raw_input) : :abort
+        :abort
       rescue Interrupt
         :abort
       end
 
-      def normalize_input(raw_input)
-        input = raw_input.chomp.strip
-        input.empty? ? DEFAULT_SELECTION : input
+      private
+
+      def attempt_with_menu(tenants, keys)
+        Output.print_header('Multiple tenants detected. Please choose one:')
+        Output.print_info('  0. Load without tenant (no tenant configuration)')
+        keys.each_with_index do |key, idx|
+          Output.print_info("  #{idx + 1}. #{key} (partner: #{partner_code(tenants, key)})")
+        end
+        attempt_selection(keys)
       end
 
-      def handle_invalid_input(message) = Output.print_warning(message).then { nil }
+      def attempt_selection(keys)
+        input = prompt_user_for_selection(keys.size)
+        return resolve_by_integer(input, keys) if valid_integer?(input)
+
+        resolve_by_name(input, keys)
+      end
+
+      def partner_code(tenants, key)
+        return tenants.dig(key, :constants, :partner_code) || 'N/A' if tenants.is_a?(Hash)
+
+        ConsoleKit.configuration.tenant_resolver_instance.resolve(key)&.dig(:constants, :partner_code) || 'N/A'
+      end
+
+      def prompt_user_for_selection(max_index)
+        default = max_index.positive? ? '1' : '0'
+        Output.print_prompt("\nEnter number or name prefix (default '#{default}'): ")
+        normalize_input($stdin.gets&.chomp&.strip, max_index)
+      end
+
+      def resolve_by_integer(input, keys)
+        index = input.to_i
+        return nil if index.zero?
+
+        unless index.between?(1, keys.size)
+          Output.print_warning("Selection must be between 0 and #{keys.size}.")
+          return :retry
+        end
+
+        keys[index - 1]
+      end
+
+      def resolve_by_name(input, keys)
+        matched = keys.select { |k| k.to_s.downcase.start_with?(input.downcase) }
+        case matched.size
+        when 1 then matched.first
+        when 0
+          Output.print_warning("No tenant matches '#{input}'.")
+          :retry
+        else
+          Output.print_warning("Ambiguous: #{matched.map(&:to_s).join(', ')}. Be more specific.")
+          :retry
+        end
+      end
+
+      def normalize_input(raw, max_index)
+        return raw unless raw.to_s.empty?
+
+        max_index.positive? ? '1' : '0'
+      end
+
       def valid_integer?(input) = input.match?(/\A\d+\z/)
-      def max_index = ConsoleKit.tenants.size
-      def valid_selection_index?(index) = index.between?(0, max_index)
-
-      def resolve_selection(index)
-        return :none if index.zero?
-
-        ConsoleKit.tenants.keys[index - 1]
-      end
     end
   end
 end
+
+ConsoleKit::LegacyTenantSelector = ConsoleKit::TenantSelector

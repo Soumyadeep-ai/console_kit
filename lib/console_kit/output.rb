@@ -55,8 +55,35 @@ module ConsoleKit
         return if silent
 
         exception&.backtrace&.each do |line|
-          print_with(:trace, "    #{line}", timestamp: true)
+          print_with(:trace, "    #{line}")
         end
+      end
+
+      def sanitize_display(str)
+        str.to_s
+           .gsub(/\e\[[0-9;]*[a-zA-Z]/, '')
+           .gsub(/\e\][^\a\e]*\a/, '')
+           .gsub(/[\x00-\x1F\x7F]/, '')
+      end
+
+      def print_banner(lines:, style: :danger)
+        return if silent
+
+        color_code = style == :danger ? '31' : '33'
+        safe_lines = lines.map { |l| sanitize_display(l) }
+        width      = safe_lines.map(&:length).max + 4
+        render_banner_lines({ color_code:, width:, padding: '═' * width, lines: safe_lines })
+      end
+
+      def render_banner_lines(context)
+        color_code = context[:color_code]
+        width      = context[:width]
+        padding    = context[:padding]
+        $stdout.puts colorize("╔#{padding}╗", color_code)
+        context[:lines].each do |line|
+          $stdout.puts colorize("║#{"  ⚠  #{line}".ljust(width)}║", color_code)
+        end
+        $stdout.puts colorize("╚#{padding}╝", color_code)
       end
 
       private

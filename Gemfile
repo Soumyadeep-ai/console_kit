@@ -15,6 +15,7 @@ group :development, :test do
   gem 'rubocop-rake'
   gem 'rubocop-rspec'
   gem 'rubycritic', require: false
+  gem 'tty-prompt', '~> 0.23'
 end
 
 group :test do

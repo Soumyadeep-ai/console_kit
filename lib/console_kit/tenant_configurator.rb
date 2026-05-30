@@ -1,127 +1,100 @@
 # frozen_string_literal: true
 
 require_relative 'output'
-require_relative 'connections/connection_manager'
-require_relative 'connections/dashboard'
-require_relative 'tenant_configurator/context_wrapper'
 
 module ConsoleKit
   # For tenant configuration
   module TenantConfigurator
-    CONTEXT_MAPPING = {
-      partner_identifier: :partner_code,
-      tenant_shard: :shard,
-      tenant_mongo_db: :mongo_db,
-      tenant_redis_db: :redis_db,
-      tenant_elasticsearch_prefix: :elasticsearch_prefix
-    }.freeze
+    # Raised internally when tenant constants are absent.
+    class NotConfigured < Error; end
 
     class << self
-      def configuration_success = Thread.current[:console_kit_configuration_success]
+      def configuration_success = Context.current.configuration_success
 
+      # :reek:ControlParameter -- shim setter; truthy val triggers mark_configured!
       def configuration_success=(val)
-        Thread.current[:console_kit_configuration_success] = val
+        Context.mark_configured! if val
       end
 
-      def current_tenant_key = Thread.current[:console_kit_current_tenant_key]
+      def current_tenant_key = Context.current.tenant
 
-      def current_tenant_key=(val)
-        Thread.current[:console_kit_current_tenant_key] = val
+      def current_tenant_key=(_val)
+        nil
       end
 
-      def configure_tenant(key)
-        return true if key == current_tenant_key && configuration_success
+      def configure_tenant(key, tenants = nil, context_class = nil)
+        tenants, context_class = resolve_defaults(tenants, context_class)
+        return missing_context_class_error unless context_class
 
-        attempt_configuration(key)
-      rescue StandardError => e
-        handle_error?(e, key)
+        run_tenant_setup(key, tenants, context_class)
       end
 
-      def clear
-        ctx = ConsoleKit.configuration.context_class
-        return unless ctx
-
-        perform_clear(ContextWrapper.for_context(ctx))
+      def clear(context_class)
+        %i[tenant_shard tenant_mongo_db partner_identifier].each do |attr|
+          context_class.public_send("#{attr}=", nil)
+        end
+        Output.print_info('Tenant context has been cleared.')
       end
 
       private
 
-      def attempt_configuration(key)
-        constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
-        return missing_config_error?(key) unless constants
-
-        execute_configuration(key, constants)
-        configuration_success
+      def resolve_defaults(tenants, context_class)
+        config = ConsoleKit.configuration
+        [tenants || config.tenants, context_class || config.context_class]
       end
 
-      def perform_clear(wrapper)
-        return unless configuration_success || wrapper.any_set?
+      def run_tenant_setup(key, tenants, context_class)
+        constants = tenants[key]&.[](:constants)
+        raise NotConfigured, key unless constants
 
-        reset_tenant(wrapper)
-        Output.print_info('Tenant context has been cleared.')
+        setup_tenant(key, constants, context_class)
         true
+      rescue NotConfigured => e
+        Output.print_error("No configuration found for tenant: #{e.message}")
+        false
+      rescue StandardError => e
+        handle_error(e, key)
+        false
       end
 
-      def reset_tenant(wrapper)
-        self.configuration_success = false
-        self.current_tenant_key = nil
-        wrapper.reset
-        setup_connections(wrapper.ctx)
+      def setup_tenant(key, constants, context_class)
+        validate_constants!(constants)
+        apply_context(context_class, constants)
+        setup_connections(context_class)
+        Output.print_success("Tenant set to: #{key}")
       end
 
       def validate_constants!(constants)
         missing = %i[shard partner_code] - constants.keys
-        raise Error, "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
+        raise "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
       end
 
-      def missing_config_error?(key)
-        self.configuration_success = false
-        Output.print_error("No configuration found for tenant: #{key}")
+      def apply_context(ctx, constant)
+        ctx.tenant_shard       = constant[:shard]       if ctx.respond_to?(:tenant_shard=)
+        ctx.tenant_mongo_db    = constant[:mongo_db]     if ctx.respond_to?(:tenant_mongo_db=)
+        ctx.partner_identifier = constant[:partner_code] if ctx.respond_to?(:partner_identifier=)
+      end
+
+      # :reek:ManualDispatch -- necessary for Rails/Mongoid detection compatibility
+      # :reek:NilCheck -- nil-check is idiomatic for optional mongo_db config
+      def setup_connections(ctx)
+        ApplicationRecord.establish_connection(ctx.tenant_shard.to_sym) if defined?(ApplicationRecord)
+        return unless defined?(Mongoid) && Mongoid.respond_to?(:override_client)
+
+        mongo_db = ctx.tenant_mongo_db
+        return if mongo_db.nil? || mongo_db.empty?
+
+        Mongoid.override_client(mongo_db.to_s)
+      end
+
+      def missing_context_class_error
+        Output.print_error('ConsoleKit: `context_class` is not configured.')
         false
       end
 
-      def execute_configuration(key, constants)
-        validate_constants!(constants)
-        apply_context(constants)
-        mark_success(key)
-      end
-
-      def apply_context(constant)
-        wrapper = ContextWrapper.for_context(ConsoleKit.configuration.context_class)
-        wrapper.assign(constant, CONTEXT_MAPPING).each do |attr, existing, configured|
-          warn_case_mismatch(attr, existing, configured) if case_mismatch?(existing, configured)
-        end
-        setup_connections(wrapper.ctx)
-      end
-
-      def case_mismatch?(existing, new_value)
-        existing.is_a?(String) && new_value.is_a?(String) &&
-          existing != new_value &&
-          existing.casecmp(new_value).zero?
-      end
-
-      def setup_connections(context)
-        Connections::ConnectionManager.available_handlers(context).each(&:connect)
-      end
-
-      def mark_success(key)
-        Output.print_success("Tenant set to: #{key}")
-        self.configuration_success = true
-        self.current_tenant_key = key
-      end
-
-      def warn_case_mismatch(attr, existing, configured)
-        Output.print_warning(
-          "#{attr} case mismatch: context had '#{existing}', config set '#{configured}'. " \
-          'Check your ConsoleKit tenant configuration.'
-        )
-      end
-
-      def handle_error?(error, key)
-        self.configuration_success = false
+      def handle_error(error, key)
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
-        false
       end
     end
   end

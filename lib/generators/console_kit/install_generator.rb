@@ -12,13 +12,12 @@ module ConsoleKit
       class_option :force, type: :boolean, default: false, desc: 'Overwrite existing files'
 
       def copy_initializer
-        force = options[:force]
         initializer_path = Rails.root.join('config', 'initializers', 'console_kit.rb')
 
-        if File.exist?(initializer_path) && !force
+        if skip_initializer?(initializer_path)
           say_status :skipped, "Initializer already exists: #{initializer_path}", :yellow
         else
-          template 'console_kit.rb', 'config/initializers/console_kit.rb', force: force
+          template 'console_kit.rb', 'config/initializers/console_kit.rb', force: options[:force]
           say_status :created, "Initializer generated at #{initializer_path}", :green
         end
       end
@@ -29,6 +28,12 @@ module ConsoleKit
         %w[tenants context_class].each do |field|
           say "  - Set `#{field}` (required)", :green
         end
+      end
+
+      private
+
+      def skip_initializer?(path)
+        File.exist?(path) && !options[:force]
       end
     end
   end

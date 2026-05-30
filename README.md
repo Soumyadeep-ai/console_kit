@@ -2,152 +2,399 @@
 
 ![Gem Version](https://img.shields.io/gem/v/console_kit.svg)
 ![Gem Downloads](https://img.shields.io/gem/dt/console_kit.svg)
-![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/release.yml/badge.svg)
+![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/test_suite.yml/badge.svg)
 ![License](https://img.shields.io/github/license/Soumyadeep-ai/console_kit)
-![Ruby](https://img.shields.io/badge/ruby-%3E=3.1.0-red)
-![Rails](https://img.shields.io/badge/rails-%3E=6.1-red)
+![Ruby](https://img.shields.io/badge/ruby-%3E=3.1-red)
+![Rails](https://img.shields.io/badge/rails-6.1%20%7C%207.0%20%7C%207.1%20%7C%207.2%20%7C%208.0%20%7C%208.1-blue)
+![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 
-A simple and flexible multi-tenant console setup toolkit for Rails applications.
+**Production-safe Rails console for multi-tenant apps.**
 
-ConsoleKit helps you manage tenant-specific database connections (SQL, MongoDB, Redis, Elasticsearch) and context configuration via an easy CLI interface and Rails integration.
+---
+
+## The problem
+
+You type `rails c` in the wrong terminal tab. You're in production. You meant staging. You run a bulk update. Two minutes later your on-call is pinging you.
+
+Or: you're in the right environment, but you meant `tenant_b` not `tenant_a`. Two thousand records. Wrong database. The rollback takes four hours.
+
+Or: a new engineer opens the console, doesn't realize the IRB prompt looks identical in every environment, and drops a table.
+
+**These are not hypotheticals.** In multi-tenant Rails apps, the console is the most dangerous surface your team touches. Every post-incident review has a version of this story.
+
+ConsoleKit makes the safe path the only path:
+
+- Forces tenant selection before you can type a single command
+- Puts the tenant name and environment in the IRB prompt — permanently visible
+- Blocks all ActiveRecord writes in production with a hard error, not a warning
+- Demands `CONFIRM` before you get a prompt in protected environments
+- Writes an audit trail of every session
+- Runs a health check so your connection stack is verified before you open the console
+
+---
 
 ## Installation
 
-Install the gem and add to the application's Gemfile by executing:
-
-```ruby
+```bash
 bundle add console_kit
 ```
 
-Additionally you can also add this line to your application's Gemfile:
+Or in your Gemfile:
 
 ```ruby
 gem 'console_kit'
 ```
 
-And then execute:
+## Quick start
 
 ```ruby
-bundle install
+# config/initializers/console_kit.rb
+ConsoleKit.configure do |config|
+  config.tenants = {
+    acme: { constants: { shard: :acme_db, partner_code: 'acme' } },
+    beta: { constants: { shard: :beta_db, partner_code: 'beta' } }
+  }
+
+  config.context_class             = CurrentContext
+  config.production_environments   = %w[production]
+  config.protected_tenants         = %i[acme]
+  config.confirm_dangerous_context = true
+  config.readonly_environments     = %w[production]
+end
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+Run `rails c`. ConsoleKit intercepts startup, prompts for a tenant, wires up the connection stack, and drops you into a prompt that shows exactly where you are:
+
+```
+[acme][production] main:001>
+```
+
+---
+
+## What happens at startup
+
+```
+rails c
+  │
+  ├─ 1. Welcome banner ───── "ConsoleKit vX.X.X  |  production"  (reflects installed version)
+  ├─ 2. Role preset ──────── CONSOLE_KIT_ROLE=support applies config overrides
+  ├─ 3. ENV check ────────── CONSOLE_KIT_TENANT=acme skips the prompt
+  ├─ 4. Tenant selection ─── fuzzy interactive picker, recent-tenant memory
+  ├─ 5. Safety gate ──────── banner + CONFIRM required if env/tenant protected
+  ├─ 6. Readonly mode ─────── AR writes blocked in production (hard error)
+  ├─ 7. Connection setup ──── SQL, Mongo, Redis, Elasticsearch, Apartment, ActsAsTenant
+  ├─ 8. Prompt ────────────── [tenant][env] set in IRB/Pry
+  ├─ 9. Audit log ─────────── session entry written to disk
+  └─10. Ready summary ─────── "[✓] acme  |  production  |  readonly: ON"
+```
+
+---
+
+## Compatibility
+
+| Ruby  | Rails 6.1 | Rails 7.0 | Rails 7.1 | Rails 7.2 | Rails 8.0 | Rails 8.1 |
+|-------|:---------:|:---------:|:---------:|:---------:|:---------:|:---------:|
+| 3.1   | ✓         | ✓         | ✓         | ✓         | —         | —         |
+| 3.2   | ✓         | ✓         | ✓         | ✓         | ✓         | ✓         |
+| 3.3   | ✓         | ✓         | ✓         | ✓         | ✓         | ✓         |
+| 3.4   | ✓         | ✓         | ✓         | ✓         | ✓         | ✓         |
+| 4.0   | —         | —         | —         | ✓         | ✓         | ✓         |
+
+Rails 8.0+ requires Ruby ≥ 3.2. Ruby 4.0 tested against Rails 7.2+.
+
+---
+
+## Readonly mode
+
+The most common production console incident isn't a dropped table — it's a bulk update on the wrong dataset. Readonly mode makes writes physically impossible:
 
 ```ruby
-gem install console_kit
+config.readonly_environments = %w[production]
 ```
 
-## Usage
+When active, any write attempt raises `ConsoleKit::ReadonlyViolation`:
 
-After installing, generate the initializer and configuration files by running:
+```
+[acme][production] main:001> User.update_all(active: false)
+ConsoleKit::ReadonlyViolation: update_all blocked: readonly mode active
+```
+
+Blocked: `save`, `save!`, `update_columns`, `update_column`, `destroy`, `destroy!`, `delete`, `create`, `create!`, `insert`, `insert!`, `insert_all`, `insert_all!`, `update_all`, `delete_all`, `destroy_all`, `upsert`, `upsert_all`.
+
+On Rails 7.1+, ConsoleKit also sets `connection.prevent_writes = true` at the adapter level — raw SQL writes through `execute` are blocked too.
 
 ```ruby
-rails generate console_kit:install
+ConsoleKit.readonly?  # => true
 ```
 
-Then, edit config/initializers/console_kit.rb to define your tenants and context class. Example format:
+---
+
+## Audit logging
+
+Every session is logged:
+
+```ruby
+config.audit_log      = true
+config.audit_log_path = '~/.console_kit_audit.log'
+```
+
+```
+2026-01-15T14:32:01+00:00 | user=alice | env=production | tenant=acme | action=tenant_switch | status=success
+```
+
+Useful for compliance ("who opened a production console session on this date?") and post-incident reconstruction.
+
+---
+
+## Production safeguard
+
+When `confirm_dangerous_context: true` and the env is production (or the tenant is protected), a banner appears and requires manual confirmation:
+
+```
+╔══════════════════════════════════════╗
+║  ⚠  ENVIRONMENT : PRODUCTION         ║
+║  ⚠  TENANT      : acme               ║
+║  ⚠  Proceed with caution.            ║
+╚══════════════════════════════════════╝
+Type CONFIRM to continue:
+```
+
+---
+
+## Configuration reference
 
 ```ruby
 ConsoleKit.configure do |config|
+  # ── Tenants ──────────────────────────────────────────────────────────────────
   config.tenants = {
-    tenant_one: {
+    acme: {
       constants: {
-        shard: :tenant_one_db,
-        mongo_db: :tenant_one_mongo,
-        partner_code: 'partnerA',
-        redis_db: 1,
-        elasticsearch_prefix: 'tenant_one',
-        environment: 'production'
-      }
-    },
-    tenant_two: {
-      constants: {
-        shard: :tenant_two_db,
-        mongo_db: :tenant_two_mongo,
-        partner_code: 'partnerB',
-        redis_db: 2,
-        elasticsearch_prefix: 'tenant_two',
-        environment: 'staging'
+        shard:                 :acme_db,
+        mongo_db:              :acme_mongo,
+        partner_code:          'acme',
+        redis_db:              1,
+        elasticsearch_prefix:  'acme',
+        apartment_schema:      'acme',     # Apartment gem
+        acts_as_tenant_id:     1           # ActsAsTenant gem
       }
     }
   }
 
+  # Dynamic resolution (large tenant counts):
+  # config.tenants         = :dynamic
+  # config.tenant_resolver = ->(key) { TenantRegistry.find(key) }
+
   config.context_class = CurrentContext
 
-  # Optional: Toggle pretty CLI output
-  config.pretty_output = true
+  # ── Safety ───────────────────────────────────────────────────────────────────
+  config.production_environments    = %w[production]
+  config.protected_tenants          = %i[acme]
+  config.confirm_dangerous_context  = true
 
-  # Optional: Show connection dashboard on tenant switch (default: false)
-  # config.show_dashboard = true
+  # ── Readonly mode ─────────────────────────────────────────────────────────────
+  config.readonly_environments = %w[production]  # env-based
+  # config.readonly_mode = true                  # always on
+
+  # ── Audit logging ─────────────────────────────────────────────────────────────
+  config.audit_log      = true
+  config.audit_log_path = '~/.console_kit_audit.log'
+
+  # ── Rails-native sharding ────────────────────────────────────────────────────
+  config.use_rails_sharding = true
+  config.shard_role         = :writing
+
+  # ── Tenant history ────────────────────────────────────────────────────────────
+  config.recent_tenant_history_path = '~/.console_kit_history'
+  config.recent_tenant_limit        = 5
+
+  # ── ENV override key ─────────────────────────────────────────────────────────
+  config.env_tenant_key = 'CONSOLE_KIT_TENANT'
+
+  # ── Lifecycle hooks ───────────────────────────────────────────────────────────
+  config.before_switch { |tenant| Datadog::Tracing.set_tag('tenant', tenant) }
+  config.after_switch(on_error: :warn) { |tenant| Sentry.set_tag('tenant', tenant) }
+
+  # ── ActsAsTenant ──────────────────────────────────────────────────────────────
+  config.acts_as_tenant_model = 'Account'
+  # Or custom finder:
+  # config.acts_as_tenant_finder = ->(key, cfg) { Account.find_by(slug: key) }
 end
 ```
 
-## Supported Connections
+---
 
-ConsoleKit automatically detects and manages connections for:
+## Supported connections
 
-| Connection      | Gem Required    | Config Key               | Behavior                                        |
-|-----------------|-----------------|--------------------------|------------------------------------------------|
-| SQL (ActiveRecord) | `activerecord` | `shard`               | Calls `establish_connection` on your base class |
-| MongoDB         | `mongoid`       | `mongo_db`              | Calls `Mongoid.override_database`              |
-| Redis           | `redis`         | `redis_db`              | Calls `Redis.current.select(db)`               |
-| Elasticsearch   | `elasticsearch` | `elasticsearch_prefix`  | Sets `Elasticsearch::Model.index_name_prefix=` |
+ConsoleKit activates each handler only when the corresponding gem is loaded:
 
-Handlers are only activated when their corresponding gem is loaded.
+| Connection         | Gem              | Config key              | What it does                                         |
+|--------------------|------------------|-------------------------|------------------------------------------------------|
+| SQL (ActiveRecord) | `activerecord`   | `shard`                 | `establish_connection` on your base class            |
+| MongoDB            | `mongoid`        | `mongo_db`              | `Mongoid.override_database`                          |
+| Redis              | `redis`          | `redis_db`              | `Redis.current.select(db)`                           |
+| Elasticsearch      | `elasticsearch`  | `elasticsearch_prefix`  | `Elasticsearch::Model.index_name_prefix=`            |
+| Apartment          | `apartment`      | `apartment_schema`      | `Apartment::Tenant.switch!`                          |
+| ActsAsTenant       | `acts_as_tenant` | `acts_as_tenant_id`     | `ActsAsTenant.current_tenant=`                       |
 
-## Console Usage
-
-When launching the Rails console, ConsoleKit will prompt you to select a tenant (if multiple tenants are configured). On selection, a tenant banner is displayed showing the tenant name, environment safety warnings, and active connections.
-
-### Selection Options:
-- **Number or Name:** Select a tenant by its index or name (case-insensitive).
-- **0 (Skip):** Load the console without any tenant configuration.
-- **exit / quit:** Immediately terminate the console session.
-
-### Console Helpers
-
-The following helper methods are available in your Rails console:
+### Apartment (PostgreSQL schema-based multi-tenancy)
 
 ```ruby
-# Switch to a different tenant
-switch_tenant
-
-# Print details about the current tenant
-tenant_info
-
-# List all available tenants
-tenants
-
-# Show connection diagnostics dashboard
-dashboard
+config.tenants = {
+  acme: { constants: { shard: :acme_db, partner_code: 'acme', apartment_schema: 'acme' } }
+}
+# ConsoleKit calls Apartment::Tenant.switch!('acme') on startup
 ```
 
-### Custom Prompt
-
-ConsoleKit automatically sets your IRB/Pry prompt to show the active tenant:
-
-```
-[tenant_one] main:001>
-```
-
-### Other Methods
+### ActsAsTenant (model-based multi-tenancy)
 
 ```ruby
-# Get current tenant
-ConsoleKit.current_tenant
-# => :tenant_one
+config.tenants = {
+  acme: { constants: { shard: :acme_db, partner_code: 'acme', acts_as_tenant_id: 1 } }
+}
+config.acts_as_tenant_model = 'Account'
+# ConsoleKit calls ActsAsTenant.current_tenant = Account.find_by(id: 1)
 
-# Reset and re-select tenant
-ConsoleKit.reset_current_tenant
-
-# Toggle pretty output
-ConsoleKit.enable_pretty_output
-ConsoleKit.disable_pretty_output
+# Custom finder:
+config.acts_as_tenant_finder = ->(key, _cfg) { Account.find_by(slug: key) }
 ```
 
-### Connection Dashboard
+---
 
-Run `dashboard` in the console to see a diagnostics table for all active connections:
+## Role-based presets
+
+Define named configuration profiles for different user roles. Activate with `CONSOLE_KIT_ROLE`:
+
+```ruby
+ConsoleKit.configure do |c|
+  c.presets = {
+    support: {
+      readonly_mode: true,
+      confirm_dangerous_context: false
+    },
+    readonly_ops: {
+      readonly_environments: %w[production staging]
+    },
+    engineering: {
+      confirm_dangerous_context: true
+    }
+  }
+end
+```
+
+```bash
+CONSOLE_KIT_ROLE=support rails c
+# Preset active: support
+# [acme][production] main:001> User.update_all(...)
+# ConsoleKit::ReadonlyViolation: update_all blocked: readonly mode active
+```
+
+Presets apply before tenant selection, so overrides like restricted tenant lists are in effect throughout startup. The doctor check validates preset attribute names:
+
+```bash
+rails console_kit:doctor
+# ✓  2 preset(s) valid
+```
+
+---
+
+## Scoped tenant switching
+
+Switch tenant for a block — previous tenant restored automatically, even on exception:
+
+```ruby
+ConsoleKit.with(:beta) do
+  User.count   # runs against beta
+end
+# back to acme
+
+# Nestable
+ConsoleKit.with(:acme) do
+  ConsoleKit.with(:beta) { ... }
+  # acme restored here
+end
+```
+
+---
+
+## Console helpers
+
+```ruby
+switch_tenant      # re-prompt for tenant selection
+tenant_info        # print current tenant details
+tenants            # list all configured tenants
+dashboard          # connection diagnostics table
+```
+
+---
+
+## Runtime introspection
+
+```ruby
+ConsoleKit.status
+# ConsoleKit Status
+#   Tenant     : acme
+#   Configured : true
+#   Environment: production
+#   Shard      : acme_db
+#   Readonly   : true
+
+ConsoleKit.current_tenant   # => :acme
+ConsoleKit.readonly?        # => true
+```
+
+---
+
+## Console prompt
+
+Tenant and environment always visible, even after `switch_tenant`:
+
+```
+[acme][production] main:001>
+```
+
+---
+
+## Dynamic tenants
+
+For apps with many tenants (too many to enumerate in config):
+
+```ruby
+ConsoleKit.configure do |c|
+  c.tenants         = :dynamic
+  c.tenant_resolver = ->(key) { TenantRegistry.resolve(key) }
+  c.context_class   = CurrentContext
+end
+```
+
+The resolver receives the selected key and returns a hash of constants (same shape as a static tenant's `constants:` block).
+
+---
+
+## Lifecycle hooks
+
+```ruby
+c.before_switch(on_error: :abort) { |tenant| AuditLog.record(tenant) }
+c.after_switch(on_error: :warn)   { |tenant| Sentry.set_tag('tenant', tenant) }
+```
+
+`on_error: :abort` — hook exception vetoes the switch. `on_error: :warn` — logs warning, continues.
+
+---
+
+## Rails sharding
+
+When `use_rails_sharding: true`, `ConsoleKit.with` wraps `ActiveRecord::Base.connected_to`:
+
+```ruby
+ConsoleKit.with(:beta) do
+  # ActiveRecord::Base.connected_to(shard: :beta_db, role: :writing) is active
+  Order.count
+end
+```
+
+---
+
+## Connection dashboard
 
 ```
 --- Connection Dashboard ---
@@ -155,37 +402,109 @@ Run `dashboard` in the console to see a diagnostics table for all active connect
 │ Service       │ Status      │ Latency │ Details                                  │
 ├───────────────┼─────────────┼─────────┼──────────────────────────────────────────┤
 │ SQL           │ ✓ Connected │ 1.1ms   │ adapter: PostgreSQL, pool_size: 5, ...   │
-│ MongoDB       │ ✓ Connected │ 2.3ms   │ database: my_tenant_db, version: 8.0.20  │
+│ MongoDB       │ ✓ Connected │ 2.3ms   │ database: acme_db, version: 8.0.20       │
 │ Redis         │ — N/A       │ —       │                                          │
 │ Elasticsearch │ ✗ Error     │ —       │ error: connection refused                │
 └───────────────┴─────────────┴─────────┴──────────────────────────────────────────┘
 ```
 
-Each handler is queried with a 2-second timeout to keep things fast. To auto-display the dashboard on every tenant switch, add to your initializer:
+---
 
-```ruby
-config.show_dashboard = true
+## Health check
+
+```bash
+rails console_kit:doctor
+rails console_kit:doctor --verbose
 ```
 
-### Environment Warnings
+```
+  ✓  tenants configured
+  ✓  tenant keys unique
+  ✓  context_class resolves
+  ⚠  tenant :beta missing key :shard
+  ✓  sharding compatible
+  ✓  readonly mode compatible
+  ✓  audit log path writable
+  ✓  Apartment 2.0.1 compatible
+  ✓  ActsAsTenant configuration valid
+  ✓  2 preset(s) valid
 
-When a tenant has an `environment` key in its constants:
-- **production**: A red warning is displayed at setup time.
-- **staging**: A yellow warning is displayed at setup time.
+10 checks (1 warning)
+```
+
+---
+
+## Integration examples
+
+### Standard multi-db Rails (6.1+)
+
+```ruby
+# database.yml
+production:
+  primary: { ... }
+  acme_db: { database: acme_production, ... }
+  beta_db: { database: beta_production, ... }
+
+# initializer
+ConsoleKit.configure do |c|
+  c.use_rails_sharding = true
+  c.tenants = {
+    acme: { constants: { shard: :acme_db, partner_code: 'acme' } },
+    beta: { constants: { shard: :beta_db, partner_code: 'beta' } }
+  }
+  c.context_class = CurrentContext
+end
+```
+
+### Mongoid
+
+```ruby
+ConsoleKit.configure do |c|
+  c.tenants = {
+    acme: { constants: { mongo_db: :acme_mongo, partner_code: 'acme' } }
+  }
+  c.context_class = CurrentContext
+end
+# ConsoleKit calls Mongoid.override_database(:acme_mongo) on startup
+```
+
+### Sidekiq context propagation
+
+```ruby
+c.after_switch { |tenant| Sidekiq::Client.default_context[:tenant] = tenant }
+```
+
+### Datadog + Sentry
+
+```ruby
+c.before_switch { |t| Datadog::Tracing.set_tag('tenant', t) }
+c.after_switch(on_error: :warn) { |t| Sentry.set_tag('tenant', t) }
+```
+
+### CI / scripted sessions
+
+```bash
+CONSOLE_KIT_TENANT=acme rails runner 'puts ConsoleKit.current_tenant'
+```
+
+---
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```bash
+bin/setup
+bundle exec rspec
+bundle exec rubocop
+bundle exec reek lib/
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at [Console Kit](https://github.com/Soumyadeep-ai/console_kit). This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at [console_kit](https://github.com/Soumyadeep-ai/console_kit). This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+MIT License. See [LICENSE](https://opensource.org/licenses/MIT).
 
 ## Code of Conduct
 

@@ -114,5 +114,51 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
         expect(described_class.for_context(ctx_class).attributes).not_to include(:partner_identifier)
       end
     end
+
+    context 'when handler is not available' do
+      let(:ctx_class) do
+        Class.new do
+          class << self
+            attr_accessor :tenant_mongo_db
+          end
+        end
+      end
+
+      before { hide_const('Mongoid') }
+
+      it 'skips the handler attribute when handler is unavailable' do
+        expect(described_class.for_context(ctx_class).attributes).not_to include(:tenant_mongo_db)
+      end
+    end
+
+    context 'when handler_available? raises StandardError' do
+      let(:bad_handler) do
+        Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+          def available?
+            raise StandardError, 'unexpected'
+          end
+        end
+      end
+
+      it 'returns false and skips' do
+        expect(described_class.send(:handler_available?, bad_handler)).to be(false)
+      end
+    end
+  end
+
+  describe '#assign when safe_read raises' do
+    let(:ctx) do
+      obj = Object.new
+      obj.define_singleton_method(:tenant_shard) { raise StandardError, 'read error' }
+      obj.define_singleton_method(:tenant_shard=) { |_v| nil }
+      obj
+    end
+    let(:attrs) { [:tenant_shard] }
+    let(:wrapper) { described_class.new(ctx, attrs) }
+
+    it 'returns nil as existing value' do
+      result = wrapper.assign({ shard: 'x' }, { tenant_shard: :shard })
+      expect(result.first[1]).to be_nil
+    end
   end
 end

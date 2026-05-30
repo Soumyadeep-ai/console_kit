@@ -9,6 +9,65 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
     allow(ConsoleKit::Output).to receive(:print_raw)
   end
 
+  describe ConsoleKit::Connections::TableFormatter do
+    describe '.format_status' do
+      it 'returns connected string for :connected' do
+        expect(described_class.format_status(:connected)).to include('Connected')
+      end
+
+      it 'returns error string for :error' do
+        expect(described_class.format_status(:error)).to include('Error')
+      end
+
+      it 'returns error string for :timeout' do
+        expect(described_class.format_status(:timeout)).to include('Error')
+      end
+
+      it 'returns N/A string for :unavailable' do
+        expect(described_class.format_status(:unavailable)).to include('N/A')
+      end
+
+      it 'returns unknown string for unrecognized status' do
+        expect(described_class.format_status(:something_weird)).to eq('? Unknown')
+      end
+    end
+
+    describe '.format_latency' do
+      it 'returns ms string when latency_ms is given' do
+        expect(described_class.format_latency(12.5)).to eq('12.5ms')
+      end
+
+      it 'returns dash when latency_ms is nil' do
+        expect(described_class.format_latency(nil)).to eq('—')
+      end
+    end
+
+    describe '.format_details' do
+      it 'returns empty string when details is nil' do
+        expect(described_class.format_details(nil)).to eq('')
+      end
+
+      it 'returns empty string when details is empty hash' do
+        expect(described_class.format_details({})).to eq('')
+      end
+
+      it 'formats key-value pairs' do
+        expect(described_class.format_details({ adapter: 'PostgreSQL' })).to include('adapter: PostgreSQL')
+      end
+
+      it 'compacts nil values' do
+        expect(described_class.format_details({ a: 'x', b: nil })).not_to include('b:')
+      end
+    end
+
+    describe '.format_row' do
+      it 'returns an array of 4 elements' do
+        diag = { name: 'SQL', status: :connected, latency_ms: 1.0, details: { adapter: 'PG' } }
+        expect(described_class.format_row(diag).length).to eq(4)
+      end
+    end
+  end
+
   describe '.display' do
     context 'when handlers have diagnostics' do
       let(:sql_diagnostics) do
@@ -92,14 +151,14 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       it 'renders a table containing the connected checkmark', :aggregate_failures do
         described_class.display
         expect(ConsoleKit::Output).to have_received(:print_raw) do |output|
-          expect(output).to include("\u2713")
+          expect(output).to include('✓')
         end
       end
 
       it 'renders a table containing the error cross', :aggregate_failures do
         described_class.display
         expect(ConsoleKit::Output).to have_received(:print_raw) do |output|
-          expect(output).to include("\u2717")
+          expect(output).to include('✗')
         end
       end
 
@@ -127,7 +186,7 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       it 'renders the N/A dash character for unavailable status', :aggregate_failures do
         described_class.display
         expect(ConsoleKit::Output).to have_received(:print_raw) do |output|
-          expect(output).to include("\u2014 N/A")
+          expect(output).to include('— N/A')
         end
       end
     end

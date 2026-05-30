@@ -181,4 +181,50 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       expect(handler.send(:context_attribute, :tenant_mongo_db)).to eq('mongo_foo')
     end
   end
+
+  describe '#diagnostics when tenant_mongo_db is nil (no override)' do
+    let(:context) { instance_double(DummyContext, tenant_mongo_db: nil) }
+    let(:database) do
+      instance_double(Mongoid::Database, name: 'default_db')
+    end
+    let(:client) { instance_double(Mongoid::Client, database: database) }
+    let(:build_info_result) { [{ 'version' => '6.0.0' }] }
+
+    before do
+      allow(database).to receive(:command).with(ping: 1)
+      allow(database).to receive(:command).with(buildInfo: 1).and_return(build_info_result)
+      allow(Mongoid).to receive(:default_client).and_return(client)
+    end
+
+    it 'uses the default client without override' do
+      result = handler.diagnostics
+      expect(result[:status]).to eq(:connected)
+    end
+
+    it 'returns the default database name' do
+      result = handler.diagnostics
+      expect(result[:details][:database]).to eq('default_db')
+    end
+  end
+
+  describe '#reset_overrides when Mongoid does not respond to override_client' do
+    let(:context) { instance_double(DummyContext, tenant_mongo_db: '') }
+
+    before do
+      mongoid_stub = Class.new do
+        def self.override_database(*); end
+      end
+      stub_const('Mongoid', mongoid_stub)
+      allow(Mongoid).to receive(:override_database)
+    end
+
+    it 'does not call override_client and does not raise' do
+      expect { handler.connect }.not_to raise_error
+    end
+
+    it 'still calls override_database with nil' do
+      handler.connect
+      expect(Mongoid).to have_received(:override_database).with(nil)
+    end
+  end
 end

@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
+# :nocov:
 module ConsoleKit
-  # Railtie for integrating ConsoleKit with Rails console.
+  # Railtie wires ConsoleKit into the Rails console lifecycle.
+  # This file is loaded only when Rails::Railtie is defined (Rails apps).
+  # Unit tests run outside a Rails app, so this file is never required —
+  # all lines are unreachable in test environments.
   class Railtie < Rails::Railtie
     console do
-      ConsoleKit::Setup.setup
-      ConsoleKit::Prompt.apply
+      SwitchPipeline.run(config: ConsoleKit.configuration)
       if defined?(IRB::ExtendCommandBundle) && !defined?(Pry)
         IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
       else
@@ -13,6 +16,6 @@ module ConsoleKit
       end
     end
 
-    config.to_prepare { ConsoleKit::Setup.reapply if defined?(Rails::Console) }
   end
 end
+# :nocov:

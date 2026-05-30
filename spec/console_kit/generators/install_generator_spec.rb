@@ -5,62 +5,62 @@ require 'generators/console_kit/install_generator'
 require 'pathname'
 require 'fileutils'
 
-# Stub Rails.root because this is not a Rails app
+GENERATOR_DESTINATION = File.expand_path('../../tmp/generator_test', __dir__)
+
+# Stub Rails.root to point at the generator destination so File.exist? checks work
 module Rails
   def self.root
-    Pathname.new(Dir.pwd)
+    Pathname.new(GENERATOR_DESTINATION)
   end
 end
 
 RSpec.describe ConsoleKit::Generators::InstallGenerator, type: :generator do
   include GeneratorSpec::TestCase
 
-  destination File.expand_path('../../tmp/generator_test', __dir__)
+  destination GENERATOR_DESTINATION
+
+  before(:all) { prepare_destination } # rubocop:disable RSpec/BeforeAfterAll
+  after(:all) { FileUtils.rm_rf(destination_root) } # rubocop:disable RSpec/BeforeAfterAll
 
   let(:initializer_path) { 'config/initializers/console_kit.rb' }
   let(:full_path) { File.join(destination_root, initializer_path) }
 
-  before { prepare_destination }
-  after { FileUtils.rm_rf(destination_root) }
-
   context 'when initializer does not exist' do
+    before { FileUtils.rm_f(full_path) }
+
     it 'creates the initializer file' do
       run_generator
       expect(File).to exist(full_path)
     end
 
-    it 'contains ConsoleKit configuration' do
+    it 'writes ConsoleKit.configure to initializer' do
       run_generator
-      content = File.read(full_path)
-      expect(content).to include('ConsoleKit.configure')
+      expect(File.read(full_path)).to include('ConsoleKit.configure')
     end
 
-    it 'prints created message' do
+    it 'includes created in generator output' do
       output = run_generator
       expect(output).to include('created')
     end
 
-    it 'prints setup complete message' do
+    it 'includes Setup complete in generator output' do
       output = run_generator
       expect(output).to include('Setup complete')
     end
 
-    it 'includes ConsoleKit.configure block' do
+    it 'writes configure block opener to initializer' do
       run_generator
-      content = File.read(full_path)
-      expect(content).to include('ConsoleKit.configure do |config|')
+      expect(File.read(full_path)).to include('ConsoleKit.configure do |config|')
     end
 
-    it 'includes config.tenants key' do
+    it 'writes tenants config to initializer' do
       run_generator
-      content = File.read(full_path)
-      expect(content).to include('config.tenants')
+      expect(File.read(full_path)).to include('config.tenants')
     end
 
-    it 'includes config.context_class key' do
+    it 'writes context_class config to initializer' do
       run_generator
-      content = File.read(full_path)
-      expect(content).to include('config.context_class')
+      expect(File.read(full_path)).to include('config.context_class')
     end
 
     it 'creates config/initializers directory if missing' do
@@ -73,53 +73,55 @@ RSpec.describe ConsoleKit::Generators::InstallGenerator, type: :generator do
   context 'when initializer already exists' do
     before { run_generator }
 
-    it 'skips creation if file exists by default' do
+    it 'skips by default if file exists' do
       output = run_generator
       expect(output).to include('skipped').or include('identical')
     end
 
-    it 'overwrites the file with --force option' do
+    it 'overwrites with --force' do
       output = run_generator %w[--force]
       expect(output).to include('created')
     end
 
-    it 'includes new content with --force' do
+    it 'overwrites existing initializer content with --force' do
       File.write(full_path, 'old content')
       run_generator %w[--force]
-      content = File.read(full_path)
-      expect(content).to include('ConsoleKit.configure')
+      expect(File.read(full_path)).to include('ConsoleKit.configure')
     end
 
-    it 'removes old content with --force' do
+    it 'does not keep old content after --force' do
       File.write(full_path, 'old content')
       run_generator %w[--force]
-      content = File.read(full_path)
-      expect(content).not_to include('old content')
+      expect(File.read(full_path)).not_to include('old content')
     end
   end
 
-  context 'when run multiple times without --force' do
-    it 'is idempotent and skips duplicate creation' do
+  context 'when idempotent' do
+    it 'is idempotent when run multiple times without --force' do
       run_generator
       output = run_generator
       expect(output).to include('skipped').or include('identical')
     end
   end
 
-  context 'when generating output messages' do
-    it 'outputs setup complete instructions' do
+  context 'with output messages' do
+    before { FileUtils.rm_f(full_path) }
+
+    it 'outputs Setup complete after creation' do
       output = run_generator
       expect(output).to match(/Setup complete!/)
     end
 
-    it 'advises modifying the initializer file' do
+    it 'outputs modify instructions after creation' do
       output = run_generator
       expect(output).to match(%r{Modify `config/initializers/console_kit.rb`})
     end
   end
 
-  context 'when unknown options are passed' do
-    it 'does not raise an error' do
+  context 'with invalid options' do
+    before { FileUtils.rm_f(full_path) }
+
+    it 'does not raise error with unknown options' do
       expect { run_generator %w[--unknown-option] }.not_to raise_error
     end
   end

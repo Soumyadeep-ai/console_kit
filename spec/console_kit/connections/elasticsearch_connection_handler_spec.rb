@@ -186,4 +186,41 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       expect(handler.send(:context_attribute, :tenant_elasticsearch_prefix)).to eq('acme')
     end
   end
+
+  describe '.apply_prefix' do
+    context 'when Elasticsearch::Model is not defined' do
+      before { hide_const('Elasticsearch') }
+
+      it 'returns nil without raising' do
+        expect(described_class.apply_prefix('foo')).to be_nil
+      end
+    end
+  end
+
+  describe '#diagnostics when ping raises an error' do
+    let(:cluster) { double(health: { 'cluster_name' => 'cluster', 'status' => 'yellow' }) }
+    let(:es_client) do
+      the_cluster = cluster
+      double.tap do |c|
+        allow(c).to receive(:ping).and_raise(StandardError, 'ping failed')
+        allow(c).to receive(:cluster).and_return(the_cluster)
+      end
+    end
+
+    before do
+      the_client = es_client
+      es_model = Module.new do
+        define_singleton_method(:client) { the_client }
+      end
+      stub_const('Elasticsearch::Model', es_model)
+    end
+
+    it 'returns status :connected (ping error is rescued inline)' do
+      expect(handler.diagnostics[:status]).to eq(:connected)
+    end
+
+    it 'still returns a numeric latency_ms' do
+      expect(handler.diagnostics[:latency_ms]).to be_a(Numeric)
+    end
+  end
 end

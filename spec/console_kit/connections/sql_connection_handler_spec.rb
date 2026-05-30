@@ -119,6 +119,19 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
+  describe '.sql_version' do
+    it 'returns the version string when query succeeds' do
+      conn = double(select_value: 'PostgreSQL 14.0')
+      expect(described_class.sql_version(conn)).to eq('PostgreSQL 14.0')
+    end
+
+    it 'returns nil when the query raises an error' do
+      conn = double
+      allow(conn).to receive(:select_value).and_raise(StandardError, 'not supported')
+      expect(described_class.sql_version(conn)).to be_nil
+    end
+  end
+
   describe '#available?' do
     it 'returns true when ApplicationRecord is defined' do
       expect(handler).to be_available
