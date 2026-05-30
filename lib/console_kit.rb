@@ -132,8 +132,8 @@ module ConsoleKit
       ScopedSwitcher.for(configuration).with(tenant_key, &)
     end
 
-    def switch_tenant!
-      result = SwitchPipeline.run(config: configuration)
+    def switch_tenant!(tenant_key = nil)
+      result = SwitchPipeline.run(tenant_key: tenant_key, config: configuration)
       result.success ? result.tenant : nil
     end
 

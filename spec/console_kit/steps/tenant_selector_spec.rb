@@ -54,9 +54,15 @@ RSpec.describe ConsoleKit::Steps::TenantSelector do
       expect(multi_step.call.failure?).to be true
     end
 
-    it 'returns failure when selection is nil' do
+    it 'succeeds with no resolved_tenant when selection is nil' do
       allow(multi_step).to receive(:interactive_select).and_return(nil)
-      expect(multi_step.call.failure?).to be true
+      expect(multi_step.call.success?).to be true
+    end
+
+    it 'sets nil as resolved_tenant when selection is nil' do
+      allow(multi_step).to receive(:interactive_select).and_return(nil)
+      multi_step.call
+      expect(ctx.resolved_tenant).to be_nil
     end
 
     it 'sets resolved_tenant from interactive selection' do

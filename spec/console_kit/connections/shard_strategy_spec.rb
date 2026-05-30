@@ -33,9 +33,9 @@ module ConsoleKit
     RSpec.describe RailsConnectedToStrategy do
       subject(:strategy) { described_class.new }
 
-      it 'is available when ActiveRecord responds to connected_to and Rails >= 6' do
+      it 'is available when ActiveRecord responds to connected_to and Rails >= 6.1' do
         stub_const('ActiveRecord::Base', Class.new { def self.connected_to(**) = yield })
-        stub_const('Rails::VERSION::MAJOR', 6)
+        stub_const('Rails::VERSION::STRING', '6.1.0')
         expect(strategy.available?).to be true
       end
 
@@ -47,11 +47,11 @@ module ConsoleKit
       it 'is unavailable when ActiveRecord::Base does not respond to connected_to' do
         ar_base_without_connected_to = Class.new
         stub_const('ActiveRecord::Base', ar_base_without_connected_to)
-        stub_const('Rails::VERSION::MAJOR', 6)
+        stub_const('Rails::VERSION::STRING', '6.1.0')
         expect(strategy.available?).to be false
       end
 
-      context 'when Rails::VERSION::MAJOR is not defined' do
+      context 'when Rails::VERSION::STRING is not defined' do
         let(:ar_base_connectable) do
           Class.new { def self.connected_to(**) = yield }
         end
@@ -63,9 +63,9 @@ module ConsoleKit
         end
       end
 
-      it 'is unavailable when Rails version is below 6' do
+      it 'is unavailable when Rails version is below 6.1' do
         stub_const('ActiveRecord::Base', Class.new { def self.connected_to(**) = yield })
-        stub_const('Rails::VERSION::MAJOR', 5)
+        stub_const('Rails::VERSION::STRING', '6.0.0')
         expect(strategy.available?).to be false
       end
 
@@ -83,7 +83,7 @@ module ConsoleKit
         end
 
         before do
-          stub_const('Rails::VERSION::MAJOR', 6)
+          stub_const('Rails::VERSION::STRING', '6.1.0')
         end
 
         it 'wraps the block with ActiveRecord connected_to' do

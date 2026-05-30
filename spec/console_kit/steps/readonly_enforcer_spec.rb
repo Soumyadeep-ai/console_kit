@@ -82,7 +82,7 @@ RSpec.describe ConsoleKit::Steps::ReadonlyEnforcer do
     end
   end
 
-  context 'when tenants is :dynamic' do
+  context 'when tenants is :dynamic with explicit readonly_mode = true' do
     before do
       ConsoleKit.configure do |c|
         c.tenants         = :dynamic
@@ -91,9 +91,31 @@ RSpec.describe ConsoleKit::Steps::ReadonlyEnforcer do
         c.readonly_mode   = true
       end
       stub_const('ActiveRecord::Base', Class.new)
+      ConsoleKit::ReadonlyMode.instance_variable_set(:@installed, false)
     end
 
-    it 'does not activate readonly mode' do
+    after { ConsoleKit::ReadonlyMode.instance_variable_set(:@installed, false) }
+
+    it 'activates readonly mode' do
+      step.call
+      expect(ConsoleKit::ReadonlyMode.active?).to be true
+    end
+  end
+
+  context 'when tenants is :dynamic with env-based enforcement only' do
+    before do
+      ConsoleKit.configure do |c|
+        c.tenants                = :dynamic
+        c.tenant_resolver        = ->(key) { { partner_code: key.to_s } }
+        c.context_class          = 'Object'
+        c.readonly_environments  = ['production']
+      end
+      hide_const('Rails')
+      stub_const('ENV', ENV.to_h.merge('RAILS_ENV' => 'production'))
+      stub_const('ActiveRecord::Base', Class.new)
+    end
+
+    it 'does not activate readonly mode via env enforcement in dynamic mode' do
       step.call
       expect(ConsoleKit::ReadonlyMode.active?).to be false
     end

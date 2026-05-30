@@ -26,7 +26,7 @@ module ConsoleKit
       end
 
       def aborted?(key)
-        key == :abort || !key
+        key == :abort
       end
 
       def apply_tenant(key)

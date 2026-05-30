@@ -24,6 +24,8 @@ module ConsoleKit
 
       def configure_tenant(key, tenants = nil, context_class = nil)
         tenants, context_class = resolve_defaults(tenants, context_class)
+        return missing_context_class_error unless context_class
+
         run_tenant_setup(key, tenants, context_class)
       end
 
@@ -68,9 +70,9 @@ module ConsoleKit
       end
 
       def apply_context(ctx, constant)
-        ctx.tenant_shard = constant[:shard]
-        ctx.tenant_mongo_db = constant[:mongo_db]
-        ctx.partner_identifier = constant[:partner_code]
+        ctx.tenant_shard       = constant[:shard]       if ctx.respond_to?(:tenant_shard=)
+        ctx.tenant_mongo_db    = constant[:mongo_db]     if ctx.respond_to?(:tenant_mongo_db=)
+        ctx.partner_identifier = constant[:partner_code] if ctx.respond_to?(:partner_identifier=)
       end
 
       # :reek:ManualDispatch -- necessary for Rails/Mongoid detection compatibility
@@ -83,6 +85,11 @@ module ConsoleKit
         return if mongo_db.nil? || mongo_db.empty?
 
         Mongoid.override_client(mongo_db.to_s)
+      end
+
+      def missing_context_class_error
+        Output.print_error('ConsoleKit: `context_class` is not configured.')
+        false
       end
 
       def handle_error(error, key)

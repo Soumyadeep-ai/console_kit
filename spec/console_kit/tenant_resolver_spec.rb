@@ -28,6 +28,22 @@ RSpec.describe ConsoleKit::TenantResolver do
     it 'reports correct size' do
       expect(resolver.size).to eq(1)
     end
+
+    it 'resolves by string when hash has symbol keys' do
+      expect(resolver.resolve('tenant_a')).not_to be_nil
+    end
+
+    context 'with string-keyed hash' do
+      subject(:resolver) { described_class.build({ 'acme' => { constants: { shard: 's', partner_code: 'p' } } }, nil) }
+
+      it 'resolves by symbol key' do
+        expect(resolver.resolve(:acme)).not_to be_nil
+      end
+
+      it 'resolves by string key' do
+        expect(resolver.resolve('acme')).not_to be_nil
+      end
+    end
   end
 
   describe '.build — Array format' do

@@ -7,7 +7,11 @@ module ConsoleKit
     class HashStrategy
       def initialize(hash)       = (@hash = hash)
       def all_keys               = @hash.keys
-      def resolve(key)           = @hash[key]
+
+      def resolve(key)
+        @hash[key] || @hash[key.to_s] || @hash[key.to_sym]
+      end
+
       def any?                   = @hash.any?
       def size                   = @hash.size
     end

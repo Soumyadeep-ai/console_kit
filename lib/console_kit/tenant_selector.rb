@@ -17,7 +17,9 @@ module ConsoleKit
           result = attempt_with_menu(tenants, keys)
           return result unless result == :retry
         end
-        nil
+        :abort
+      rescue Interrupt
+        :abort
       end
 
       private

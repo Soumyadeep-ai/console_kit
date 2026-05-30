@@ -224,5 +224,11 @@ RSpec.describe ConsoleKit::ScopedSwitcher do
         expect(ConsoleKit::Context.current.tenant).to eq(:tenant_b)
       end
     end
+
+    it 'runs restore pipeline outside shard wrapper' do
+      ConsoleKit::Context.push(:tenant_b)
+      switcher.with(:tenant_a) { :noop }
+      expect(shard_strategy).to have_received(:wrap).once
+    end
   end
 end

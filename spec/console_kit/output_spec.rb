@@ -180,6 +180,19 @@ RSpec.describe ConsoleKit::Output do
       expect { described_class.print_banner(lines: ["\e[31mDANGER\e[0m"], style: :danger) }
         .to output(/DANGER/).to_stdout
     end
+
+    it 'suppresses banner output when silent' do
+      output = capture_stdout do
+        described_class.silence { described_class.print_banner(lines: ['X']) }
+      end
+      expect(output).to be_empty
+    end
+
+    it 'omits ANSI color codes in banner when pretty_output is false' do
+      ConsoleKit.configure { |c| c.pretty_output = false }
+      output = capture_stdout { described_class.print_banner(lines: ['X'], style: :danger) }
+      expect(output).not_to match(/\e\[/)
+    end
   end
 
   describe '.silent' do

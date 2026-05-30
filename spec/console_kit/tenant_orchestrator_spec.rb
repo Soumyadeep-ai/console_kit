@@ -38,6 +38,32 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       described_class.reset
       expect(ConsoleKit::SwitchPipeline).to have_received(:run)
     end
+
+    it 'restores prior tenant when pipeline fails' do
+      ConsoleKit::Context.push(:tenant_a)
+      ConsoleKit::Context.mark_configured!
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'aborted'))
+      described_class.reset
+      expect(ConsoleKit::Context.current.tenant).to eq(:tenant_a)
+    end
+
+    it 'leaves context empty when pipeline fails with no prior tenant' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'aborted'))
+      described_class.reset
+      expect(ConsoleKit::Context.current.tenant).to be_nil
+    end
+
+    it 'restores prior tenant but not configured when pipeline fails and prior was not configured' do
+      ConsoleKit::Context.push(:tenant_a)
+      # intentionally NOT calling mark_configured! — prior_configured is false
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, error: 'aborted'))
+      described_class.reset
+      expect(ConsoleKit::Context.current.tenant).to eq(:tenant_a)
+      expect(ConsoleKit::Context.current.configured?).to be false
+    end
   end
 
   describe '.reapply' do

@@ -301,5 +301,18 @@ RSpec.describe ConsoleKit do
         .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, tenant: nil, error: 'aborted'))
       expect(described_class.switch_tenant!).to be_nil
     end
+
+    it 'accepts a tenant_key argument without raising' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      expect { described_class.switch_tenant!(:tenant_a) }.not_to raise_error
+    end
+
+    it 'passes tenant_key to the pipeline' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
+      described_class.switch_tenant!(:tenant_a)
+      expect(ConsoleKit::SwitchPipeline).to have_received(:run).with(hash_including(tenant_key: :tenant_a))
+    end
   end
 end

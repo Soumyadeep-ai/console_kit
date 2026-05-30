@@ -50,24 +50,26 @@ module ConsoleKit
 
     def with(tenant_key, &block)
       shard = resolve_shard(tenant_key)
-      @strategy.wrap(shard, role: @config.shard_role) { scoped_run(tenant_key, &block) }
+      previous = nil
+      begin
+        @strategy.wrap(shard, role: @config.shard_role) do
+          Context.push(tenant_key)
+          result = SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
+          raise ConsoleKit::Error, result.error unless result.success?
+
+          block.call
+        ensure
+          previous = Context.pop
+        end
+      ensure
+        SwitchPipeline.run(tenant_key: previous, scoped: true, config: @config) if previous
+      end
     end
 
     private
 
     def resolve_shard(tenant_key)
       Connections::ShardResolver.new(@config).resolve(tenant_key)
-    end
-
-    def scoped_run(tenant_key, &block)
-      Context.push(tenant_key)
-      result = SwitchPipeline.run(tenant_key: tenant_key, scoped: true, config: @config)
-      raise ConsoleKit::Error, result.error unless result.success?
-
-      block.call
-    ensure
-      previous = Context.pop
-      SwitchPipeline.run(tenant_key: previous, scoped: true, config: @config) if previous
     end
   end
 end

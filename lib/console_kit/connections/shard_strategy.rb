@@ -33,15 +33,15 @@ module ConsoleKit
     end
 
     # Strategy that delegates to ActiveRecord's `connected_to` API on
-    # Rails 6 or newer. Falls back to the default connection if the
+    # Rails 6.1 or newer. Falls back to the default connection if the
     # requested shard cannot be reached at runtime.
     class RailsConnectedToStrategy < ShardStrategy
       def available?
         return false unless defined?(ActiveRecord::Base)
         return false unless ActiveRecord::Base.respond_to?(:connected_to)
-        return false unless defined?(Rails::VERSION::MAJOR)
+        return false unless defined?(Rails::VERSION::STRING)
 
-        Rails::VERSION::MAJOR >= 6
+        Gem::Version.new(Rails::VERSION::STRING) >= Gem::Version.new('6.1')
       end
 
       def wrap(shard, role: :writing, &block)

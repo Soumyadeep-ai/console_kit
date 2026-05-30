@@ -150,6 +150,63 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       end
     end
 
+    context 'when context class does not respond to tenant_shard=' do
+      let(:context_class) { Struct.new(:tenant_mongo_db, :partner_identifier).new }
+
+      before do
+        allow(ApplicationRecord).to receive(:establish_connection)
+        allow(Mongoid).to receive(:override_client)
+        allow(ConsoleKit::Output).to receive(:print_success)
+      end
+
+      it 'skips tenant_shard= without raising' do
+        expect { described_class.configure_tenant(tenant_key, tenants, context_class) }.not_to raise_error
+      end
+    end
+
+    context 'when context class does not respond to tenant_mongo_db=' do
+      let(:context_class) { Struct.new(:tenant_shard, :partner_identifier).new }
+
+      before do
+        allow(ApplicationRecord).to receive(:establish_connection)
+        allow(ConsoleKit::Output).to receive(:print_success)
+        hide_const('Mongoid')
+      end
+
+      it 'skips tenant_mongo_db= without raising' do
+        expect { described_class.configure_tenant(tenant_key, tenants, context_class) }.not_to raise_error
+      end
+    end
+
+    context 'when context class does not respond to partner_identifier=' do
+      let(:context_class) { Struct.new(:tenant_shard, :tenant_mongo_db).new }
+
+      before do
+        allow(ApplicationRecord).to receive(:establish_connection)
+        allow(ConsoleKit::Output).to receive(:print_success)
+      end
+
+      it 'skips partner_identifier= without raising' do
+        expect { described_class.configure_tenant(tenant_key, tenants, context_class) }.not_to raise_error
+      end
+    end
+
+    context 'when context_class is nil' do
+      before do
+        allow(ConsoleKit.configuration).to receive(:context_class).and_return(nil)
+        allow(ConsoleKit::Output).to receive(:print_error)
+      end
+
+      it 'returns false' do
+        expect(described_class.configure_tenant(tenant_key, tenants, nil)).to be false
+      end
+
+      it 'prints a context_class configuration error' do
+        described_class.configure_tenant(tenant_key, tenants, nil)
+        expect(ConsoleKit::Output).to have_received(:print_error).with(/context_class/)
+      end
+    end
+
     context 'when configuration succeeds' do
       before do
         allow(ApplicationRecord).to receive(:establish_connection)

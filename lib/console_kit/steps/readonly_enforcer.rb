@@ -32,7 +32,7 @@ module ConsoleKit
       end
 
       def should_activate?
-        ar_available? && !dynamic_mode? && (config.readonly_mode || env_enforced?)
+        ar_available? && (config.readonly_mode || (!dynamic_mode? && env_enforced?))
       end
 
       def ar_available? = defined?(ActiveRecord::Base)

@@ -32,9 +32,9 @@ RSpec.describe ConsoleKit::TenantSelector do
   end
 
   context 'when invalid input is given' do
-    it 'retries up to 3 times and returns nil if never valid' do
+    it 'returns :abort if all attempts fail' do
       allow($stdin).to receive(:gets).and_return("bad\n", "-1\n", "3\n")
-      expect(described_class.select(tenants, keys)).to be_nil
+      expect(described_class.select(tenants, keys)).to eq(:abort)
     end
 
     it 'retries on invalid inputs then succeeds on a valid input' do
@@ -139,6 +139,13 @@ RSpec.describe ConsoleKit::TenantSelector do
     it 'defaults to "0" (no tenant) when no tenants available and input is empty' do
       allow($stdin).to receive(:gets).and_return("\n")
       expect(described_class.select({}, [])).to be_nil
+    end
+  end
+
+  context 'when user interrupts with Ctrl-C' do
+    it 'returns :abort gracefully' do
+      allow($stdin).to receive(:gets).and_raise(Interrupt)
+      expect(described_class.select(tenants, keys)).to eq(:abort)
     end
   end
 

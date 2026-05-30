@@ -9,8 +9,15 @@ module ConsoleKit
       end
 
       def reset
+        prior_tenant     = Context.current.tenant
+        prior_configured = Context.current.configured?
         Context.reset!
-        SwitchPipeline.run(config: ConsoleKit.configuration)
+        result = SwitchPipeline.run(config: ConsoleKit.configuration)
+        if result.failure? && prior_tenant
+          Context.push(prior_tenant)
+          Context.mark_configured! if prior_configured
+        end
+        result
       end
 
       def reapply
