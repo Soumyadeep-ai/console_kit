@@ -290,11 +290,16 @@ RSpec.describe ConsoleKit do
 
     after { ConsoleKit::Context.reset! }
 
-    it 'runs SwitchPipeline and returns a result' do
+    it 'returns tenant key on success' do
       allow(ConsoleKit::SwitchPipeline).to receive(:run)
         .and_return(ConsoleKit::SwitchPipeline::Result.new(success: true, tenant: :tenant_a))
-      result = described_class.switch_tenant!
-      expect(result).to be_a(ConsoleKit::SwitchPipeline::Result)
+      expect(described_class.switch_tenant!).to eq(:tenant_a)
+    end
+
+    it 'returns nil on failure' do
+      allow(ConsoleKit::SwitchPipeline).to receive(:run)
+        .and_return(ConsoleKit::SwitchPipeline::Result.new(success: false, tenant: nil, error: 'aborted'))
+      expect(described_class.switch_tenant!).to be_nil
     end
   end
 end

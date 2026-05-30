@@ -133,7 +133,8 @@ module ConsoleKit
     end
 
     def switch_tenant!
-      SwitchPipeline.run(config: configuration)
+      result = SwitchPipeline.run(config: configuration)
+      result.success ? result.tenant : nil
     end
 
     def status

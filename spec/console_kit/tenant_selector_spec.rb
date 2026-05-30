@@ -136,6 +136,39 @@ RSpec.describe ConsoleKit::TenantSelector do
       expect(described_class.select(tenants, keys)).to eq('alpha')
     end
 
+    it 'defaults to "0" (no tenant) when no tenants available and input is empty' do
+      allow($stdin).to receive(:gets).and_return("\n")
+      expect(described_class.select({}, [])).to be_nil
+    end
+  end
+
+  context 'when using name prefix matching' do
+    it 'returns tenant matching unique prefix' do
+      allow($stdin).to receive(:gets).and_return("al\n")
+      expect(described_class.select(tenants, keys)).to eq('alpha')
+    end
+
+    it 'returns tenant matching full name' do
+      allow($stdin).to receive(:gets).and_return("beta\n")
+      expect(described_class.select(tenants, keys)).to eq('beta')
+    end
+
+    it 'warns and retries on ambiguous prefix' do
+      allow($stdin).to receive(:gets).and_return("a\n", "1\n")
+      ambiguous_tenants = { 'apple' => { constants: { partner_code: 'AP' } }, 'android' => { constants: { partner_code: 'AN' } } }
+      ambiguous_keys = ambiguous_tenants.keys
+      allow(ConsoleKit::Output).to receive(:print_warning).with(a_string_including('Ambiguous'))
+      described_class.select(ambiguous_tenants, ambiguous_keys)
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('Ambiguous'))
+    end
+
+    it 'warns and retries on no match' do
+      allow($stdin).to receive(:gets).and_return("xyz\n", "1\n")
+      allow(ConsoleKit::Output).to receive(:print_warning).with("No tenant matches 'xyz'.")
+      described_class.select(tenants, keys)
+      expect(ConsoleKit::Output).to have_received(:print_warning).with("No tenant matches 'xyz'.")
+    end
+
     it 'warns about input selection being out of range' do
       allow($stdin).to receive(:gets).and_return("9\n", "1\n")
       allow(ConsoleKit::Output).to receive(:print_warning).with('Selection must be between 0 and 2.')

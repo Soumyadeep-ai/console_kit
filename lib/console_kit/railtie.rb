@@ -16,9 +16,6 @@ module ConsoleKit
       end
     end
 
-    config.to_prepare do
-      SwitchPipeline.run(config: ConsoleKit.configuration) if defined?(Rails::Console)
-    end
   end
 end
 # :nocov:

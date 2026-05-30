@@ -56,11 +56,4 @@ RSpec.describe 'ConsoleKit Railtie blocks' do
     end
   end
 
-  describe 'to_prepare block behavior' do
-    it 'runs SwitchPipeline when Rails::Console is defined' do
-      stub_const('Rails::Console', Class.new)
-      ConsoleKit::SwitchPipeline.run(config: ConsoleKit.configuration) if defined?(Rails::Console)
-      expect(ConsoleKit::SwitchPipeline).to have_received(:run)
-    end
-  end
 end

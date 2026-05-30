@@ -80,7 +80,7 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
 
-    context 'when Pry is defined' do
+    context 'when Pry is defined (legacy proc API)' do
       let(:captured_prompt) { [] }
       let(:pry_cfg) { double('pry_config') } # rubocop:disable RSpec/VerifiedDoubles
 
@@ -99,6 +99,84 @@ RSpec.describe ConsoleKit::Prompt do
         described_class.apply
         result = captured_prompt.first&.call(nil, nil, nil)
         expect(result).to include('>')
+      end
+    end
+
+    context 'when Pry::Prompt API is available' do
+      let(:pry_cfg) { double('pry_config') } # rubocop:disable RSpec/VerifiedDoubles
+      let(:captured_procs) { [] }
+      let(:prompt_instance) { double('prompt_instance') } # rubocop:disable RSpec/VerifiedDoubles
+      let(:pry_prompt_class) { double('Pry::Prompt class') } # rubocop:disable RSpec/VerifiedDoubles
+
+      before do
+        hide_const('IRB') if defined?(IRB)
+        allow(pry_prompt_class).to receive(:new) do |_name, _desc, procs|
+          captured_procs.concat(procs)
+          prompt_instance
+        end
+        allow(pry_cfg).to receive(:prompt=)
+        pry_module = Module.new
+        pry_module.const_set(:Prompt, pry_prompt_class)
+        allow(pry_module).to receive(:config).and_return(pry_cfg)
+        stub_const('Pry', pry_module)
+      end
+
+      it 'sets prompt= with a Pry::Prompt instance' do
+        described_class.apply
+        expect(pry_cfg).to have_received(:prompt=).with(prompt_instance)
+      end
+
+      it 'secondary prompt proc includes *' do
+        described_class.apply
+        expect(captured_procs.last&.call).to include('*')
+      end
+    end
+
+    context 'when IRB is defined with an active CurrentContext' do
+      let(:irb_context) { double('IRB::Context') } # rubocop:disable RSpec/VerifiedDoubles
+
+      before do
+        hide_const('Pry') if defined?(Pry)
+        allow(irb_context).to receive(:prompt_i=)
+        allow(irb_context).to receive(:prompt_n=)
+        allow(irb_context).to receive(:prompt_s=)
+        allow(irb_context).to receive(:prompt_c=)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: irb_context)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'updates prompt strings on the running context' do
+        described_class.apply
+        expect(irb_context).to have_received(:prompt_i=).with(a_string_including('['))
+      end
+    end
+
+    context 'when IRB is defined, CurrentContext is nil, MAIN_CONTEXT present' do
+      let(:irb_context) { double('IRB::Context') } # rubocop:disable RSpec/VerifiedDoubles
+
+      before do
+        hide_const('Pry') if defined?(Pry)
+        irb_conf[:MAIN_CONTEXT] = irb_context
+        allow(irb_context).to receive(:prompt_i=)
+        allow(irb_context).to receive(:prompt_n=)
+        allow(irb_context).to receive(:prompt_s=)
+        allow(irb_context).to receive(:prompt_c=)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: nil)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'falls back to MAIN_CONTEXT for prompt refresh' do
+        described_class.apply
+        expect(irb_context).to have_received(:prompt_i=)
+      end
+    end
+
+    context 'when IRB is defined but no active context anywhere' do
+      before do
+        hide_const('Pry') if defined?(Pry)
+        stub_const('IRB', double('IRB', conf: irb_conf, CurrentContext: nil)) # rubocop:disable RSpec/VerifiedDoubles
+      end
+
+      it 'does not raise' do
+        expect { described_class.apply }.not_to raise_error
       end
     end
 

@@ -7,9 +7,8 @@ module ConsoleKit
       def apply
         return unless defined?(IRB) || defined?(Pry)
 
-        label = new.tenant_label
-        configure_irb_prompt(label) if defined?(IRB)
-        configure_pry_prompt(label) if defined?(Pry)
+        configure_irb_prompt(new.tenant_label) if defined?(IRB)
+        configure_pry_prompt if defined?(Pry)
       end
 
       private
@@ -19,11 +18,34 @@ module ConsoleKit
         prompt_config = irb_conf[:PROMPT] ||= {}
         prompt_config[:CONSOLE_KIT] = build_irb_prompt_hash(label)
         irb_conf[:PROMPT_MODE] = :CONSOLE_KIT
+        refresh_irb_context
       end
 
-      def configure_pry_prompt(label)
-        Pry.config.prompt = proc do |_target_self, _nest_level, _pry|
-          "#{label}> "
+      def refresh_irb_context
+        ctx = find_irb_context
+        return unless ctx
+
+        hash = IRB.conf[:PROMPT][:CONSOLE_KIT]
+        ctx.prompt_i = hash[:PROMPT_I]
+        ctx.prompt_n = hash[:PROMPT_N]
+        ctx.prompt_s = hash[:PROMPT_S]
+        ctx.prompt_c = hash[:PROMPT_C]
+      end
+
+      def find_irb_context
+        return IRB.CurrentContext if IRB.respond_to?(:CurrentContext) && IRB.CurrentContext
+
+        IRB.conf[:MAIN_CONTEXT]
+      end
+
+      def configure_pry_prompt
+        primary   = proc { |*| "#{ConsoleKit::Prompt.new.tenant_label}> " }
+        secondary = proc { |*| "#{ConsoleKit::Prompt.new.tenant_label}* " }
+        if defined?(Pry::Prompt)
+          Pry.config.prompt = Pry::Prompt.new('console_kit', 'ConsoleKit tenant prompt',
+                                              [primary, secondary])
+        else
+          Pry.config.prompt = primary
         end
       end
 

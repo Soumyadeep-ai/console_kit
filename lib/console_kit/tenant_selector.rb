@@ -32,11 +32,10 @@ module ConsoleKit
       end
 
       def attempt_selection(keys)
-        index = prompt_user_for_selection(keys.size)
-        return nil if index.zero?
-        return keys[index - 1] if index.positive?
+        input = prompt_user_for_selection(keys.size)
+        return resolve_by_integer(input, keys) if valid_integer?(input)
 
-        :retry
+        resolve_by_name(input, keys)
       end
 
       def partner_code(tenants, key)
@@ -46,30 +45,43 @@ module ConsoleKit
       end
 
       def prompt_user_for_selection(max_index)
-        Output.print_prompt("\nEnter the number of the tenant you want (or press Enter for default '1'): ")
-        input = normalize_input($stdin.gets&.chomp&.strip)
-        return invalid_input_response unless valid_integer?(input)
-
-        validate_range(input.to_i, max_index)
+        default = max_index.positive? ? '1' : '0'
+        Output.print_prompt("\nEnter number or name prefix (default '#{default}'): ")
+        normalize_input($stdin.gets&.chomp&.strip, max_index)
       end
 
-      def validate_range(parsed, max_index)
-        return invalid_range_response(max_index) unless parsed.between?(0, max_index)
+      def resolve_by_integer(input, keys)
+        index = input.to_i
+        return nil if index.zero?
 
-        parsed
+        unless index.between?(1, keys.size)
+          Output.print_warning("Selection must be between 0 and #{keys.size}.")
+          return :retry
+        end
+
+        keys[index - 1]
       end
 
-      def normalize_input(raw)
-        raw.to_s.empty? ? '1' : raw
+      def resolve_by_name(input, keys)
+        matched = keys.select { |k| k.to_s.downcase.start_with?(input.downcase) }
+        case matched.size
+        when 1 then matched.first
+        when 0
+          Output.print_warning("No tenant matches '#{input}'.")
+          :retry
+        else
+          Output.print_warning("Ambiguous: #{matched.map(&:to_s).join(', ')}. Be more specific.")
+          :retry
+        end
+      end
+
+      def normalize_input(raw, max_index)
+        return raw unless raw.to_s.empty?
+
+        max_index.positive? ? '1' : '0'
       end
 
       def valid_integer?(input) = input.match?(/\A\d+\z/)
-      def invalid_input_response = Output.print_warning('Invalid input. Please enter a number.').then { -1 }
-
-      def invalid_range_response(max_index)
-        Output.print_warning("Selection must be between 0 and #{max_index}.")
-        -1
-      end
     end
   end
 end
