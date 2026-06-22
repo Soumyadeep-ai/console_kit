@@ -109,7 +109,7 @@ RSpec.describe ConsoleKit::Generators::InstallGenerator, type: :generator do
   context 'when generating output messages' do
     it 'outputs setup complete instructions' do
       output = run_generator
-      expect(output).to match(/Setup complete!/)
+      expect(output).to include('Setup complete!')
     end
 
     it 'advises modifying the initializer file' do
