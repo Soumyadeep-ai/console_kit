@@ -6,6 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.0] - 2026-06-24
+- Minor Bug Fixes
+
+---
+
 ## [1.3.0] - 2026-05-25
 ### Added
 - **Mongoid Named Client Support:** `MongoConnectionHandler` now detects named Mongoid clients (configured in `mongoid.yml`) and calls `Mongoid.override_client` instead of `Mongoid.override_database`. This correctly handles multi-tenant setups where each tenant has a separate Mongoid client URI rather than a shared client with a different database name override.
@@ -136,6 +141,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.4.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.1.0
