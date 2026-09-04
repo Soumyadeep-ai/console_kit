@@ -86,14 +86,155 @@ end
 
 ConsoleKit automatically detects and manages connections for:
 
-| Connection      | Gem Required    | Config Key               | Behavior                                        |
-|-----------------|-----------------|--------------------------|------------------------------------------------|
-| SQL (ActiveRecord) | `activerecord` | `shard`               | Calls `establish_connection` on your base class |
-| MongoDB         | `mongoid`       | `mongo_db`              | Calls `Mongoid.override_database`              |
-| Redis           | `redis`         | `redis_db`              | Calls `Redis.current.select(db)`               |
-| Elasticsearch   | `elasticsearch` | `elasticsearch_prefix`  | Sets `Elasticsearch::Model.index_name_prefix=` |
+| Connection         | Gem Required    | Config Key             | How it switches                                                        | How it is verified                     |
+|--------------------|-----------------|------------------------|------------------------------------------------------------------------|----------------------------------------|
+| SQL (ActiveRecord) | `activerecord`  | `shard`                | `connecting_to(shard:)` for registered shards, `establish_connection` otherwise | `current_shard` / `db_config.name`     |
+| MongoDB            | `mongoid`       | `mongo_db`             | `Mongoid.override_client` for named clients, `override_database` otherwise      | effective client or database name      |
+| Redis              | `redis`         | `redis_db`             | `SELECT` on the application's Redis handle                             | the client's cached logical DB         |
+| Elasticsearch      | `elasticsearch` | `elasticsearch_prefix` | `Elasticsearch::Model.index_name_prefix=`                              | the effective index prefix, read back  |
 
-Handlers are only activated when their corresponding gem is loaded.
+Handlers are only activated when their corresponding gem is loaded. Verification is a local read on
+every backend - switching a tenant makes no diagnostic network calls.
+
+## Tenant Switching Guarantees
+
+A tenant switch is transactional:
+
+```
+validate -> snapshot -> prepare -> apply context -> connect -> verify -> commit
+```
+
+Two invariants follow from that:
+
+1. **At every observable point, ConsoleKit is either still on the previous tenant or completely on
+   the new one.** The new tenant only becomes current at the final commit, so a failure part-way
+   through can never leave you with the context on tenant B, SQL on B and Redis still on A.
+2. **A successful connection is not enough.** Each backend must prove the live connection belongs to
+   the requested tenant. A connection that succeeds while pointing at the wrong database fails the
+   switch rather than silently serving another tenant's data.
+
+If anything fails, every touched component is restored - the context attributes and all four
+backends - and the switch raises. Each component is attempted even when an earlier restore fails, so
+one broken backend cannot strand the rest.
+
+### Errors
+
+```ruby
+ConsoleKit.switch_tenant(:globex)
+# ConsoleKit::TenantSwitchError:
+#   Failed to switch tenant from :acme to :globex (MongoDB):
+#   MongoDB verification failed. Expected "globex_db", got "acme_db"
+#
+#   Previous tenant state was restored successfully.
+```
+
+A rollback can itself fail, and that is reported separately rather than replacing the root cause:
+
+```ruby
+# ConsoleKit::TenantSwitchError:
+#   Failed to switch tenant from :acme to :globex (MongoDB):
+#   MongoDB verification failed. Expected "globex_db", got "acme_db"
+#
+#   WARNING: rollback did not fully succeed:
+#     - SQL: shard registry offline
+```
+
+`TenantSwitchError` exposes `#original_error`, `#rollback_failures` and `#rollback_succeeded?`.
+The exception hierarchy, all under `ConsoleKit::Error`:
+
+| Error | Raised when |
+|-------|-------------|
+| `ConfigurationError` | configuration is missing, malformed or unusable |
+| `TenantNotFoundError` | the tenant key is not in the configured tenant map |
+| `ConnectionError` | a backend could not be connected or inspected |
+| `ConnectionVerificationError` | a backend connected but points at the wrong tenant |
+| `UnsupportedBackendError` | the installed client cannot support the requested operation |
+| `TenantSwitchError` | a switch failed; carries the root cause and any rollback failures |
+| `RollbackError` | restoring previous state failed |
+
+Credentials are never included in an error message, a diagnostic row or a log line. Connection URIs
+and `key=value` credential fragments are scrubbed before any message is built.
+
+## Programmatic API
+
+The console prompt is the usual entry point, but the same operations are available directly:
+
+```ruby
+# Raising, programmatic switch. Atomic: on failure the previous tenant is restored.
+ConsoleKit.switch_tenant(:acme)
+
+# The current tenant key, or nil.
+ConsoleKit.current_tenant  # => :acme
+
+# Re-verify that every available backend still points at the current tenant.
+ConsoleKit.verify_tenant!
+
+# Nested, exception-safe scope. The enclosing tenant is restored on exit,
+# including when the block raises or the inner switch fails.
+ConsoleKit.with_tenant(:globex) do
+  Order.count
+end
+# back on :acme here
+
+# Validate the whole configuration up front. Reports every problem at once.
+ConsoleKit.configuration.validate!
+```
+
+`ConsoleKit.switch_tenant` raises on failure. The interactive console flow deliberately does not -
+it reports through the console output and returns `false`, so a mistyped tenant does not tear down
+your session.
+
+## Concurrency and Isolation
+
+**Read this before using ConsoleKit anywhere other than a console.**
+
+ConsoleKit invents no isolation of its own. It writes through whatever handle your client library
+gives it, so isolation is exactly as good as that handle:
+
+| Component | Isolated per thread? |
+|-----------|----------------------|
+| ConsoleKit's own tenant state | **Yes** |
+| Mongoid overrides (`Mongoid::Threaded`) | **Yes** |
+| ActiveRecord native shard path (`connecting_to`) | **Yes** - fiber-local |
+| Your context object | **Only if it stores per-thread** (e.g. `ActiveSupport::CurrentAttributes`) |
+| ActiveRecord `establish_connection` fallback | **No** - replaces a process-wide pool |
+| Redis via `Redis.current` (redis-rb 4) | **No** - process-global singleton |
+| Elasticsearch `index_name_prefix` | **No** - one process-wide attribute |
+
+Where isolation does not exist, the last writer wins for the whole process. ConsoleKit reports this
+rather than hiding it:
+
+```ruby
+handler.isolation_model  # => :scoped, :process_global, or :none
+handler.thread_isolated? # => false for Redis on redis-rb 4, always false for Elasticsearch
+```
+
+Redis on redis-rb 4 prints a one-time warning that DB selection is process-wide. Elasticsearch warns,
+naming both prefixes, when live threads disagree about the prefix.
+
+**`switch_tenant` is a console tool, not a per-request multi-tenancy mechanism.** Because it mutates
+process-global backend state, calling it from a request or a background job will change the tenant
+for every other thread in that process. For real isolation, run one tenant per process.
+
+`ConsoleKit.with_tenant` and `ConsoleKit.current_tenant` are safe to read anywhere; it is the
+switching itself that is process-affecting.
+
+## Observability
+
+ConsoleKit emits timing and counts through a small internal hook. There is no external dependency -
+wire it to whatever you already use:
+
+```ruby
+ConsoleKit::Instrumentation.subscribe do |name, duration_ms, payload|
+  Rails.logger.info("#{name} #{duration_ms}ms #{payload.inspect}")
+end
+
+ConsoleKit::Instrumentation.counts
+# => { "console_kit.tenant_switch" => 3, "console_kit.rollback" => 1, ... }
+```
+
+Events cover tenant switches, per-backend connect and verify, rollbacks, verification failures and
+diagnostics. Payloads carry tenant keys and backend names - never credentials.
 
 ## Console Usage
 
@@ -145,6 +286,8 @@ ConsoleKit.enable_pretty_output
 ConsoleKit.disable_pretty_output
 ```
 
+See [Programmatic API](#programmatic-api) for `switch_tenant`, `with_tenant` and `verify_tenant!`.
+
 ### Connection Dashboard
 
 Run `dashboard` in the console to see a diagnostics table for all active connections:
@@ -161,7 +304,23 @@ Run `dashboard` in the console to see a diagnostics table for all active connect
 └───────────────┴─────────────┴─────────┴──────────────────────────────────────────┘
 ```
 
-Each handler is queried with a 2-second timeout to keep things fast. To auto-display the dashboard on every tenant switch, add to your initializer:
+The dashboard takes a level:
+
+```ruby
+dashboard                 # :basic - no network calls at all
+dashboard(level: :full)   # adds version, health and latency probes
+```
+
+`:basic` is the default and reports only what can be read locally, so it is cheap enough to run
+freely. Switching a tenant never triggers diagnostics on its own.
+
+Each handler is queried with a 2-second timeout. Diagnostics run on a bounded set of reusable
+per-backend workers, so the thread count is capped no matter how often you type `dashboard`; a
+backend whose previous check is still running reports as busy rather than starting another one.
+Results are cached for a couple of seconds, and that cache is invalidated immediately by a tenant
+switch, so a stale row can never be reported as the current tenant's.
+
+To auto-display the dashboard on every tenant switch, add to your initializer:
 
 ```ruby
 config.show_dashboard = true

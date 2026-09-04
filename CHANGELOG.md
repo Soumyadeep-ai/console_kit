@@ -6,6 +6,58 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.0] - 2026-09-04
+
+Hardening release. Tenant switching is now transactional: a switch either
+completes fully or leaves the previous tenant exactly as it was.
+
+### Added
+- **Atomic tenant switching.** `TenantSwitch` runs `validate -> snapshot -> prepare -> apply context -> connect -> verify -> commit`. The new tenant is not observable as current until the final commit, so a partially applied tenant state can no longer survive a failure.
+- **Rollback.** Any failure restores every touched component: context attributes and all four backends. Each component is attempted even when an earlier one fails, so one broken backend cannot strand the rest.
+- **Connection identity verification.** A successful connection is no longer accepted as proof. SQL compares `current_shard` / `db_config.name`, Mongoid the effective client or database name, Redis the client's cached logical DB, Elasticsearch the effective index prefix. All are local reads with no network round trip; a mismatch raises `ConnectionVerificationError` and fails the switch.
+- **Exception taxonomy.** `ConfigurationError`, `TenantNotFoundError`, `ConnectionError`, `ConnectionVerificationError`, `TenantSwitchError`, `RollbackError` and `UnsupportedBackendError`, all under `ConsoleKit::Error`. `TenantSwitchError` carries `#original_error`, `#rollback_failures` and `#rollback_succeeded?`, so a rollback failure never replaces the root cause.
+- **`TenantState` and `StateStore`.** All per-thread tenant state now lives in one thread-local holding one value object, replacing five independent `Thread.current` keys.
+- **`ConsoleKit.switch_tenant(:acme)`** — programmatic, raising counterpart to the interactive console flow.
+- **`ConsoleKit.with_tenant(:acme) { ... }`** — nested, exception-safe tenant scope that restores the enclosing tenant on exit.
+- **`ConsoleKit.verify_tenant!`** — re-verify that every available backend still points at the current tenant.
+- **Diagnostic levels.** `dashboard(level: :basic)` (the default) performs no network calls; `level: :full` keeps the version/health probes. Tenant switching triggers no diagnostics at all.
+- **Diagnostic caching.** A short TTL cache keyed by tenant state, level and backend. A tenant switch invalidates it immediately, and `:timeout` / `:error` rows are never cached, so a recovered backend is never masked.
+- **Instrumentation hook.** `ConsoleKit::Instrumentation.subscribe { |name, duration_ms, payload| ... }` plus counters for switches, verifications, rollbacks and diagnostic timeouts. No external dependency.
+- **Strict configuration validation.** `ConsoleKit.configuration.validate!` now reports every problem in one pass: tenant structure, identifiers, duplicate identifiers colliding by case or type, required constants, Redis DB numbers, Elasticsearch prefixes, shard and Mongoid client names. Unrecognised constants keys and a `context_class` missing writers are reported as warnings.
+- **Isolation reporting.** `RedisConnectionHandler#isolation_model` / `#thread_isolated?` and the Elasticsearch equivalents report at runtime whether a backend is genuinely per-thread or process-global.
+
+### Changed
+- **Connection pool churn removed.** The SQL handler now uses the native `connecting_to(shard:)` path when the target is a registered shard, detected by capability check rather than by Rails version. The `establish_connection` fallback re-establishes only when the resolved configuration actually changes, and no longer disconnects a pool that Rails is about to replace anyway. Switching to the shard already in use performs no pool work.
+- **`reapply`** no longer re-establishes a connection that is already on the target shard.
+- Diagnostics run on a bounded set of reusable per-backend workers instead of a fresh thread per call.
+- `ContextWrapper#assign` returns a Hash of applied values rather than triples, and owns the case-mismatch warning itself. It gained `current_values` and `restore`.
+- `TenantConfigurator.validate_constants!` moved to `ConsoleKit::TenantPlan`. `configuration_success` is now derived from `StateStore` and is joined by a `configuration_success?` predicate.
+
+### Fixed
+- **Unbounded diagnostic thread leak.** Every timed-out dashboard call previously abandoned a thread permanently. Diagnostics now use a capped set of reusable workers; a backend whose worker is still busy reports busy rather than spawning another thread. Threads are still never killed, preserving the 1.3.0 fix.
+- **`NotImplementedError` escaped the transaction.** It descends from `ScriptError`, not `StandardError`, so a handler that implemented `available?`, `snapshot` and `prepare` but not `connect!` bypassed rollback entirely and left the process half-switched.
+- **A failing `snapshot` destroyed the root cause.** The undo bundle was captured inside the guarded region, so a snapshot failure produced a `NoMethodError` from the rollback path in place of the real error, and no rollback ran.
+- **`ContextWrapper#restore` aborted on the first failing writer**, stranding the remaining context attributes on the tenant the switch failed to reach while `current_tenant` reported the previous one.
+- **Elasticsearch `:full` diagnostics reported `Connected` for an unreachable cluster.** The ping failure was swallowed and `cluster.health` was called anyway.
+- **A failed Mongoid, Redis or Elasticsearch switch could look like a success.** Each handler rescued `NoMethodError` and printed a warning while the caller carried on.
+
+### Security
+- **Credentials no longer reach error messages.** Tenant constants can carry connection URIs, so an authentication failure could put a plaintext password into `TenantSwitchError#message` and from there into logs and consoles. Root causes, rollback failures, diagnostic rows and configuration-validation messages are all scrubbed.
+- **Elasticsearch cross-thread prefix conflicts are now detected.** `Elasticsearch::Model.index_name_prefix` is process-wide; when live threads hold different prefixes ConsoleKit warns once, naming both, instead of silently letting one thread read another tenant's indices.
+- Broad `rescue StandardError` blocks were narrowed. Programming errors (`NoMethodError`, `NameError`, `ArgumentError`, `TypeError`) are no longer laundered into ordinary "dependency unavailable" results.
+
+### Breaking changes
+- **redis-rb 5 and redis-client:** these expose no process-wide client handle, so a non-default `redis_db` now raises `UnsupportedBackendError` from `prepare` instead of printing a warning and silently running against the wrong DB. Give each tenant its own Redis URL, for example `redis://redis.internal:6379/<db>`.
+- **Elasticsearch prefixes** containing uppercase characters, whitespace, a leading `_`, `-` or `+`, or any of `\ / * ? " < > | , #` now raise `ConfigurationError` before any mutation. Previously they were passed through and rejected later, or silently produced unusable index names.
+- **Incomplete tenant entries now fail `validate!`.** A tenant with no `:constants`, or missing `shard` / `partner_code`, previously validated as fine and only broke at switch time.
+- **A failed backend switch now raises rather than warning.** `ConsoleKit.switch_tenant` raises `TenantSwitchError`; the interactive console flow still reports through `Output` and returns `false`.
+
+### Preserved
+- The 1.3.0 Mongoid named-client fixes (`override_client` for named clients, `override_database` for database names, and clearing both on reset) are intact and covered by explicit regression tests.
+- The 1.3.0 `base_class` memoization in the SQL handler is retained.
+
+---
+
 ## [1.4.0] - 2026-06-24
 - Minor Bug Fixes
 
