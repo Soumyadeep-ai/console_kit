@@ -33,6 +33,14 @@ module ConsoleKit
     #                   with UnsupportedBackendError instead of pretending the
     #                   switch worked; give each tenant its own Redis URL
     #                   (redis://host:6379/<db>) instead.
+    #   :unknown        the probe itself failed against a reachable client, so
+    #                   ConsoleKit does not know. It reports :unknown rather
+    #                   than guessing :process_global, because an isolation
+    #                   claim the rest of the system trusts must not be a
+    #                   consolation prize for a failed probe. #thread_isolated?
+    #                   is false, and whether a DB can be selected is still
+    #                   decided by the client's own capabilities, not by this
+    #                   verdict.
     class RedisConnectionHandler < BaseConnectionHandler
       CONTEXT_ATTRIBUTE = :tenant_redis_db
       DISPLAY_NAME = 'Redis'

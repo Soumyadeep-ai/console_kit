@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.5.0] - 2026-09-04
+## [1.5.0] - 2026-09-05
 
 Hardening release. Tenant switching is now transactional: a switch either
 completes fully or leaves the previous tenant exactly as it was.
@@ -41,6 +41,11 @@ completes fully or leaves the previous tenant exactly as it was.
 - **A context attribute whose getter raised was snapshotted as `nil`**, so rollback wrote that `nil` over a real previous value and then reported a clean rollback. Unreadable attributes are now recorded with a sentinel, skipped on restore, and reported as rollback failures, so `rollback_succeeded?` cannot lie about them.
 - **Elasticsearch `:full` diagnostics reported `Connected` for an unreachable cluster.** The ping failure was swallowed and `cluster.health` was called anyway.
 - **A failed Mongoid, Redis or Elasticsearch switch could look like a success.** Each handler rescued `NoMethodError` and printed a warning while the caller carried on.
+- **The ActiveRecord shard stack grew without bound.** `connecting_to` pushes onto `connected_to_stack` and `restore` popped only on failure, so every committed switch left a frame behind - and since the Railtie reapplies on every Rails `reload!`, a long console session accrued hundreds of frames that Rails walks on every `current_shard` lookup. The stack now holds exactly one ConsoleKit frame regardless of switch count, and an application's own `connected_to` blocks are never disturbed.
+- **A misconfigured `sql_base_class` silently removed SQL from every switch.** An unresolvable class name made `available?` return false, which is indistinguishable from ActiveRecord not being loaded, so SQL was never switched, verified or rolled back while the switch still reported itself verified. A non-default class name that cannot be resolved now warns.
+- **The Redis isolation probe returned a verdict when it failed.** A programming error inside ConsoleKit was rescued into `:process_global` - an isolation claim the rest of the system then trusted. Programming errors re-raise, and a genuine probe failure reports the new `:unknown`.
+- **Handler discovery returned reload duplicates in non-deterministic order.** The registry is `descendants`, so a Zeitwerk reload leaves stale generations registered: the switch connected both while the snapshot map kept only one, so a rollback could restore a handler from a different generation's snapshot. Handlers are now deduplicated by backend and ordered deterministically.
+- **`level: :basic` diagnostics were cached and could go stale.** Cache freshness keys on `TenantState` identity, which only changes when the calling thread switches, so a foreign thread moving a process-global backend left a stale row reported as current. `:basic` is a pure local read, so it is no longer cached at all; the TTL cache applies to `:full`, which is what the dashboard-hammering requirement was about.
 
 ### Security
 - **Credentials no longer reach error messages.** Tenant constants can carry connection URIs, so an authentication failure could put a plaintext password into `TenantSwitchError#message` and from there into logs and consoles. Root causes, rollback failures, diagnostic rows, configuration-validation messages and the interactive console's own error output are all scrubbed.
@@ -73,6 +78,14 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 - **Elasticsearch prefixes** containing uppercase characters, whitespace, a leading `_`, `-` or `+`, or any of `\ / * ? " < > | , #` now raise `ConfigurationError` before any mutation. Previously they were passed through and rejected later, or silently produced unusable index names.
 - **Incomplete tenant entries now fail `validate!`.** A tenant with no `:constants`, or missing `shard` / `partner_code`, previously validated as fine and only broke at switch time.
 - **A failed backend switch now raises rather than warning.** `ConsoleKit.switch_tenant` raises `TenantSwitchError`; the interactive console flow still reports through `Output` and returns `false`.
+
+### Internal API notes
+These are not part of the documented public surface, but they changed shape and are visible to anyone who reached for them:
+- `RedisConnectionHandler#isolation_model` gained a fourth value, `:unknown`. Code matching on the previous three must handle it.
+- `ConnectionManager.available_handlers` now returns handlers deduplicated by backend and ordered deterministically by backend key, rather than in `Class#subclasses` order.
+- `Diagnostics::Cache` caches `level: :full` only.
+- New instrumentation counters: `console_kit.handler_dropped`, `console_kit.handler_collision`.
+- `TenantRollback#call` takes an optional second argument for backends that no longer have a live handler. `RollbackError#failures` entries may carry a Symbol backend key rather than a display-name String for those.
 
 ### Preserved
 - The 1.3.0 Mongoid named-client fixes (`override_client` for named clients, `override_database` for database names, and clearing both on reset) are intact and covered by explicit regression tests.

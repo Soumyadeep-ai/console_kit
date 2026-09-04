@@ -242,7 +242,7 @@ isolation depends on the installed client report it at runtime:
 
 ```ruby
 ConsoleKit::Connections::RedisConnectionHandler.new(ctx).isolation_model
-# => :scoped, :process_global, or :none
+# => :scoped, :process_global, :none, or :unknown
 
 ConsoleKit::Connections::ElasticsearchConnectionHandler.new(ctx).isolation_model
 # => :process_global (always)
