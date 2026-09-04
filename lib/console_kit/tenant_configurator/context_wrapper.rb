@@ -14,6 +14,12 @@ module ConsoleKit
         Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
       }.freeze
 
+      # Recorded by #current_values when a context getter raises. Writing nil over
+      # a value we could not read would silently destroy it, and reporting the
+      # rollback as successful would be a lie - so the attribute is skipped on
+      # restore and reported as a rollback failure instead.
+      UNREADABLE = :'#<console_kit unreadable>'
+
       attr_reader :ctx, :attributes
 
       class << self
@@ -69,12 +75,8 @@ module ConsoleKit
       # raises, so one broken writer cannot strand the rest of the context on the
       # tenant the switch failed to reach.
       def restore(values)
-        failures = values.filter_map do |attr, value|
-          ctx.public_send(:"#{attr}=", value)
-          nil
-        rescue StandardError, NotImplementedError => e
-          [attr, e]
-        end
+        unreadable, writable = values.partition { |_attr, value| value == UNREADABLE }
+        failures = write_back(writable) + unreadable.map { |attr, _| [attr, unreadable_error(attr)] }
         raise_restore_failure(failures) if failures.any?
 
         values
@@ -93,6 +95,19 @@ module ConsoleKit
       end
 
       private
+
+      def write_back(pairs)
+        pairs.filter_map do |attr, value|
+          ctx.public_send(:"#{attr}=", value)
+          nil
+        rescue StandardError, NotImplementedError => e
+          [attr, e]
+        end
+      end
+
+      def unreadable_error(attr)
+        Error.new("Previous value of #{attr} could not be read, so it was left as the new tenant set it.")
+      end
 
       def raise_restore_failure(failures)
         detail = failures.map { |attr, error| "#{attr} (#{error.class})" }.join(', ')
@@ -114,9 +129,11 @@ module ConsoleKit
 
       def safe_read(attr)
         ctx.public_send(attr)
-      rescue StandardError => e
-        Output.print_warning("Could not read context attribute #{attr}: #{e.class}. Rollback will reset it to nil.")
-        nil
+      rescue StandardError, NotImplementedError => e
+        Output.print_warning(
+          "Could not read context attribute #{attr}: #{e.class}. Rollback will not be able to restore it."
+        )
+        UNREADABLE
       end
     end
   end

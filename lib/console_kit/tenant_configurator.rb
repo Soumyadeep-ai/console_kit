@@ -85,7 +85,8 @@ module ConsoleKit
       end
 
       def print_error_details(error, key)
-        Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
+        message = Connections::DiagnosticHelpers.scrub(error.message)
+        Output.print_error("Failed to configure tenant '#{key}': #{message}")
         Output.print_backtrace(error)
         nil
       end

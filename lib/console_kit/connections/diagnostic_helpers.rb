@@ -11,9 +11,22 @@ module ConsoleKit
       # through verbatim. Client error messages routinely embed the whole
       # connection URL they failed on.
       CREDENTIAL_URL = %r{\b[a-z][a-z0-9+.-]*://\S*}i
-      CREDENTIAL_ASSIGNMENT = /
-        \b(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth(?:orization)?)\b\s*[=:]\s*\S+
-      /xi
+      SECRET_KEY = /password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth(?:orization)?/i
+      # key=value, key: value, key => value and "key"=>"value". The `:(?!:)`
+      # keeps `Mongo::Auth::Unauthorized` from being read as an assignment.
+      CREDENTIAL_ASSIGNMENT = /["']?\b#{SECRET_KEY}\b["']?\s*(?:=>|=|:(?!:))\s*["']?\S+/
+      # `password hunter2` with no separator at all. The negative lookahead stops
+      # `password authentication failed` from being mangled into nonsense.
+      SECRET_NOISE = /authentication|auth|is|was|for|error|required|mismatch|incorrect|invalid|failed|missing|expired/i
+      CREDENTIAL_PHRASE = /\b#{SECRET_KEY}\s+(?!#{SECRET_NOISE}\b)["']?\S+/i
+      # `for user "svc_admin"`, `username admin` - a principal is not a password,
+      # but it is half of one and routinely appears in auth failures.
+      CREDENTIAL_PRINCIPAL = /\b(?:for user|username|user name)\b\s+["']?\S+/i
+      # `User svc_admin@admin is not authorized` - the @ is what distinguishes a
+      # principal from the ordinary English word "user".
+      CREDENTIAL_PRINCIPAL_AT = /\buser\s+["']?\S+@\S+/i
+      SCRUBBERS = [CREDENTIAL_URL, CREDENTIAL_ASSIGNMENT, CREDENTIAL_PHRASE,
+                   CREDENTIAL_PRINCIPAL, CREDENTIAL_PRINCIPAL_AT].freeze
       REDACTED = '[redacted]'
       BUSY_REASON = 'A previous check is still running'
 
@@ -23,8 +36,11 @@ module ConsoleKit
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
+      # Hostnames are deliberately NOT scrubbed: they are not secrets in the same
+      # class as a password, and removing them would gut the diagnostic value of
+      # a connection error. Everything that is half of a credential is removed.
       def scrub(message)
-        message.to_s.gsub(CREDENTIAL_URL, REDACTED).gsub(CREDENTIAL_ASSIGNMENT, REDACTED)
+        SCRUBBERS.reduce(message.to_s) { |text, pattern| text.gsub(pattern, REDACTED) }
       end
 
       def error_diagnostics(name, error)

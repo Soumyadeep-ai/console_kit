@@ -123,4 +123,62 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
       end
     end
   end
+
+  describe 'an attribute whose getter raises' do
+    let(:ctx) do
+      Class.new do
+        class << self
+          attr_accessor :tenant_shard
+          attr_writer :partner_identifier
+
+          def partner_identifier = raise(IOError, 'context store not initialized')
+        end
+      end
+    end
+
+    before do
+      allow(ConsoleKit::Output).to receive(:print_warning)
+      ctx.tenant_shard = 'shard_acme'
+      ctx.partner_identifier = 'ACME'
+    end
+
+    it 'records a sentinel rather than nil, so rollback cannot silently destroy the value' do
+      expect(wrapper.current_values[:partner_identifier]).to eq(described_class::UNREADABLE)
+    end
+
+    it 'still records the attributes it could read' do
+      expect(wrapper.current_values[:tenant_shard]).to eq('shard_acme')
+    end
+
+    it 'warns that the attribute will not be restorable' do
+      wrapper.current_values
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('partner_identifier'))
+    end
+
+    context 'when that snapshot is restored' do
+      let(:snapshot) { wrapper.current_values }
+
+      before do
+        snapshot
+        ctx.tenant_shard = 'shard_globex'
+        ctx.partner_identifier = 'GLOBEX'
+      end
+
+      it 'reports the failure instead of claiming a clean rollback' do
+        expect { wrapper.restore(snapshot) }.to raise_error(ConsoleKit::Error, /partner_identifier/)
+      end
+
+      it 'does not write the sentinel onto the context' do
+        wrapper.restore(snapshot)
+      rescue ConsoleKit::Error
+        expect(ctx.instance_variable_get(:@partner_identifier)).to eq('GLOBEX')
+      end
+
+      it 'still restores every attribute it could read' do
+        wrapper.restore(snapshot)
+      rescue ConsoleKit::Error
+        expect(ctx.tenant_shard).to eq('shard_acme')
+      end
+    end
+  end
 end

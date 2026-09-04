@@ -106,12 +106,24 @@ validate -> snapshot -> prepare -> apply context -> connect -> verify -> commit
 
 Two invariants follow from that:
 
-1. **At every observable point, ConsoleKit is either still on the previous tenant or completely on
-   the new one.** The new tenant only becomes current at the final commit, so a failure part-way
-   through can never leave you with the context on tenant B, SQL on B and Redis still on A.
-2. **A successful connection is not enough.** Each backend must prove the live connection belongs to
-   the requested tenant. A connection that succeeds while pointing at the wrong database fails the
-   switch rather than silently serving another tenant's data.
+1. **At every switch boundary, ConsoleKit is either still on the previous tenant or completely on
+   the new one.** The new tenant only becomes current at the final commit, so once `switch_tenant`
+   returns - successfully or not - you are never left with the context on tenant B, SQL on B and
+   Redis still on A.
+
+   This is a guarantee about boundaries, not about instants. A switch applies the context, then each
+   backend in turn, then verifies. While it is running there is genuinely a window in which some
+   backends have moved and others have not, and for the process-global backends below that window is
+   visible to other threads. See [Concurrency and Isolation](#concurrency-and-isolation).
+2. **A successful connection is not enough.** After connecting, each backend is read back and must
+   report the tenant that was asked for. A handler that silently ignored the switch, or a foreign
+   writer that moved the backend between connect and verify, fails the switch instead of quietly
+   serving another tenant's data.
+
+   Be precise about what this buys you: verification is a local read of the handle ConsoleKit just
+   wrote, not a round trip that interrogates the server. It catches a write that did not take. It
+   cannot catch a `database.yml` entry that points `shard_acme` at another tenant's server. It is an
+   attestation, not a proof of provenance.
 
 If anything fails, every touched component is restored - the context attributes and all four
 backends - and the switch raises. Each component is attempted even when an earlier restore fails, so
@@ -152,8 +164,11 @@ The exception hierarchy, all under `ConsoleKit::Error`:
 | `TenantSwitchError` | a switch failed; carries the root cause and any rollback failures |
 | `RollbackError` | restoring previous state failed |
 
-Credentials are never included in an error message, a diagnostic row or a log line. Connection URIs
-and `key=value` credential fragments are scrubbed before any message is built.
+Credentials are scrubbed from error messages, diagnostic rows and console output. Connection URIs,
+`key=value` and `key => value` credential fragments, bare `password <value>` phrases and
+`for user <name>` principals are all removed before a message is built. Hostnames and ports are
+deliberately kept - they are not secrets, and removing them would gut the diagnostic value of a
+connection error.
 
 ## Programmatic API
 
@@ -184,6 +199,27 @@ ConsoleKit.configuration.validate!
 it reports through the console output and returns `false`, so a mistyped tenant does not tear down
 your session.
 
+Not every failure is a `TenantSwitchError`. Problems found before anything is applied - an unknown
+tenant, malformed constants, a backend that cannot support the request - raise
+`TenantNotFoundError`, `ConfigurationError` or `UnsupportedBackendError` directly, because there is
+nothing to roll back. Rescue `ConsoleKit::Error` if you want to catch all of them:
+
+```ruby
+begin
+  ConsoleKit.switch_tenant(:globex)
+rescue ConsoleKit::TenantSwitchError => e
+  # the switch was attempted and rolled back
+  warn e.message unless e.rollback_succeeded?
+rescue ConsoleKit::Error => e
+  # rejected before anything was touched
+  warn e.message
+end
+```
+
+`verify_tenant!` raises `ConnectionVerificationError` on a mismatch and does **not** roll back - it
+is a report on the current state, not a repair. If it fails, the backends really are inconsistent
+and you should switch again explicitly.
+
 ## Concurrency and Isolation
 
 **Read this before using ConsoleKit anywhere other than a console.**
@@ -201,13 +237,19 @@ gives it, so isolation is exactly as good as that handle:
 | Redis via `Redis.current` (redis-rb 4) | **No** - process-global singleton |
 | Elasticsearch `index_name_prefix` | **No** - one process-wide attribute |
 
-Where isolation does not exist, the last writer wins for the whole process. ConsoleKit reports this
-rather than hiding it:
+Where isolation does not exist, the last writer wins for the whole process. The two backends whose
+isolation depends on the installed client report it at runtime:
 
 ```ruby
-handler.isolation_model  # => :scoped, :process_global, or :none
-handler.thread_isolated? # => false for Redis on redis-rb 4, always false for Elasticsearch
+ConsoleKit::Connections::RedisConnectionHandler.new(ctx).isolation_model
+# => :scoped, :process_global, or :none
+
+ConsoleKit::Connections::ElasticsearchConnectionHandler.new(ctx).isolation_model
+# => :process_global (always)
 ```
+
+Both also answer `thread_isolated?`. The SQL and Mongoid handlers do not define these - their
+isolation depends on which code path is taken, as the table above shows.
 
 Redis on redis-rb 4 prints a one-time warning that DB selection is process-wide. Elasticsearch warns,
 naming both prefixes, when live threads disagree about the prefix.
@@ -314,11 +356,15 @@ dashboard(level: :full)   # adds version, health and latency probes
 `:basic` is the default and reports only what can be read locally, so it is cheap enough to run
 freely. Switching a tenant never triggers diagnostics on its own.
 
-Each handler is queried with a 2-second timeout. Diagnostics run on a bounded set of reusable
-per-backend workers, so the thread count is capped no matter how often you type `dashboard`; a
-backend whose previous check is still running reports as busy rather than starting another one.
-Results are cached for a couple of seconds, and that cache is invalidated immediately by a tenant
-switch, so a stale row can never be reported as the current tenant's.
+`:full` queries each handler with a 2-second timeout, on a bounded set of reusable per-backend
+workers - the thread count is capped no matter how often you type `dashboard`, and a backend whose
+previous check is still running reports as busy rather than starting another one. `:basic` needs no
+timeout because it never leaves the process.
+
+Results are cached for a couple of seconds. A tenant switch **on the calling thread** invalidates
+that cache immediately. It cannot detect another thread moving a process-global backend out from
+under you, so on a multi-threaded process a `:basic` row can be up to the cache window out of date
+for Redis and Elasticsearch.
 
 To auto-display the dashboard on every tenant switch, add to your initializer:
 
