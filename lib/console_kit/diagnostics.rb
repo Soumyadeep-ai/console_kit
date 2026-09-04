@@ -32,7 +32,8 @@ module ConsoleKit
     PROGRAMMING_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError].freeze
 
     class << self
-      # Diagnostic rows for every available handler, memoised for CACHE_TTL_SECONDS.
+      # Diagnostic rows for every available handler. :full rows are memoised for
+      # CACHE_TTL_SECONDS; :basic rows are read live on every call.
       def run(level: :basic, timeout: DEFAULT_TIMEOUT)
         validate_level!(level)
         available_handlers.map { |handler| cached(handler, level, timeout) }
@@ -60,16 +61,22 @@ module ConsoleKit
       end
     end
 
-    # Short-lived, per-thread memo of diagnostic rows.
+    # Short-lived, per-thread memo of :full diagnostic rows.
     #
     # Correctness before speed: the store is a thread-local, so one thread's
     # tenant can never leak into another thread's dashboard, and an entry is
-    # only reused while the thread is still on the very TenantState object and
-    # the very Configuration object that produced it. TenantSwitch commits a
-    # brand new TenantState on every switch, so a switch invalidates every row
-    # immediately, TTL or not.
+    # only reused while the thread is still on the very TenantState object that
+    # produced it. TenantSwitch commits a brand new TenantState on every switch,
+    # so a switch invalidates every row immediately, TTL or not.
+    #
+    # Only :full is cached. :basic rows are pure local reads, so caching them
+    # buys nothing and costs correctness: freshness can only observe THIS
+    # thread's TenantState, which does not change when another thread moves a
+    # process-global backend such as Elasticsearch or Redis. Sparing the
+    # backends a hammering - the reason this cache exists - is a :full concern.
     module Cache
       STORE_KEY = :console_kit_diagnostics_cache
+      CACHED_LEVEL = :full
       # A backend that just failed is re-asked on the next call. Holding a
       # failure for the full TTL would hide a backend that has since recovered,
       # and re-asking is cheap: while a timed-out check is still running the
@@ -78,6 +85,8 @@ module ConsoleKit
 
       class << self
         def fetch_row(backend, level)
+          return yield unless level == CACHED_LEVEL
+
           key = [StateStore.tenant_key, level, backend]
           read(key) || write(key, yield)
         end
@@ -98,19 +107,16 @@ module ConsoleKit
         def write(key, row)
           return row if UNCACHEABLE.include?(row[:status])
 
-          store[key] = { row: row, expires_at: now + CACHE_TTL_SECONDS, state: state, config: config }
+          store[key] = { row: row, expires_at: now + CACHE_TTL_SECONDS, state: state }
           row
         end
 
-        def fresh?(entry)
-          entry[:expires_at] > now && entry[:state].equal?(state) && entry[:config].equal?(config)
-        end
+        def fresh?(entry) = entry[:expires_at] > now && entry[:state].equal?(state)
 
         # The raw slot, not StateStore.current: `current` fabricates a fresh
         # TenantState.empty whenever nothing is set, which would make every
         # identity comparison a miss for a console with no tenant selected.
         def state = Thread.current[StateStore::STATE_KEY]
-        def config = ConsoleKit.configuration
         def now = Connections::DiagnosticHelpers.clock_time
       end
     end

@@ -15,6 +15,10 @@ class DiagnosticsSpecHandler
   end
 
   def diagnostics(level:) = @block.call(level)
+
+  def safe_diagnostics(level:, timeout: ConsoleKit::Diagnostics::DEFAULT_TIMEOUT)
+    ConsoleKit::Diagnostics::Runner.call(self, timeout: timeout, level: level)
+  end
 end
 
 RSpec.describe ConsoleKit::Diagnostics do
@@ -46,9 +50,10 @@ RSpec.describe ConsoleKit::Diagnostics do
 
   # Fetches through the cache, bumping counter[0] on every real backend call
   # (a cache hit never runs the block), so tests can assert on call counts
-  # without relying on instance variables.
-  def counting_fetch(backend_key, counter, row_proc = -> { connected_row })
-    described_class::Cache.fetch_row(backend_key, :basic) do
+  # without relying on instance variables. Only :full is cached, so that is the
+  # level every cache example uses unless it is about :basic specifically.
+  def counting_fetch(backend_key, counter, row_proc = -> { connected_row }, level: :full)
+    described_class::Cache.fetch_row(backend_key, level) do
       counter[0] += 1
       row_proc.call
     end
@@ -274,12 +279,44 @@ RSpec.describe ConsoleKit::Diagnostics do
       counting_fetch(:clear_backend, counter)
       expect(counter.first).to eq(2)
     end
+
+    # Freshness can only observe THIS thread's TenantState, so a cached :basic
+    # row survives another thread moving a process-global backend. A :basic row
+    # is a local read anyway, so it is never cached.
+    it 'does not cache a :basic row, because it is read out of memory anyway' do
+      counter = [0]
+      2.times { counting_fetch(:basic_uncached_backend, counter, level: :basic) }
+      expect(counter.first).to eq(2)
+    end
+  end
+
+  # Elasticsearch and Redis are documented as process-global: another thread
+  # moving one changes nothing this thread's TenantState can show, so a cached
+  # row would keep reporting a tenant that has already been switched away.
+  describe 'a process-global backend moved by another thread' do
+    let(:live_prefix) { ['acme_es'] }
+    let(:handler) do
+      DiagnosticsSpecHandler.new(:process_global_backend) do
+        { name: 'Elasticsearch', status: :connected, latency_ms: nil, details: { prefix: live_prefix.first } }
+      end
+    end
+
+    before do
+      ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme')
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([handler])
+      described_class.run(level: :basic)
+      Thread.new { live_prefix[0] = 'someone_elses_tenant' }.join
+    end
+
+    it 'reports the prefix the backend is actually on' do
+      expect(described_class.run(level: :basic).first[:details][:prefix]).to eq('someone_elses_tenant')
+    end
   end
 
   describe 'thread isolation of the cache' do
     def fetch_isolated_row(tenant_key, name)
       ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: tenant_key)
-      described_class::Cache.fetch_row(:thread_iso_backend, :basic) { connected_row(name) }
+      described_class::Cache.fetch_row(:thread_iso_backend, :full) { connected_row(name) }
     end
 
     it "does not use another thread's cached row for this thread's tenant" do

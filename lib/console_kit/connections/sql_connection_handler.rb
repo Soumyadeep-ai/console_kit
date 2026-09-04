@@ -11,6 +11,12 @@ module ConsoleKit
     class SqlConnectionHandler < BaseConnectionHandler
       CONTEXT_ATTRIBUTE = :tenant_shard
       DISPLAY_NAME = 'SQL'
+      # Configuration's own default. An application with no ActiveRecord never
+      # resolves it, and that is a supported setup rather than a mistake.
+      DEFAULT_BASE_CLASS = 'ApplicationRecord'
+      MISSING_BASE_CLASS = 'ConsoleKit: sql_base_class %<name>s could not be resolved, so SQL will NOT be switched, ' \
+                           'verified or rolled back and a switch will still report itself as verified. Check the ' \
+                           'class name and that the class is loaded.'
 
       class << self
         def sql_version(conn)
@@ -24,7 +30,19 @@ module ConsoleKit
         def base_class_name = ConsoleKit.configuration.sql_base_class
       end
 
-      def available? = self.class.base_class_name.to_s.safe_constantize.present?
+      # An unresolvable DEFAULT base class only means the application has no
+      # ActiveRecord, so it stays silent. A base class the operator configured
+      # explicitly and that does not resolve is a configuration error: the
+      # handler still answers false, because raising from here would escape
+      # every switch, every dashboard and the rollback's handler lookup, but it
+      # says so rather than looking like an optional gem that is not loaded.
+      def available?
+        name = self.class.base_class_name
+        return true if name.to_s.safe_constantize.present?
+
+        Output.print_warning(format(MISSING_BASE_CLASS, name: name.inspect)) unless name.to_s == DEFAULT_BASE_CLASS
+        false
+      end
 
       # Validate/resolve only, never mutates.
       def prepare(target)

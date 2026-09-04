@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../errors'
+require_relative 'sql_strategy'
 
 module ConsoleKit
   module Connections
@@ -17,6 +18,12 @@ module ConsoleKit
     #   * a different object on the other thread -> :scoped
     #   * nothing resolvable, or a new object on
     #     every call in one thread               -> :none
+    #   * the probe itself could not run          -> :unknown
+    #
+    # :unknown is never an isolation claim: it says the model was not observed,
+    # so nothing may assume isolation from it. A programming error inside the
+    # probe is re-raised instead, because a bug in ConsoleKit must never be
+    # laundered into a verdict the rest of the system trusts.
     class RedisClientAdapter
       # Matches anything that could carry a host, ACL username or password out
       # of a client error message.
@@ -63,7 +70,9 @@ module ConsoleKit
         return nil unless defined?(::Redis) && ::Redis.respond_to?(:current)
 
         ::Redis.current
-      rescue StandardError
+      rescue StandardError => e
+        raise e if programming_error?(e)
+
         nil
       end
 
@@ -72,9 +81,13 @@ module ConsoleKit
         return :none if here.nil? || !resolve.equal?(here)
 
         Thread.new { resolve }.value.equal?(here) ? :process_global : :scoped
-      rescue StandardError
-        :process_global
+      rescue StandardError => e
+        raise e if programming_error?(e)
+
+        :unknown
       end
+
+      def programming_error?(error) = SqlStrategy.programming_error?(error)
     end
   end
 end

@@ -95,6 +95,47 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
+  # A bug inside ConsoleKit must never be laundered into an isolation VERDICT the
+  # rest of the system then trusts, and a probe that could not run must not claim
+  # :process_global. Genuine client failures stay :none, exactly as before.
+  describe '#isolation_model when the probe itself fails' do
+    context 'when resolving the client raises a programming error' do
+      before { allow(Redis).to receive(:current).and_raise(NoMethodError, "undefined method 'db' for nil") }
+
+      it 'surfaces the programming error instead of answering with an isolation model' do
+        expect { handler.isolation_model }.to raise_error(NoMethodError)
+      end
+
+      it 'surfaces it from #prepare instead of rejecting the DB as unsupported' do
+        expect { handler.prepare(2) }.to raise_error(NoMethodError)
+      end
+    end
+
+    context 'when the probe fails for a reason that is not a bug' do
+      before { allow(Thread).to receive(:new).and_raise(ThreadError, 'cannot create thread') }
+
+      it 'reports :unknown rather than asserting :process_global' do
+        expect(handler.isolation_model).to eq(:unknown)
+      end
+
+      it 'is not thread isolated' do
+        expect(handler).not_to be_thread_isolated
+      end
+    end
+
+    context 'when the client is simply unreachable' do
+      before { allow(Redis).to receive(:current).and_raise(RedisFakes::CannotConnectError, 'connection refused') }
+
+      it 'still reports :none' do
+        expect(handler.isolation_model).to eq(:none)
+      end
+
+      it 'still rejects a non-default DB it cannot select and verify' do
+        expect { handler.prepare(2) }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+    end
+  end
+
   describe '#prepare' do
     it 'accepts a non-negative integer DB index' do
       expect { handler.prepare(2) }.not_to raise_error

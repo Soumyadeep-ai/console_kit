@@ -42,6 +42,45 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
+  # A configured base class that does not resolve drops SQL out of the switch,
+  # the verify, the snapshot and the rollback, and the switch still reports
+  # itself verified. That is indistinguishable from "ActiveRecord is not loaded"
+  # unless it is said out loud.
+  describe '#available? with a base class that cannot be resolved' do
+    before { allow(ConsoleKit::Output).to receive(:print_warning) }
+
+    context 'when the operator configured the class name explicitly' do
+      before { ConsoleKit.configuration.sql_base_class = 'Legacy::NotARealRecord' }
+
+      it 'names the class that could not be resolved' do
+        handler.available?
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('Legacy::NotARealRecord'))
+      end
+
+      it 'says SQL will not be switched' do
+        handler.available?
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('NOT be switched'))
+      end
+
+      it 'still answers false rather than raising out of the switch' do
+        expect(handler).not_to be_available
+      end
+    end
+
+    context 'when the application simply has no ActiveRecord' do
+      before { hide_const('ApplicationRecord') }
+
+      it 'stays silent, because the default base class is allowed to be absent' do
+        handler.available?
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+
+      it 'answers false' do
+        expect(handler).not_to be_available
+      end
+    end
+  end
+
   describe '#prepare' do
     it 'accepts a natively registered shard' do
       expect { handler.prepare('shard_one') }.not_to raise_error
@@ -154,6 +193,60 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     it 'does not touch the pool when the default is already live' do
       handler.connect!(nil)
       expect(pool_handler.disconnects).to eq(0)
+    end
+  end
+
+  # `connecting_to` pushes onto the fiber-local shard stack and Rails offers no
+  # matching pop, so every committed switch used to leave a frame behind. Rails
+  # walks that stack on every `current_shard` lookup, i.e. on every query, and
+  # the Railtie re-applies the tenant on every `reload!`.
+  describe '#connect! stack growth' do
+    it 'holds the stack at one frame across five successive switches' do
+      %w[shard_one shard_two shard_one shard_two shard_one].each { |name| handler.connect!(name) }
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'holds the stack at one frame when the same shard is applied four times' do
+      4.times { handler.connect!('shard_one') }
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'still churns no pool while the same shard is re-applied' do
+      4.times { handler.connect!('shard_one') }
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'does not grow the stack when resetting to the default' do
+      handler.connect!('shard_one')
+      handler.connect!(nil)
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'lands on the default shard after a reset' do
+      handler.connect!('shard_one')
+      handler.connect!(nil)
+      expect(base_class.current_shard).to eq(:default)
+    end
+
+    it 'leaves a frame the application pushed itself alone' do
+      base_class.connecting_to(shard: :shard_two, role: :writing)
+      handler.connect!('shard_one')
+      expect(base_class.connected_to_stack.size).to eq(2)
+    end
+
+    it 'restores the enclosing shard without growing the stack' do
+      handler.connect!('shard_one')
+      state = handler.snapshot
+      handler.connect!('shard_two')
+      handler.restore(state)
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'restores the exact depth after a failed switch is rolled back' do
+      state = handler.snapshot
+      handler.connect!('shard_one')
+      handler.restore(state)
+      expect(base_class.connected_to_stack.size).to eq(state[:stack_depth])
     end
   end
 

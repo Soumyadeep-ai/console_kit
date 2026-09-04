@@ -23,6 +23,15 @@ module ConsoleKit
     class SqlStrategy
       NATIVE_METHODS = %i[connecting_to connected_to_stack default_shard current_shard current_role].freeze
 
+      # `connecting_to` pushes onto the fiber-local shard stack and Rails offers
+      # no matching pop, so every committed switch used to leave one frame
+      # behind for the rest of the console session. The frame this fiber pushed
+      # is remembered here and dropped before the next one goes on, which holds
+      # the stack at a single ConsoleKit frame however many switches happen.
+      # Only a frame we pushed, and only while it is still on top, is popped,
+      # so a frame the application pushed itself is never disturbed.
+      FRAME_KEY = :console_kit_sql_connected_to_frame
+
       class << self
         # Errors that mean "our own code is wrong" and must never be swallowed.
         def programming_error?(error) = error.is_a?(NameError) || error.is_a?(ArgumentError)
@@ -72,6 +81,7 @@ module ConsoleKit
         return if state.nil?
 
         unwind_stack(state[:stack_depth])
+        restore_shard(state[:shard])
         reestablish(state[:db_config_name])
       end
 
@@ -104,10 +114,26 @@ module ConsoleKit
       def native_capable? = NATIVE_METHODS.all? { |method| base_class.respond_to?(method) }
       def connected_to_stack = base_class.try(:connected_to_stack)
 
-      # `connecting_to` pushes onto the fiber-local stack; #restore pops back to
-      # the depth recorded by #snapshot. Committed switches leave one entry each.
+      # Replaces this fiber's ConsoleKit frame rather than stacking another one.
       def apply_native(shard)
+        drop_owned_frame
         base_class.connecting_to(shard: shard || base_class.default_shard, role: base_class.current_role)
+        Thread.current[FRAME_KEY] = connected_to_stack&.last
+      end
+
+      def drop_owned_frame
+        stack = connected_to_stack.to_a
+        stack.pop if stack.last.equal?(Thread.current[FRAME_KEY])
+      end
+
+      # Unwinding to the recorded depth is no longer enough now that one frame
+      # is reused: the frame sitting at that depth may be the one this switch
+      # pushed. Re-applying the recorded shard puts the identity back without
+      # growing the stack, because #apply_native replaces that frame.
+      def restore_shard(shard)
+        return if shard.nil? || !native_capable? || base_class.current_shard == shard
+
+        apply_native(shard)
       end
 
       def apply_fallback(shard)

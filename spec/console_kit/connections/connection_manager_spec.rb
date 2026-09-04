@@ -65,6 +65,78 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     end
   end
 
+  # `registry` is `descendants`, which keeps every generation of a handler class
+  # alive across a code reload. Two entries then claim one backend_key, and the
+  # plan, the undo bundle and the rollback all key on backend_key, so the older
+  # duplicate has its snapshot silently discarded while it is still connected
+  # and is then rolled back from the other instance's snapshot.
+  #
+  # These handlers deliberately do not inherit BaseConnectionHandler: the
+  # registry is `descendants`, so an anonymous subclass would leak into every
+  # later example in the process.
+  describe 'de-duplicating the resolved handlers' do
+    before { allow(ConsoleKit::Output).to receive(:print_warning) }
+
+    def handler_class(key)
+      Class.new do
+        define_singleton_method(:backend_key) { key }
+        def initialize(context) = @context = context
+        def available? = true
+      end
+    end
+
+    def stub_registry(*classes)
+      allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return(classes)
+    end
+
+    context 'when a code reload leaves two generations of one handler class behind' do
+      let(:generations) { [handler_class(:reloadable), handler_class(:reloadable)] }
+
+      # Both generations carry the same constant name, exactly as Zeitwerk
+      # leaves them; only the second one is what the name still resolves to.
+      before do
+        generations.each { |klass| stub_const('ReloadedHandler', klass) }
+        stub_registry(*generations)
+      end
+
+      it 'resolves the backend exactly once' do
+        expect(described_class.available_handlers(context).size).to eq(1)
+      end
+
+      it 'keeps the generation the constant still resolves to' do
+        expect(described_class.available_handlers(context).first.class).to be(generations.last)
+      end
+
+      it 'says nothing, because a reload duplicate is expected' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+    end
+
+    context 'when two differently named classes claim one backend key' do
+      before do
+        stub_const('AlphaHandler', handler_class(:collided))
+        stub_const('BetaHandler', handler_class(:collided))
+        stub_registry(AlphaHandler, BetaHandler)
+      end
+
+      it 'keeps only one handler for the key' do
+        expect(described_class.available_handlers(context).size).to eq(1)
+      end
+
+      it 'warns that both classes claim the same backend key' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including(':collided'))
+      end
+    end
+
+    it 'orders handlers by backend key rather than by Class#subclasses order' do
+      stub_registry(handler_class(:zed), handler_class(:alpha))
+      keys = described_class.available_handlers(context).map { |handler| handler.class.backend_key }
+      expect(keys).to eq(%i[alpha zed])
+    end
+  end
+
   # A dropped handler vanishes from the switch, the verification, the snapshot
   # AND the rollback, so a switch can report itself verified while that backend
   # still serves another tenant. "Half-implemented" has to be loud; "optional gem
@@ -78,6 +150,7 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
 
     def half_implemented
       Class.new do
+        def self.backend_key = :half_implemented
         def initialize(context) = @context = context
         def available? = raise NotImplementedError, 'HalfHandler must implement #available?'
       end
@@ -85,6 +158,7 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
 
     def not_loaded
       Class.new do
+        def self.backend_key = :not_loaded
         def initialize(context) = @context = context
         def available? = false
       end
