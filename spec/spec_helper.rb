@@ -41,12 +41,29 @@ RSpec.configure do |config|
     mocks.verify_partial_doubles = true
   end
 
+  # The connection handler registry is `BaseConnectionHandler.descendants`, so a
+  # handler class an example builds stays discoverable by every later example
+  # until it is collected. Dropping the reference is not enough, and an `after`
+  # hook is too early: constant stubs and `let` memos still hold the class while
+  # those run. Collecting once per group keeps the registry honest without
+  # paying for a full GC on every example.
+  config.after(:context) do
+    GC.start
+  end
+
+  # Every piece of state ConsoleKit keeps outside a single example. Leaking any
+  # of it makes examples order-dependent, which is exactly how the anonymous
+  # connection handlers used to poison later examples.
   config.after do
     ConsoleKit.reset_configuration!
+    ConsoleKit::StateStore.clear!
+    ConsoleKit::Instrumentation.clear!
+    ConsoleKit::Connections::RedisConnectionHandler.isolation_warned = nil
+    ConsoleKit::Connections::ElasticsearchPrefixRegistry.record(nil)
+    ElasticsearchMocks.reset!
+    ActiveRecordMock.reset_default_base!
     Thread.current[:console_kit_silent] = nil
-    Thread.current[:console_kit_configuration_success] = nil
-    Thread.current[:console_kit_current_tenant_key] = nil
-    Thread.current[:console_kit_current_tenant] = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
+    Thread.current[:console_kit_elasticsearch_prefix_conflict] = nil
   end
 end

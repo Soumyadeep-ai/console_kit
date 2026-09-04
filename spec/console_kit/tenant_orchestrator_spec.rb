@@ -104,14 +104,16 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
     end
   end
 
+  # Since 1.5.0 reapply performs a full transactional switch through TenantSwitch
+  # rather than going through TenantConfigurator.configure_tenant.
   describe '.reapply' do
-    it 're-configures the current tenant' do
+    it 're-applies the current tenant via TenantSwitch' do
       ConsoleKit::Setup.current_tenant = 'acme'
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+      allow(ConsoleKit::TenantSwitch).to receive(:call)
 
       described_class.reapply
 
-      expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('acme')
+      expect(ConsoleKit::TenantSwitch).to have_received(:call).with('acme')
     end
   end
 end

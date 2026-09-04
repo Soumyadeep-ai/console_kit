@@ -18,9 +18,9 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
       expect(ctx.tenant_shard).to eq('shard_acme')
     end
 
-    it 'returns all change tuples' do
+    it 'returns a hash of the assigned values' do
       result = wrapper.assign(constants, mapping)
-      expect(result).to include([:tenant_shard, nil, 'shard_acme'])
+      expect(result).to eq(tenant_shard: 'shard_acme', partner_identifier: 'ACME')
     end
 
     context 'when previous value differs only in case' do
@@ -28,9 +28,10 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
 
       let(:constants) { { shard: 'shard_acme', partner_code: 'acme' } }
 
-      it 'includes the mismatch in returned tuples' do
-        result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'ACME', 'acme'])
+      it 'warns about the case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('ACME', 'acme'))
       end
 
       it 'still assigns the configured value' do
@@ -42,18 +43,25 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
     context 'when previous value matches exactly' do
       before { ctx.partner_identifier = 'ACME' }
 
-      it 'does not include it as a case mismatch tuple' do
-        result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'ACME', 'ACME'])
+      it 'does not warn about a case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
 
     context 'when values differ in more than case' do
       before { ctx.partner_identifier = 'OTHER' }
 
-      it 'includes the change tuple but not as a case-only mismatch' do
+      it 'assigns the new value' do
         result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'OTHER', 'ACME'])
+        expect(result[:partner_identifier]).to eq('ACME')
+      end
+
+      it 'does not warn about a case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
   end

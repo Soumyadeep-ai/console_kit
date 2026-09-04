@@ -1,12 +1,5 @@
 # frozen_string_literal: true
 
-# Mock for ApplicationRecord to support testing
-class ApplicationRecord
-  def self.establish_connection(*); end
-  def self.connection; end
-  def self.connection_pool; end
-end
-
 # Stand-ins for the ActiveRecord APIs the SQL connection handler actually talks
 # to. Only those APIs are modelled, and they are modelled the way Rails 6.1-8.0
 # behaves: `connecting_to` pushes onto a fiber-local stack, `establish_connection`
@@ -134,6 +127,10 @@ module ActiveRecordMock
         @connection_pool = Pool.new(resolve_config(config_name))
       end
 
+      # Puts the pool back on the first configuration without going through
+      # `establish_connection`, which examples routinely stub.
+      def reset_connection! = @connection_pool = Pool.new(resolve_config(nil))
+
       def connection = @connection ||= Connection.new
 
       def resolve_config(config_name)
@@ -186,5 +183,27 @@ module ActiveRecordMock
     def config_for(klass, name)
       klass.configurations.configs_for(env_name: klass.env_name).find { |config| config.name == name.to_s }
     end
+  end
+end
+
+# Default `ApplicationRecord` for the whole suite.
+#
+# SqlConnectionHandler#verify! proves a switch landed by comparing the shard it
+# asked for against the db_config name the live connection pool resolves to, so
+# the stand-in has to carry that identity honestly: `establish_connection(:x)`
+# really does move the pool onto the `x` configuration, and reading it back is
+# the only thing that makes #verify! pass. The declared configurations are the
+# suite's own `database.yml`.
+ApplicationRecord = ActiveRecordMock.plain_base(configs: %w[primary shard_acme shard_globex])
+
+module ActiveRecordMock
+  # Stable handle on the default base class, so its connection state can be
+  # reset between examples even while `stub_const` swaps the constant out.
+  DEFAULT_BASE = ApplicationRecord
+
+  class << self
+    # Deliberately bypasses `establish_connection`: examples stub it (sometimes
+    # to raise), and this runs while those stubs are still installed.
+    def reset_default_base! = DEFAULT_BASE.reset_connection!
   end
 end

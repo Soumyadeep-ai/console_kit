@@ -43,35 +43,11 @@ RSpec.describe FullConsoleFlow do
     ConsoleKit::Setup.current_tenant = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
 
-    # Mock all external dependencies
-    allow(ApplicationRecord).to receive(:establish_connection)
-    allow(ApplicationRecord).to receive_messages(connection_pool: double(disconnect!: true, size: 5),
-                                                 connection: double(
-                                                   adapter_name: 'PostgreSQL', execute: true, select_value: '14.0'
-                                                 ))
-
-    allow(Mongoid).to receive(:override_database)
-    mongo_db = instance_double(Mongoid::Database, name: 'acme_db', command: [{ 'version' => '6.0' }])
-    mongo_client = instance_double(Mongoid::Client)
-    allow(mongo_client).to receive(:use).with(any_args).and_return(mongo_client)
-    allow(mongo_client).to receive(:database).and_return(mongo_db)
-
-    allow(Mongoid).to receive(:default_client).and_return(mongo_client)
-
-    allow(Redis).to receive_messages(
-      respond_to?: true,
-      current: instance_double(Redis, select: true, ping: 'PONG',
-                                      info: { 'redis_version' => '7.0', 'used_memory_human' => '1MB' })
-    )
-
-    allow(Elasticsearch::Model).to receive(:index_name_prefix=)
-    allow(Elasticsearch::Model).to receive_messages(
-      respond_to?: true,
-      client: double(
-        ping: true,
-        cluster: double(health: { 'cluster_name' => 'test', 'status' => 'green' })
-      )
-    )
+    # No backend is stubbed here on purpose. Since 1.5.0 every switch verifies
+    # its own identity before committing, so the whole flow is driven against
+    # the stateful fakes: ApplicationRecord really moves its pool, Mongoid
+    # really records its overrides, `Redis.current` really SELECTs a DB and
+    # Elasticsearch::Model really carries the index prefix.
 
     # Mock user input for TenantSelector
     allow($stdin).to receive_messages(tty?: true, gets: '1')

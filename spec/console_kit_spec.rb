@@ -108,20 +108,23 @@ RSpec.describe ConsoleKit do
   end
 
   describe 'delegated tenant methods' do
+    # Since 1.5.0 ConsoleKit.current_tenant reads ConsoleKit::StateStore.tenant_key
+    # directly instead of delegating to ConsoleKit::Setup.current_tenant.
     describe '.current_tenant' do
-      before { allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('tenant1') }
+      before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'tenant1') }
 
-      it 'calls ConsoleKit::Setup.current_tenant' do
+      it 'does not delegate to ConsoleKit::Setup.current_tenant' do
+        allow(ConsoleKit::Setup).to receive(:current_tenant)
         described_class.current_tenant
-        expect(ConsoleKit::Setup).to have_received(:current_tenant)
+        expect(ConsoleKit::Setup).not_to have_received(:current_tenant)
       end
 
-      it 'returns the tenant from ConsoleKit::Setup.current_tenant' do
+      it 'returns the tenant key held in StateStore' do
         expect(described_class.current_tenant).to eq('tenant1')
       end
 
-      it 'returns nil when ConsoleKit::Setup.current_tenant returns nil' do
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+      it 'returns nil when StateStore holds no tenant' do
+        ConsoleKit::StateStore.clear!
         expect(described_class.current_tenant).to be_nil
       end
 
@@ -155,18 +158,13 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  # Since 1.5.0 reset_configuration! clears ConsoleKit::StateStore directly, and
+  # TenantConfigurator.configuration_success is derived from that store rather
+  # than being an independently settable flag.
   describe '.reset_configuration!' do
-    let(:tenant_configurator) do
-      result_store = {}
-      mod = Module.new
-      mod.define_singleton_method(:configuration_success=) { |v| result_store[:value] = v }
-      mod.define_singleton_method(:configuration_success) { result_store[:value] }
-      stub_const('ConsoleKit::TenantConfigurator', mod)
-      mod
-    end
+    before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme', configured: true) }
 
-    it 'resets configuration success if TenantConfigurator is defined' do
-      tenant_configurator
+    it 'clears configuration success by clearing the underlying tenant state' do
       described_class.reset_configuration!
       expect(ConsoleKit::TenantConfigurator.configuration_success).to be false
     end
