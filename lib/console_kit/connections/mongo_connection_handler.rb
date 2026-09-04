@@ -6,58 +6,85 @@ module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
-      def connect
-        db = context_attribute(:tenant_mongo_db).presence
-        switch_mongo(db)
-      rescue NoMethodError
-        Output.print_warning('Mongoid client override is not available in this version of Mongoid.')
+      CONTEXT_ATTRIBUTE = :tenant_mongo_db
+      DISPLAY_NAME = 'MongoDB'
+
+      def available? = !!defined?(Mongoid)
+
+      # Validate/resolve only, never mutates. Raises when this Mongoid version
+      # cannot support client/database overrides at all.
+      def prepare(_target)
+        return if Mongoid.respond_to?(:override_database)
+
+        raise UnsupportedBackendError, "#{display_name} client override API is not available in this Mongoid version."
       end
 
-      def available? = defined?(Mongoid)
+      def snapshot
+        { client: current_client_override, database: current_database_override }
+      end
 
-      def diagnostics
-        return unavailable_diagnostics('MongoDB') unless available?
+      def connect!(target)
+        if target.nil?
+          reset_overrides
+        elsif named_client?(target)
+          Mongoid.override_client(target)
+        else
+          Mongoid.override_database(target)
+        end
+      end
 
-        perform_diagnostics
+      def verify!(target)
+        if target.nil?
+          verify_reset!
+        elsif named_client?(target)
+          verify_match!(target, effective_client_name)
+        else
+          verify_match!(target, effective_database_name)
+        end
+      end
+
+      def restore(state)
+        Mongoid.override_client(state[:client]) if Mongoid.respond_to?(:override_client)
+        Mongoid.override_database(state[:database])
+      end
+
+      def diagnostics(level: :basic)
+        return unavailable_diagnostics unless available?
+
+        level == :full ? full_diagnostics : basic_diagnostics
       rescue StandardError => e
-        error_diagnostics('MongoDB', e)
+        error_diagnostics(display_name, e)
       end
 
       private
 
-      def perform_diagnostics
-        db = tenant_database
-        latency = measure_latency { db.command(ping: 1) }
-        info = db.command(buildInfo: 1).first
-        build_mongo_diagnostics(db.name, info['version'], latency)
+      def basic_diagnostics
+        { name: display_name, status: :connected, latency_ms: nil, details: { database: effective_database_name } }
       end
 
-      def build_mongo_diagnostics(name, version, latency)
+      def full_diagnostics
+        db = Mongoid.default_client.database
+        latency = measure_latency { db.command(ping: 1) }
+        info = db.command(buildInfo: 1).first
         {
-          name: 'MongoDB',
-          status: :connected,
-          latency_ms: latency,
-          details: { database: name, version: version }
+          name: display_name, status: :connected, latency_ms: latency,
+          details: { database: db.name, version: info['version'] }
         }
       end
 
-      def tenant_database
-        override = context_attribute(:tenant_mongo_db).presence
-        client = Mongoid.default_client
-        (override ? client.use(override) : client).database
+      def effective_client_name = Mongoid.default_client.name
+      def effective_database_name = Mongoid.default_client.database.name
+
+      def verify_match!(target, actual)
+        return if actual.to_s == target.to_s
+
+        raise verification_error(target, actual)
       end
 
-      def switch_mongo(db)
-        if db.nil?
-          Output.print_info('Resetting MongoDB client to default')
-          reset_overrides
-        elsif named_client?(db)
-          Output.print_info("Switching to MongoDB client: #{db}")
-          Mongoid.override_client(db)
-        else
-          Output.print_info("Switching to MongoDB database: #{db}")
-          Mongoid.override_database(db)
-        end
+      def verify_reset!
+        return if current_client_override.nil? && current_database_override.nil?
+
+        raise verification_error(nil, { client: current_client_override, database: current_database_override })
       end
 
       def reset_overrides
@@ -66,9 +93,21 @@ module ConsoleKit
       end
 
       def named_client?(name)
+        return false unless defined?(Mongoid::Config) && Mongoid::Config.respond_to?(:clients)
+
         Mongoid::Config.clients.key?(name.to_s)
-      rescue StandardError
-        false
+      end
+
+      def current_client_override
+        return nil unless defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:client_override)
+
+        Mongoid::Threaded.client_override
+      end
+
+      def current_database_override
+        return nil unless defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:database_override)
+
+        Mongoid::Threaded.database_override
       end
     end
   end
