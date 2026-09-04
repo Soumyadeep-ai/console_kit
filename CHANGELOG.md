@@ -48,6 +48,26 @@ completes fully or leaves the previous tenant exactly as it was.
 - **Elasticsearch cross-thread prefix conflicts are now detected.** `Elasticsearch::Model.index_name_prefix` is process-wide; when live threads hold different prefixes ConsoleKit warns once, naming both, instead of silently letting one thread read another tenant's indices.
 - Broad `rescue StandardError` blocks were narrowed. Programming errors (`NoMethodError`, `NameError`, `ArgumentError`, `TypeError`) are no longer laundered into ordinary "dependency unavailable" results.
 
+### Performance
+Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes, so it needs no database, Redis, Mongo or Elasticsearch. Counts are facts; timings are indicative and reported with run-to-run variance.
+
+- **Connection pool churn, per switch:**
+
+  | Path | `establish_connection` | `disconnect` |
+  |------|------------------------|--------------|
+  | native shard, same shard | 0 | 0 |
+  | native shard, different shard | 0 | 0 |
+  | native shard, reset to default | 0 | 0 |
+  | fallback, same shard | 0 | 0 |
+  | fallback, different shard | 1 | 1 |
+  | fallback, reset to default | 1 | 1 |
+
+  Before 1.5.0 every switch performed one `disconnect!` plus one `establish_connection` unconditionally, including a switch to the shard already in use, and including registered shards where no pool work is needed at all.
+- **Network calls per tenant switch: 0**, including `verify_tenant!` - verification is a local read on every backend. `dashboard(level: :basic)` performs 0 cold and cached; `level: :full` performs 8 cold and 0 within the cache window.
+- **Allocations per switch:** ~205 objects switching between tenants, ~194 repeating the same tenant.
+- `TenantConfigurator.configure_tenant` short-circuits a repeat of the current tenant at roughly 300x the cost of a full switch. `ConsoleKit.switch_tenant` deliberately does not short-circuit - it re-runs the whole transaction, because its purpose is to guarantee the state rather than to assume it.
+- The 1.3.0 `base_class` memoization is retained.
+
 ### Breaking changes
 - **redis-rb 5 and redis-client:** these expose no process-wide client handle, so a non-default `redis_db` now raises `UnsupportedBackendError` from `prepare` instead of printing a warning and silently running against the wrong DB. Give each tenant its own Redis URL, for example `redis://redis.internal:6379/<db>`.
 - **Elasticsearch prefixes** containing uppercase characters, whitespace, a leading `_`, `-` or `+`, or any of `\ / * ? " < > | , #` now raise `ConfigurationError` before any mutation. Previously they were passed through and rejected later, or silently produced unusable index names.
