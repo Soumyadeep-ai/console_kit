@@ -39,7 +39,7 @@ module ConsoleKit
         result = yield
         publish(name, elapsed_ms(start), payload.merge(status: :ok))
         result
-      rescue StandardError => e
+      rescue StandardError, NotImplementedError => e
         publish(name, elapsed_ms(start), payload.merge(status: :error, error: e.class.name))
         raise
       end

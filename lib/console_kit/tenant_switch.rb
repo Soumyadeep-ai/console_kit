@@ -72,7 +72,7 @@ module ConsoleKit
       undo = capture_undo(handlers)
       attempted = []
       apply(handlers, targets, constants, undo, attempted)
-    rescue StandardError => e
+    rescue StandardError, NotImplementedError => e
       @rollback_failures = rollback(undo, attempted)
       raise switch_error(e)
     end

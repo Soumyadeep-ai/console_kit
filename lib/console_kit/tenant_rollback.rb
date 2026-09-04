@@ -53,7 +53,7 @@ module ConsoleKit
       handlers.reverse.filter_map do |handler|
         handler.restore(snapshots[handler.backend_key])
         nil
-      rescue StandardError => e
+      rescue StandardError, NotImplementedError => e
         Instrumentation.increment('console_kit.rollback_failure')
         { backend: handler.display_name, error: e }
       end
@@ -62,7 +62,7 @@ module ConsoleKit
     def restore_context
       context_wrapper.restore(undo[:context])
       []
-    rescue StandardError => e
+    rescue StandardError, NotImplementedError => e
       Instrumentation.increment('console_kit.rollback_failure')
       [{ backend: 'context', error: e }]
     end

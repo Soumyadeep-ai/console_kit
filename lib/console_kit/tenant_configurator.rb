@@ -46,7 +46,7 @@ module ConsoleKit
         TenantSwitch.call(key)
         Output.print_success("Tenant set to: #{key}")
         true
-      rescue StandardError => e
+      rescue StandardError, NotImplementedError => e
         report_failure(e, key)
         false
       end
