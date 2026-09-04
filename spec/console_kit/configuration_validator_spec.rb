@@ -1,0 +1,252 @@
+# frozen_string_literal: true
+
+require 'spec_helper'
+
+RSpec.describe ConsoleKit::ConfigurationValidator do
+  subject(:validate!) { described_class.new(config).validate! }
+
+  let(:config) { ConsoleKit::Configuration.new }
+  let(:valid_constants) do
+    { shard: :shard1, partner_code: 'acme', mongo_db: 'acme_db', redis_db: 1, elasticsearch_prefix: 'acme' }
+  end
+  let(:valid_tenants) { { acme: { constants: valid_constants } } }
+
+  before do
+    allow(ConsoleKit::Output).to receive(:print_warning)
+    stub_const('Something', Class.new)
+    config.context_class = 'Something'
+  end
+
+  # Runs the block, answering whether it raised ConfigurationError. Keeps the
+  # table-driven parity examples below to one assertion each.
+  def raises_configuration_error?
+    yield
+    false
+  rescue ConsoleKit::ConfigurationError
+    true
+  end
+
+  def redis_handler_rejects?(value)
+    raises_configuration_error? { ConsoleKit::Connections::RedisConnectionHandler.new(nil).prepare(value) }
+  end
+
+  def es_handler_rejects?(value)
+    raises_configuration_error? { ConsoleKit::Connections::ElasticsearchConnectionHandler.new(nil).prepare(value) }
+  end
+
+  it 'does not raise for a fully valid tenant map' do
+    config.tenants = valid_tenants
+    expect { validate! }.not_to raise_error
+  end
+
+  describe 'tenant map structure' do
+    it 'raises when a tenant entry is not a Hash' do
+      config.tenants = { acme: 'not-a-hash' }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme.*must be a Hash/)
+    end
+
+    it 'raises when a tenant entry has no :constants key' do
+      config.tenants = { acme: {} }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme is missing a `:constants`/)
+    end
+
+    it 'raises when :constants is present but not a Hash' do
+      config.tenants = { acme: { constants: 'nope' } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme `:constants`.*Hash/)
+    end
+  end
+
+  describe 'tenant identifiers' do
+    it 'raises when a tenant key is neither a Symbol nor a String' do
+      config.tenants = { 1 => { constants: valid_constants } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /identifier 1 must be/)
+    end
+
+    it 'raises when a tenant key is a blank string' do
+      config.tenants = { '' => { constants: valid_constants } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /identifier "" must be/)
+    end
+
+    it 'catches tenant identifiers that duplicate by case' do
+      config.tenants = { acme: { constants: valid_constants }, ACME: { constants: valid_constants } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /are duplicates once normalized/)
+    end
+
+    it 'catches tenant identifiers that duplicate by type' do
+      config.tenants = { acme: { constants: valid_constants }, 'acme' => { constants: valid_constants } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /are duplicates once normalized/)
+    end
+  end
+
+  describe 'required constants keys' do
+    it 'raises naming the tenant and the missing keys' do
+      config.tenants = { acme: { constants: { mongo_db: 'db' } } }
+      expect { validate! }.to raise_error(
+        ConsoleKit::ConfigurationError, /:acme.*missing required keys: shard, partner_code/
+      )
+    end
+
+    it 'reads its required keys from TenantPlan::REQUIRED_KEYS so the two cannot drift' do
+      expect(ConsoleKit::TenantPlan::REQUIRED_KEYS).to eq(%i[shard partner_code])
+    end
+  end
+
+  describe 'redis_db validation' do
+    it 'raises naming the tenant, the key and the bad value' do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_db: -1) } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme redis_db -1 is invalid/)
+    end
+
+    it 'rejects a non-numeric string' do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_db: 'primary') } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /redis_db "primary" is invalid/)
+    end
+
+    it 'rejects a float' do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_db: 1.5) } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /redis_db 1\.5 is invalid/)
+    end
+  end
+
+  describe 'elasticsearch_prefix validation' do
+    it 'rejects an uppercase prefix, naming the tenant and value' do
+      config.tenants = { acme: { constants: valid_constants.merge(elasticsearch_prefix: 'Acme') } }
+      expect { validate! }.to raise_error(
+        ConsoleKit::ConfigurationError, /:acme elasticsearch_prefix "Acme" is invalid: must be lowercase/
+      )
+    end
+
+    it 'rejects a prefix with a leading underscore' do
+      config.tenants = { acme: { constants: valid_constants.merge(elasticsearch_prefix: '_acme') } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /must not begin with/)
+    end
+
+    it 'rejects a prefix with an illegal character' do
+      config.tenants = { acme: { constants: valid_constants.merge(elasticsearch_prefix: 'acme/idx') } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /must not contain/)
+    end
+  end
+
+  describe 'mongo_db and shard validation' do
+    it 'rejects a mongo_db that is not a String or Symbol' do
+      config.tenants = { acme: { constants: valid_constants.merge(mongo_db: 123) } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme mongo_db 123 is invalid/)
+    end
+
+    it 'rejects a blank mongo_db' do
+      config.tenants = { acme: { constants: valid_constants.merge(mongo_db: '') } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /mongo_db "" is invalid/)
+    end
+
+    it 'rejects a shard that is not a String or Symbol' do
+      config.tenants = { acme: { constants: valid_constants.merge(shard: 42) } }
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /:acme shard 42 is invalid/)
+    end
+  end
+
+  describe 'aggregation of multiple problems' do
+    let(:error_message) do
+      config.tenants = {
+        acme: { constants: { mongo_db: 'db' } },
+        globex: { constants: valid_constants.merge(redis_db: -1) }
+      }
+      begin
+        validate!
+        nil
+      rescue ConsoleKit::ConfigurationError => e
+        e.message
+      end
+    end
+
+    it 'reports the first tenant problem' do
+      expect(error_message).to include(':acme constants missing required keys')
+    end
+
+    it 'reports the second tenant problem in the same message' do
+      expect(error_message).to include(':globex redis_db -1 is invalid')
+    end
+  end
+
+  describe 'context_class resolvability' do
+    it 'raises when context_class cannot be resolved, alongside a valid tenant map' do
+      config.tenants = valid_tenants
+      config.context_class = 'DoesNotExistAtAll'
+      expect { validate! }.to raise_error(ConsoleKit::ConfigurationError, /could not be found/)
+    end
+  end
+
+  describe 'warnings (do not raise)' do
+    it 'does not raise about unrecognised constants keys' do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_dbs: 3) } }
+      expect { validate! }.not_to raise_error
+    end
+
+    it 'prints the unrecognised constants key warning' do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_dbs: 3) } }
+      validate!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/unrecognised keys: :redis_dbs/)
+    end
+
+    it 'does not raise when the context class is missing writers' do
+      stub_const('BareContext', Class.new)
+      config.tenants = valid_tenants
+      config.context_class = 'BareContext'
+      expect { validate! }.not_to raise_error
+    end
+
+    it 'prints the missing-writer warning naming the missing attributes' do
+      stub_const('BareContext', Class.new)
+      config.tenants = valid_tenants
+      config.context_class = 'BareContext'
+      validate!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/no writer for:.*partner_identifier/)
+    end
+
+    it 'warns about unrecognised top-level tenant keys' do
+      config.tenants = { acme: { constants: valid_constants, label: 'Acme Inc' } }
+      validate!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/top-level has unrecognised keys: :label/)
+    end
+  end
+
+  describe 'credential scrubbing' do
+    let(:credential_url) { 'redis://user:hunter2@cache.internal:6379/1' }
+    let(:error_message) do
+      config.tenants = { acme: { constants: valid_constants.merge(redis_db: credential_url) } }
+      begin
+        validate!
+        ''
+      rescue ConsoleKit::ConfigurationError => e
+        e.message
+      end
+    end
+
+    it 'scrubs a credential-bearing URI echoed in an invalid redis_db message' do
+      expect(error_message).not_to include('hunter2')
+    end
+  end
+
+  describe 'Redis DB rule parity with RedisConnectionHandler' do
+    redis_values = [0, 5, '3', '0', nil, -1, 1.5, 2.0, 'primary', '-1'].freeze
+
+    redis_values.each do |value|
+      it "agrees with the handler on #{value.inspect}" do
+        config.tenants = { acme: { constants: valid_constants.merge(redis_db: value) } }
+
+        expect(raises_configuration_error? { validate! }).to eq(redis_handler_rejects?(value))
+      end
+    end
+  end
+
+  describe 'Elasticsearch prefix rule parity with ElasticsearchConnectionHandler' do
+    es_values = ['', nil, 'acme', 'Acme', 'acme idx', '_acme', '-acme', 'acme/idx', 'acme#idx'].freeze
+
+    es_values.each do |value|
+      it "agrees with the handler on #{value.inspect}" do
+        config.tenants = { acme: { constants: valid_constants.merge(elasticsearch_prefix: value) } }
+
+        expect(raises_configuration_error? { validate! }).to eq(es_handler_rejects?(value))
+      end
+    end
+  end
+end
