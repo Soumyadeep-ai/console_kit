@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'English'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/inclusion'
 require 'active_support/core_ext/string/inflections'
@@ -63,14 +64,32 @@ module ConsoleKit
     def with_tenant(key)
       previous = StateStore.current
       state = TenantSwitch.call(key)
+      completed = false
       begin
-        yield
+        result = yield
+        completed = true
+        result
       ensure
-        TenantSwitch.unwind(state, previous)
+        unwind_scope(state, previous, completed ? nil : $ERROR_INFO)
       end
     end
 
     def enable_pretty_output = configuration.pretty_output = true
     def disable_pretty_output = configuration.pretty_output = false
+
+    private
+
+    # A rollback failure raised from an `ensure` would replace the exception the
+    # block was already raising, and that exception is the root cause the
+    # operator needs. While one is in flight the rollback failure is reported
+    # through Output instead; with no block exception it still surfaces.
+    def unwind_scope(state, previous, in_flight)
+      TenantSwitch.unwind(state, previous)
+    rescue RollbackError => e
+      raise e if in_flight.nil?
+
+      Output.print_error("#{e.message}\nThis rollback failure did not replace the in-flight " \
+                         "#{in_flight.class}: #{in_flight.message}")
+    end
   end
 end

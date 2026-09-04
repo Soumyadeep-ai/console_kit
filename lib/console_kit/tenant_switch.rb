@@ -123,7 +123,11 @@ module ConsoleKit
       end
     end
 
+    # Remembers which handler is being applied, so a raw backend error - one the
+    # handler did not wrap in a ConnectionError of its own - can still be
+    # attributed to the backend that raised it.
     def instrument_backend(event, handler, &)
+      @failing_handler = handler
       Instrumentation.instrument(event, backend: handler.backend_key, tenant: tenant_key, &)
     end
 
@@ -142,7 +146,7 @@ module ConsoleKit
     def switch_error(error)
       TenantSwitchError.new(
         from_tenant: StateStore.tenant_key, to_tenant: tenant_key, original_error: error,
-        backend: error.try(:backend), rollback_failures: @rollback_failures
+        backend: error.try(:backend) || @failing_handler&.display_name, rollback_failures: @rollback_failures
       )
     end
 

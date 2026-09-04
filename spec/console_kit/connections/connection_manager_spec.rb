@@ -64,4 +64,67 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       expect(ConsoleKit::Connections::BaseConnectionHandler).to have_received(:registry)
     end
   end
+
+  # A dropped handler vanishes from the switch, the verification, the snapshot
+  # AND the rollback, so a switch can report itself verified while that backend
+  # still serves another tenant. "Half-implemented" has to be loud; "optional gem
+  # not loaded" has to stay silent.
+  #
+  # These handlers deliberately do not inherit BaseConnectionHandler: the
+  # registry is `descendants`, so an anonymous subclass would leak into every
+  # later example in the process.
+  describe 'a handler that cannot answer whether it is available' do
+    before { allow(ConsoleKit::Output).to receive(:print_warning) }
+
+    def half_implemented
+      Class.new do
+        def initialize(context) = @context = context
+        def available? = raise NotImplementedError, 'HalfHandler must implement #available?'
+      end
+    end
+
+    def not_loaded
+      Class.new do
+        def initialize(context) = @context = context
+        def available? = false
+      end
+    end
+
+    context 'when the handler raises NotImplementedError' do
+      before do
+        allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([half_implemented])
+      end
+
+      it 'still drops it from the available handlers' do
+        expect(described_class.available_handlers(context)).to be_empty
+      end
+
+      it 'warns with the reason the handler gave' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output)
+          .to have_received(:print_warning).with(a_string_including('must implement #available?'))
+      end
+
+      it 'warns that the backend will not be rolled back' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output)
+          .to have_received(:print_warning).with(a_string_including('NOT be switched, verified or rolled back'))
+      end
+    end
+
+    context 'when the handler simply answers false, as an unloaded gem does' do
+      before do
+        allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([not_loaded])
+      end
+
+      it 'drops it from the available handlers' do
+        expect(described_class.available_handlers(context)).to be_empty
+      end
+
+      it 'says nothing about it' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+    end
+  end
 end

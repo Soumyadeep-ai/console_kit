@@ -175,6 +175,48 @@ RSpec.describe NestedTenant do
     end
   end
 
+  # The scope closes from an `ensure`, so a rollback failure raised there would
+  # discard whatever the block was already raising - the exact failure the
+  # operator called about.
+  describe 'a rollback that fails while the block is already raising' do
+    let(:handlers) { ConsoleKit::Connections::ConnectionManager.available_handlers(context_class) }
+    let(:sql) { handlers.find { |handler| handler.backend_key == :sql } }
+
+    before do
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return(handlers)
+      allow(sql).to receive(:restore).and_raise(IOError, 'shard registry offline')
+      allow(ConsoleKit::Output).to receive(:print_error)
+    end
+
+    it 'propagates the exception the block raised' do
+      expect { io_scope }.to raise_error(IOError, 'the REAL failure the operator needs')
+    end
+
+    it 'still reports the rollback failure through Output' do
+      swallow_io_scope
+      expect(ConsoleKit::Output).to have_received(:print_error).with(a_string_including('Rollback failed for'))
+    end
+
+    it 'says the rollback failure did not replace the root cause' do
+      swallow_io_scope
+      expect(ConsoleKit::Output).to have_received(:print_error).with(a_string_including('did not replace'))
+    end
+
+    it 'still raises the rollback failure when the block itself succeeded' do
+      expect { ConsoleKit.with_tenant('acme') { :ok } }.to raise_error(ConsoleKit::RollbackError)
+    end
+
+    def io_scope
+      ConsoleKit.with_tenant('acme') { raise IOError, 'the REAL failure the operator needs' }
+    end
+
+    def swallow_io_scope
+      io_scope
+    rescue IOError
+      nil
+    end
+  end
+
   describe 'nesting inside a thread' do
     let(:trace) { trace_nested_scopes_on_a_thread }
 

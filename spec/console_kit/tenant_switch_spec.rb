@@ -104,6 +104,34 @@ RSpec.describe ConsoleKit::TenantSwitch do
     rescue ConsoleKit::TenantSwitchError
       expect(ConsoleKit::StateStore.tenant_key).to be_nil
     end
+
+    # The handler raised a bare NotImplementedError and never wrapped it, so the
+    # only thing that knows which backend was being applied is the coordinator.
+    it 'attributes the raw failure to the backend that raised it' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.backend).to eq('MONGO')
+    end
+
+    it 'names that backend in the headline' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('(MONGO)')
+    end
+  end
+
+  describe 'a handler that wrapped its own failure' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:wrapped) { ConsoleKit::ConnectionError.new(backend: 'Redis', tenant: 'acme', operation: :connect) }
+
+    before { allow(broken).to receive(:connect!).and_raise(wrapped) }
+
+    it 'keeps the backend the handler named rather than the one being applied' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.backend).to eq('Redis')
+    end
   end
 
   describe 'rollback that itself fails' do
