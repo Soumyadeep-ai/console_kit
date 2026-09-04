@@ -65,9 +65,18 @@ module ConsoleKit
       end
 
       # Write values back verbatim. Used for rollback, so it must not warn or
-      # transform anything.
+      # transform anything. Every attribute is attempted even when an earlier one
+      # raises, so one broken writer cannot strand the rest of the context on the
+      # tenant the switch failed to reach.
       def restore(values)
-        values.each { |attr, value| ctx.public_send(:"#{attr}=", value) }
+        failures = values.filter_map do |attr, value|
+          ctx.public_send(:"#{attr}=", value)
+          nil
+        rescue StandardError, NotImplementedError => e
+          [attr, e]
+        end
+        raise_restore_failure(failures) if failures.any?
+
         values
       end
 
@@ -84,6 +93,12 @@ module ConsoleKit
       end
 
       private
+
+      def raise_restore_failure(failures)
+        detail = failures.map { |attr, error| "#{attr} (#{error.class})" }.join(', ')
+        raise Error, "Could not restore context attributes: #{detail}. " \
+                     'Those attributes are still set to the tenant the switch failed to reach.'
+      end
 
       def case_mismatch?(existing, new_value)
         existing.is_a?(String) && new_value.is_a?(String) &&

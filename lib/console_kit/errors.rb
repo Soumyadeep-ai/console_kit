@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'connections/diagnostic_helpers'
+
 module ConsoleKit
   # Base error class for ConsoleKit-related exceptions.
   class Error < StandardError; end
@@ -70,8 +72,12 @@ module ConsoleKit
     private
 
     def build_message
-      [headline, original_error.message, rollback_summary].compact.join("\n")
+      [headline, scrub(original_error.message), rollback_summary].compact.join("\n")
     end
+
+    # Tenant constants can carry connection URIs. A root-cause message reaches
+    # logs and consoles, so it is scrubbed the same way diagnostics rows are.
+    def scrub(message) = Connections::DiagnosticHelpers.scrub(message)
 
     def headline
       scope = backend ? " (#{backend})" : nil
@@ -85,7 +91,7 @@ module ConsoleKit
     end
 
     def formatted_failures
-      rollback_failures.map { |f| "  - #{f[:backend]}: #{f[:error].message}" }.join("\n")
+      rollback_failures.map { |f| "  - #{f[:backend]}: #{scrub(f[:error].message)}" }.join("\n")
     end
   end
 end

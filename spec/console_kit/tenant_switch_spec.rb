@@ -137,4 +137,95 @@ RSpec.describe ConsoleKit::TenantSwitch do
       expect(e.message).to include('rollback did not fully succeed')
     end
   end
+
+  describe 'a snapshot that fails before anything is applied' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    before { allow(healthy).to receive(:snapshot).and_raise(ArgumentError, 'snapshot boom') }
+
+    it 'raises TenantSwitchError rather than a NoMethodError from the rollback path' do
+      expect { switch }.to raise_error(ConsoleKit::TenantSwitchError)
+    end
+
+    it 'preserves the root cause instead of replacing it with a rollback error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.original_error).to be_a(ArgumentError)
+    end
+
+    it 'leaves the context untouched, because nothing was applied' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(context_class.tenant_shard).to be_nil
+    end
+
+    it 'never connects a backend' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(healthy.identity).to be_nil
+    end
+  end
+
+  describe 'a root cause carrying credentials' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:uri) { 'postgres://deploy:sup3rs3cret@db.internal:5432/acme' }
+
+    before { allow(broken).to receive(:connect!).and_raise(RuntimeError, "auth failed for #{uri}") }
+
+    it 'does not echo the password into the switch error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).not_to include('sup3rs3cret')
+    end
+
+    it 'does not echo the credential-bearing URI into the switch error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).not_to include(uri)
+    end
+
+    it 'still reports that the switch failed' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('Failed to switch tenant')
+    end
+  end
+
+  describe 'a context writer that fails during rollback' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:context_class) do
+      Class.new do
+        class << self
+          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db, :tenant_elasticsearch_prefix
+          attr_reader :partner_identifier
+
+          def partner_identifier=(value)
+            raise IOError, 'partner writer offline' if value.nil?
+
+            @partner_identifier = value
+          end
+        end
+      end
+    end
+
+    it 'still restores the attributes it could write' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(context_class.tenant_shard).to be_nil
+    end
+
+    it 'reports that rollback did not fully succeed' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e).not_to be_rollback_succeeded
+    end
+
+    it 'names the attributes left on the tenant the switch failed to reach' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('partner_identifier')
+    end
+  end
 end

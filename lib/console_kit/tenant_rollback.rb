@@ -40,6 +40,8 @@ module ConsoleKit
     # Returns an array of { backend:, error: } for every component that could not
     # be restored. An empty array means the previous state is fully back.
     def call(handlers)
+      return [] if undo.nil?
+
       Instrumentation.increment(EVENT)
       restore_backends(handlers) + restore_context
     end

@@ -69,7 +69,19 @@ module ConsoleKit
     # --- apply / verify / commit ---------------------------------------
 
     def transact(handlers, targets, constants)
-      undo = capture_undo(handlers)
+      run_transaction(handlers, targets, constants, snapshot_state(handlers))
+    end
+
+    # Snapshotting runs before anything has been applied, so a failure here needs
+    # no rollback - but it must still surface as a TenantSwitchError carrying its
+    # cause rather than escaping raw.
+    def snapshot_state(handlers)
+      capture_undo(handlers)
+    rescue StandardError, NotImplementedError => e
+      raise switch_error(e)
+    end
+
+    def run_transaction(handlers, targets, constants, undo)
       attempted = []
       apply(handlers, targets, constants, undo, attempted)
     rescue StandardError, NotImplementedError => e
