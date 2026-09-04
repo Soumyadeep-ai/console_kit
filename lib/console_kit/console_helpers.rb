@@ -16,8 +16,10 @@ module ConsoleKit
       nil
     end
 
-    def dashboard
-      ConsoleKit::Connections::Dashboard.display
+    # `dashboard` is cheap by default: :basic asks no backend anything.
+    # `dashboard(level: :full)` pings, and is bounded per backend.
+    def dashboard(level: :basic)
+      ConsoleKit::Connections::Dashboard.display(level: level)
       self
     end
 

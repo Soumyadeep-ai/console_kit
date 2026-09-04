@@ -70,10 +70,25 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
   end
 
   describe '#dashboard' do
+    before { allow(ConsoleKit::Connections::Dashboard).to receive(:display) }
+
     it 'delegates to ConsoleKit::Connections::Dashboard.display' do
-      allow(ConsoleKit::Connections::Dashboard).to receive(:display)
       helper.dashboard
       expect(ConsoleKit::Connections::Dashboard).to have_received(:display)
+    end
+
+    it 'asks for the cheap basic level when called with no arguments' do
+      helper.dashboard
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display).with(level: :basic)
+    end
+
+    it 'passes an explicit level through' do
+      helper.dashboard(level: :full)
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display).with(level: :full)
+    end
+
+    it 'returns itself so the console prints nothing noisy' do
+      expect(helper.dashboard).to be(helper)
     end
   end
 

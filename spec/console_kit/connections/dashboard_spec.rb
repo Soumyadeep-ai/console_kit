@@ -4,6 +4,7 @@ require 'spec_helper'
 
 RSpec.describe ConsoleKit::Connections::Dashboard do
   before do
+    ConsoleKit::Diagnostics.clear_cache!
     allow(ConsoleKit::Output).to receive(:print_header)
     allow(ConsoleKit::Output).to receive(:print_warning)
     allow(ConsoleKit::Output).to receive(:print_raw)
@@ -19,7 +20,7 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
           details: { adapter: 'PostgreSQL', pool_size: 5, version: 'PostgreSQL 14.0' }
         }
       end
-      let(:mock_handler) { double(safe_diagnostics: sql_diagnostics) }
+      let(:mock_handler) { double(backend_key: :sql, safe_diagnostics: sql_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)
@@ -80,8 +81,8 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       let(:error_diagnostics) do
         { name: 'MongoDB', status: :error, latency_ms: nil, details: { error: 'auth failed' } }
       end
-      let(:connected_handler) { double(safe_diagnostics: connected_diagnostics) }
-      let(:error_handler)     { double(safe_diagnostics: error_diagnostics) }
+      let(:connected_handler) { double(backend_key: :sql, safe_diagnostics: connected_diagnostics) }
+      let(:error_handler)     { double(backend_key: :mongo, safe_diagnostics: error_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)
@@ -116,7 +117,7 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
       let(:unavailable_diagnostics) do
         { name: 'Redis', status: :unavailable, latency_ms: nil, details: {} }
       end
-      let(:mock_handler) { double(safe_diagnostics: unavailable_diagnostics) }
+      let(:mock_handler) { double(backend_key: :redis, safe_diagnostics: unavailable_diagnostics) }
 
       before do
         allow(ConsoleKit::Connections::ConnectionManager)
@@ -129,6 +130,31 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
         expect(ConsoleKit::Output).to have_received(:print_raw) do |output|
           expect(output).to include("\u2014 N/A")
         end
+      end
+    end
+
+    context 'with diagnostic levels' do
+      let(:row) { { name: 'Redis', status: :connected, latency_ms: nil, details: {} } }
+      let(:mock_handler) { double(backend_key: :redis, safe_diagnostics: row) }
+
+      before do
+        allow(ConsoleKit::Connections::ConnectionManager)
+          .to receive(:available_handlers)
+          .and_return([mock_handler])
+      end
+
+      it 'asks for the cheap basic level by default' do
+        described_class.display
+        expect(mock_handler).to have_received(:safe_diagnostics).with(hash_including(level: :basic))
+      end
+
+      it 'passes an explicit level through to the handler' do
+        described_class.display(level: :full)
+        expect(mock_handler).to have_received(:safe_diagnostics).with(hash_including(level: :full))
+      end
+
+      it 'rejects an unknown level' do
+        expect { described_class.display(level: :deep) }.to raise_error(ConsoleKit::ConfigurationError, /:deep/)
       end
     end
   end

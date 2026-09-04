@@ -5,6 +5,7 @@ require 'active_support/core_ext/string/inflections'
 require 'active_support/core_ext/string/filters'
 require_relative 'diagnostic_helpers'
 require_relative '../errors'
+require_relative '../diagnostics'
 
 module ConsoleKit
   module Connections
@@ -70,7 +71,7 @@ module ConsoleKit
       def diagnostics(level: :basic) = raise NotImplementedError, "#{self.class} must implement #diagnostics"
 
       # Bounded, leak-free diagnostics execution. Delegates to the shared runner.
-      def safe_diagnostics(timeout: 2, level: :basic)
+      def safe_diagnostics(timeout: Diagnostics::DEFAULT_TIMEOUT, level: :basic)
         Diagnostics::Runner.call(self, timeout: timeout, level: level)
       end
 

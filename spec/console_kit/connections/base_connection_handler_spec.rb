@@ -46,6 +46,39 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  describe '#safe_diagnostics' do
+    let(:handler_class) do
+      stub_const('SafeDiagnosticsHandler', Class.new(described_class) do
+        def available? = false
+        def diagnostics(level: :basic) = { name: 'Safe', status: :connected, latency_ms: nil, details: { level: } }
+      end)
+    end
+    let(:safe_handler) { handler_class.new(context) }
+
+    after { ConsoleKit::Diagnostics::Runner.shutdown! }
+
+    it 'returns the handler row' do
+      expect(safe_handler.safe_diagnostics[:status]).to eq(:connected)
+    end
+
+    it 'defaults to the cheap basic level' do
+      expect(safe_handler.safe_diagnostics[:details][:level]).to eq(:basic)
+    end
+
+    it 'passes an explicit level through' do
+      expect(safe_handler.safe_diagnostics(level: :full)[:details][:level]).to eq(:full)
+    end
+
+    it 'rejects an unknown level' do
+      expect { safe_handler.safe_diagnostics(level: :deep) }.to raise_error(ConsoleKit::ConfigurationError)
+    end
+
+    it 'starts no thread for the basic level' do
+      safe_handler.safe_diagnostics
+      expect(ConsoleKit::Diagnostics::Runner.live_thread_count).to eq(0)
+    end
+  end
+
   describe 'initialization' do
     it 'assigns the context' do
       expect(handler.context).to eq(context)
