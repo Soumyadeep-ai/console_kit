@@ -557,4 +557,10 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       expect(bare_handler.send(:context_attribute, :tenant_redis_db)).to be_nil
     end
   end
+
+  describe 'the shared connection handler contract' do
+    include_context 'with the Redis handler contract'
+
+    it_behaves_like 'a connection handler'
+  end
 end

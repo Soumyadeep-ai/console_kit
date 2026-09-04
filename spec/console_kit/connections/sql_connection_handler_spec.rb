@@ -458,4 +458,10 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       expect(base_class.connection_pool.db_config.name).to eq('primary')
     end
   end
+
+  describe 'the shared connection handler contract' do
+    include_context 'with the SQL handler contract'
+
+    it_behaves_like 'a connection handler'
+  end
 end

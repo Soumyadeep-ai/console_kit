@@ -283,4 +283,10 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       expect(handler.send(:context_attribute, :tenant_mongo_db)).to eq('mongo_foo')
     end
   end
+
+  describe 'the shared connection handler contract' do
+    include_context 'with the MongoDB handler contract'
+
+    it_behaves_like 'a connection handler'
+  end
 end

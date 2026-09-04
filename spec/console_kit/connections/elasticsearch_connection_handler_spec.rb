@@ -541,4 +541,10 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       expect(handler.send(:context_attribute, :tenant_elasticsearch_prefix)).to eq('acme')
     end
   end
+
+  describe 'the shared connection handler contract' do
+    include_context 'with the Elasticsearch handler contract'
+
+    it_behaves_like 'a connection handler'
+  end
 end
