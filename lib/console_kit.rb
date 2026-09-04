@@ -69,6 +69,7 @@ module ConsoleKit
         TenantSwitch.unwind(state, previous)
       end
     end
+
     def enable_pretty_output = configuration.pretty_output = true
     def disable_pretty_output = configuration.pretty_output = false
   end

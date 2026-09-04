@@ -3,6 +3,8 @@
 require_relative 'errors'
 require_relative 'tenant_state'
 require_relative 'instrumentation'
+require_relative 'tenant_rollback'
+require_relative 'tenant_plan'
 require_relative 'connections/connection_manager'
 
 module ConsoleKit
@@ -29,24 +31,11 @@ module ConsoleKit
         raise ConfigurationError, 'No tenant is currently configured.' unless state.configured?
 
         new(state.tenant_key).send(:verify_committed, state)
+        state
       end
 
       # Undo a committed state, returning the store to `previous`.
-      def unwind(state, previous)
-        switcher = new(nil, context: ConsoleKit.configuration.context_class)
-        failures = switcher.send(:restore_undo, state.undo, handlers_for(state))
-        StateStore.current = previous
-        raise RollbackError, failures unless failures.empty?
-
-        previous
-      end
-
-      private
-
-      def handlers_for(state)
-        Connections::ConnectionManager.available_handlers(ConsoleKit.configuration.context_class)
-                                     .select { |h| state.undo_backends.key?(h.backend_key) }
-      end
+      def unwind(state, previous) = TenantRollback.unwind(state, previous)
     end
 
     def initialize(tenant_key, context: nil)
@@ -64,38 +53,11 @@ module ConsoleKit
     attr_reader :tenant_key, :context
 
     def perform
-      constants = resolve_constants
+      plan = TenantPlan.new(tenant_key)
       handlers = Connections::ConnectionManager.available_handlers(context)
-      targets = resolve_targets(constants, handlers)
+      targets = plan.targets_for(handlers)
       prepare_all(handlers, targets)
-      transact(handlers, targets, constants)
-    end
-
-    # --- validate -------------------------------------------------------
-
-    def resolve_constants
-      return {} if tenant_key.nil?
-
-      tenants = ConsoleKit.configuration.tenants
-      constants = tenants.is_a?(Hash) ? tenants.dig(tenant_key, :constants) : nil
-      raise TenantNotFoundError, "No configuration found for tenant: #{tenant_key}" unless constants
-
-      validate_constants!(constants)
-      constants
-    end
-
-    def validate_constants!(constants)
-      missing = %i[shard partner_code] - constants.keys
-      return if missing.empty?
-
-      raise ConfigurationError, "Tenant #{tenant_key.inspect} constants missing keys: #{missing.join(', ')}"
-    end
-
-    def resolve_targets(constants, handlers)
-      handlers.to_h do |handler|
-        attr_name = handler.class.context_attribute_name
-        [handler.backend_key, attr_name && constants[TenantConfigurator::CONTEXT_MAPPING[attr_name]].presence]
-      end
+      transact(handlers, targets, plan.constants)
     end
 
     # --- prepare (no mutation) -----------------------------------------
@@ -109,15 +71,17 @@ module ConsoleKit
     def transact(handlers, targets, constants)
       undo = capture_undo(handlers)
       attempted = []
-      begin
-        context_values = apply_context(constants)
-        connect_all(handlers, targets, attempted)
-        verify_all(attempted, targets)
-        commit(constants, context_values, undo)
-      rescue StandardError => e
-        @rollback_failures = restore_undo(undo, attempted)
-        raise switch_error(e)
-      end
+      apply(handlers, targets, constants, undo, attempted)
+    rescue StandardError => e
+      @rollback_failures = rollback(undo, attempted)
+      raise switch_error(e)
+    end
+
+    def apply(handlers, targets, constants, undo, attempted)
+      context_values = apply_context(constants)
+      connect_all(handlers, targets, attempted)
+      verify_all(attempted, targets)
+      commit(constants, context_values, undo)
     end
 
     def capture_undo(handlers)
@@ -159,27 +123,8 @@ module ConsoleKit
 
     # --- rollback -------------------------------------------------------
 
-    def restore_undo(undo, handlers)
-      failures = restore_backends(undo[:backends], handlers)
-      failures.concat(restore_context(undo[:context]))
-      Instrumentation.increment('console_kit.rollback') unless handlers.empty?
-      failures
-    end
-
-    def restore_backends(snapshots, handlers)
-      handlers.reverse.filter_map do |handler|
-        handler.restore(snapshots[handler.backend_key])
-        nil
-      rescue StandardError => e
-        { backend: handler.display_name, error: e }
-      end
-    end
-
-    def restore_context(values)
-      context_wrapper.restore(values)
-      []
-    rescue StandardError => e
-      [{ backend: 'context', error: e }]
+    def rollback(undo, handlers)
+      TenantRollback.new(undo, context_wrapper).call(handlers)
     end
 
     def switch_error(error)
@@ -191,9 +136,8 @@ module ConsoleKit
 
     def verify_committed(state)
       handlers = Connections::ConnectionManager.available_handlers(context)
-      targets = resolve_targets(state.constants, handlers)
-      verify_all(handlers, targets)
-      true
+      verify_all(handlers, TenantPlan.new(state.tenant_key).targets_for(handlers))
+      nil
     end
 
     def context_wrapper = @context_wrapper ||= TenantConfigurator::ContextWrapper.for_context(context)

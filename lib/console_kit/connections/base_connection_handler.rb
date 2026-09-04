@@ -64,7 +64,7 @@ module ConsoleKit
       # Prove the live connection belongs to `target`. Raise
       # ConnectionVerificationError on mismatch. Handlers that genuinely cannot
       # observe their own identity must say so in their documentation.
-      def verify!(_target) = true
+      def verify!(_target) = nil
 
       def connect = connect!(target)
       def diagnostics(level: :basic) = raise NotImplementedError, "#{self.class} must implement #diagnostics"
@@ -89,7 +89,10 @@ module ConsoleKit
       end
 
       def context_attribute(name) = @context.try(name)
-      def unavailable_diagnostics(name = display_name) = { name: name, status: :unavailable, latency_ms: nil, details: {} }
+
+      def unavailable_diagnostics(name = display_name)
+        { name: name, status: :unavailable, latency_ms: nil, details: {} }
+      end
     end
   end
 end

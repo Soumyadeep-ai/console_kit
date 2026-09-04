@@ -24,7 +24,8 @@ module ConsoleKit
     }.freeze
 
     class << self
-      def configuration_success = StateStore.configured?
+      def configuration_success? = StateStore.configured?
+      alias configuration_success configuration_success?
 
       # Compat shim: assigning a falsey value clears the current tenant state.
       def configuration_success=(val)
@@ -47,6 +48,7 @@ module ConsoleKit
         true
       rescue StandardError => e
         report_failure(e, key)
+        false
       end
 
       def clear
@@ -67,9 +69,9 @@ module ConsoleKit
       end
 
       def report_failure(error, key)
-        return missing_config_error?(key) if tenant_missing?(error)
+        return print_missing_config(key) if tenant_missing?(error)
 
-        handle_error?(error, key)
+        print_error_details(error, key)
       end
 
       def tenant_missing?(error)
@@ -77,15 +79,15 @@ module ConsoleKit
           (error.is_a?(TenantSwitchError) && error.original_error.is_a?(TenantNotFoundError))
       end
 
-      def missing_config_error?(key)
+      def print_missing_config(key)
         Output.print_error("No configuration found for tenant: #{key}")
-        false
+        nil
       end
 
-      def handle_error?(error, key)
+      def print_error_details(error, key)
         Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
         Output.print_backtrace(error)
-        false
+        nil
       end
     end
   end

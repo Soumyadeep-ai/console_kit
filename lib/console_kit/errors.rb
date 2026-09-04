@@ -74,8 +74,8 @@ module ConsoleKit
     end
 
     def headline
-      "Failed to switch tenant from #{from_tenant.inspect} to #{to_tenant.inspect}" \
-        "#{backend ? " (#{backend})" : ''}:"
+      scope = backend ? " (#{backend})" : nil
+      "Failed to switch tenant from #{from_tenant.inspect} to #{to_tenant.inspect}#{scope}:"
     end
 
     def rollback_summary
