@@ -13,12 +13,12 @@ module ConsoleKit
       end
 
       def reapply
+        key = current_tenant
         return unless tenant_setup_successful?
 
-        Output.silence do
-          TenantConfigurator.current_tenant_key = nil
-          TenantConfigurator.configure_tenant(current_tenant)
-        end
+        Output.silence { TenantSwitch.call(key) }
+      rescue StandardError => e
+        Output.print_error("Failed to reapply tenant '#{key}': #{e.message}")
       end
 
       def reset

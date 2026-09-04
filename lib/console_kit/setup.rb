@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative 'tenant_state'
 require_relative 'tenant_selector'
 require_relative 'tenant_configurator'
 require_relative 'output'
@@ -11,10 +12,14 @@ module ConsoleKit
   # Does the initial setup
   module Setup
     class << self
-      def current_tenant = Thread.current[:console_kit_current_tenant]
+      def current_tenant = StateStore.tenant_key
 
+      # Declares the current tenant key without touching connections. Assigning a
+      # key that is already current preserves the fully-configured state.
       def current_tenant=(val)
-        Thread.current[:console_kit_current_tenant] = val
+        return if StateStore.tenant_key == val
+
+        val.nil? ? StateStore.clear! : StateStore.current = TenantState.new(tenant_key: val)
       end
 
       def setup = TenantOrchestrator.run

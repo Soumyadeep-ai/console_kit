@@ -2,7 +2,10 @@
 
 module ConsoleKit
   module TenantConfigurator
-    # Encapsulates context and attributes to resolve DataClump smells
+    # Encapsulates the tenant context object and the attributes ConsoleKit owns on it.
+    #
+    # All context mutation goes through here so it can be snapshotted and put back
+    # verbatim when a tenant switch fails.
     class ContextWrapper
       HANDLER_ATTRIBUTES = {
         Connections::SqlConnectionHandler => :tenant_shard,
@@ -54,24 +57,50 @@ module ConsoleKit
         attributes.any? { |attr| ctx.public_send(attr).present? }
       end
 
+      # Snapshot of every ConsoleKit-owned context attribute.
+      def current_values = attributes.to_h { |attr| [attr, safe_read(attr)] }
+
       def reset
-        attributes.each { |attr| ctx.public_send("#{attr}=", nil) }
+        restore(attributes.to_h { |attr| [attr, nil] })
       end
 
+      # Write values back verbatim. Used for rollback, so it must not warn or
+      # transform anything.
+      def restore(values)
+        values.each { |attr, value| ctx.public_send(:"#{attr}=", value) }
+        values
+      end
+
+      # Apply tenant constants, warning about values that differ from the
+      # existing context value only by case.
       def assign(constant, mapping)
-        attributes.map do |attr|
+        attributes.to_h do |attr|
           existing = safe_read(attr)
           new_value = constant[mapping[attr]]
-          ctx.public_send("#{attr}=", new_value)
-          [attr, existing, new_value]
+          ctx.public_send(:"#{attr}=", new_value)
+          warn_case_mismatch(attr, existing, new_value) if case_mismatch?(existing, new_value)
+          [attr, new_value]
         end
       end
 
       private
 
+      def case_mismatch?(existing, new_value)
+        existing.is_a?(String) && new_value.is_a?(String) &&
+          existing != new_value && existing.casecmp(new_value).zero?
+      end
+
+      def warn_case_mismatch(attr, existing, configured)
+        Output.print_warning(
+          "#{attr} case mismatch: context had '#{existing}', config set '#{configured}'. " \
+          'Check your ConsoleKit tenant configuration.'
+        )
+      end
+
       def safe_read(attr)
         ctx.public_send(attr)
-      rescue StandardError
+      rescue StandardError => e
+        Output.print_warning("Could not read context attribute #{attr}: #{e.class}. Rollback will reset it to nil.")
         nil
       end
     end
