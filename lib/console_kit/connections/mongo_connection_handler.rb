@@ -6,14 +6,23 @@ module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
-      CONTEXT_ATTRIBUTE = :tenant_mongo_db
-      DISPLAY_NAME = 'MongoDB'
+      backend :mongo,
+              display_name: 'MongoDB',
+              context_attribute: :tenant_mongo_db,
+              constants_key: :mongo_db,
+              detail_label: 'Mongo DB'
+
+      class << self
+        def target_error(value) = identifier_error(value)
+      end
 
       def available? = !!defined?(Mongoid)
 
-      # Validate/resolve only, never mutates. Raises when this Mongoid version
-      # cannot support client/database overrides at all.
-      def prepare(_target)
+      # Validate/resolve only, never mutates. Raises when the database name is
+      # unusable, or when this Mongoid version cannot support client/database
+      # overrides at all.
+      def prepare(target)
+        validate_target!(target)
         return if Mongoid.respond_to?(:override_database)
 
         raise UnsupportedBackendError, "#{display_name} client override API is not available in this Mongoid version."

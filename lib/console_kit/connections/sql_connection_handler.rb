@@ -9,8 +9,12 @@ module ConsoleKit
     # delegated to SqlStrategy, which prefers Rails' native shard switching and
     # falls back to `establish_connection` for plain database.yml names.
     class SqlConnectionHandler < BaseConnectionHandler
-      CONTEXT_ATTRIBUTE = :tenant_shard
-      DISPLAY_NAME = 'SQL'
+      backend :sql,
+              display_name: 'SQL',
+              context_attribute: :tenant_shard,
+              constants_key: :shard,
+              detail_label: 'Shard'
+
       # Configuration's own default. An application with no ActiveRecord never
       # resolves it, and that is a supported setup rather than a mistake.
       DEFAULT_BASE_CLASS = 'ApplicationRecord'
@@ -19,6 +23,8 @@ module ConsoleKit
                            'class name and that the class is loaded.'
 
       class << self
+        def target_error(value) = identifier_error(value)
+
         def sql_version(conn)
           conn.select_value('SELECT version()')
         rescue StandardError => e
@@ -46,6 +52,7 @@ module ConsoleKit
 
       # Validate/resolve only, never mutates.
       def prepare(target)
+        validate_target!(target)
         unless strategy.switchable?
           raise UnsupportedBackendError, "#{display_name} base class #{base_class} cannot switch connections."
         end

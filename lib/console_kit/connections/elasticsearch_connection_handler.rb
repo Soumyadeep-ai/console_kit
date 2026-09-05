@@ -33,14 +33,13 @@ module ConsoleKit
     # the registry as a backward-compatible read path; the registry is the
     # authority.
     class ElasticsearchConnectionHandler < BaseConnectionHandler
-      CONTEXT_ATTRIBUTE = :tenant_elasticsearch_prefix
-      DISPLAY_NAME = 'Elasticsearch'
-      UNSUPPORTED = "#{DISPLAY_NAME} does not expose index_name_prefix= in this version.".freeze
+      backend :elasticsearch,
+              display_name: 'Elasticsearch',
+              context_attribute: :tenant_elasticsearch_prefix,
+              constants_key: :elasticsearch_prefix,
+              detail_label: 'ES Prefix'
 
-      UPPERCASE = /[[:upper:]]/
-      LEADING = /\A[_\-+]/
-      WHITESPACE = /\s/
-      ILLEGAL = %r{[\\/*?"<>|,#]}
+      UNSUPPORTED = 'Elasticsearch does not expose index_name_prefix= in this version.'
 
       class << self
         def elasticsearch_available?
@@ -51,6 +50,11 @@ module ConsoleKit
         rescue NameError
           false
         end
+
+        # The one rule: a blank prefix always means "use the default", and a
+        # present prefix must be a legal Elasticsearch index-name prefix. The
+        # registry owns what "legal" means, since it owns the prefix itself.
+        def target_error(value) = ElasticsearchPrefixRegistry.prefix_error(value.presence&.to_s)
       end
 
       def available? = self.class.elasticsearch_available?
@@ -59,10 +63,9 @@ module ConsoleKit
 
       # Validate/resolve only, never mutates.
       def prepare(target)
-        prefix = normalize(target)
-        return if prefix.nil?
+        validate_target!(target)
+        return if normalize(target).nil?
 
-        validate!(prefix)
         raise UnsupportedBackendError, UNSUPPORTED unless registry.settable?
       end
 
@@ -146,21 +149,6 @@ module ConsoleKit
           "#{display_name} index prefix is process-global: this thread wants #{prefix.inspect} while other " \
           "live threads hold #{others.map(&:inspect).join(', ')}. The last writer wins for the whole process."
         )
-      end
-
-      def validate!(prefix)
-        reason = invalid_reason(prefix)
-        return if reason.nil?
-
-        raise ConfigurationError, "ConsoleKit: #{display_name} index prefix #{prefix.inspect} is invalid: #{reason}."
-      end
-
-      def invalid_reason(prefix)
-        return 'must be lowercase' if prefix.match?(UPPERCASE)
-        return 'must not begin with _, - or +' if prefix.match?(LEADING)
-        return 'must not contain whitespace' if prefix.match?(WHITESPACE)
-
-        'must not contain \\ / * ? " < > | , or #' if prefix.match?(ILLEGAL)
       end
 
       def normalize(target) = target.presence&.to_s

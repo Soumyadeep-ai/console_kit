@@ -223,7 +223,7 @@ module TenantBackends
       return ATTRIBUTES.to_h { |attr| [attr, nil] } if key.nil?
 
       constants = TENANTS.fetch(key)[:constants]
-      ConsoleKit::TenantConfigurator::CONTEXT_MAPPING.transform_values { |name| constants[name] }
+      ConsoleKit::TenantConfigurator.context_mapping.transform_values { |name| constants[name] }
     end
 
     # Every piece of per-thread state these fakes keep. Threads die with their

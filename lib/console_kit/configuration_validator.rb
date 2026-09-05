@@ -16,62 +16,16 @@ module ConsoleKit
   # context class missing a writer) and are printed via Output but never
   # raise, since they may be intentional.
   #
-  # The Redis DB and Elasticsearch prefix rules are mirrored from
-  # RedisConnectionHandler and ElasticsearchConnectionHandler, not
-  # re-invented, so validation here and the handlers' own `#prepare` cannot
-  # silently drift apart. Required tenant keys are read from
-  # TenantPlan::REQUIRED_KEYS for the same reason. None of these classes are
-  # `require_relative`d here: by the time `validate!` is ever called the whole
-  # gem is loaded (see TenantPlan, which references TenantConfigurator the
-  # same way), and requiring them here would pull the entire connections
-  # stack into Configuration's load path for no benefit.
+  # Per-backend value rules are never re-invented here: each registered
+  # handler's own `.target_error` is called directly, so validation here and
+  # the handler's own `#prepare` share one rule and cannot silently drift
+  # apart. Required tenant keys are read from TenantPlan::REQUIRED_KEYS for
+  # the same reason. None of these classes are `require_relative`d here: by
+  # the time `validate!` is ever called the whole gem is loaded (see
+  # TenantPlan, which references TenantConfigurator the same way), and
+  # requiring them here would pull the entire connections stack into
+  # Configuration's load path for no benefit.
   class ConfigurationValidator
-    # Pure "is this value acceptable, and if not why" rules mirrored from the
-    # connection handlers' own `#prepare`, kept separate from
-    # ConfigurationValidator so the two classes cannot silently drift and
-    # each stays well under Metrics/ClassLength on its own.
-    module FieldRules
-      # Mirrors RedisConnectionHandler#normalize (private: a digit-only
-      # String is accepted, anything else - including a float or a negative
-      # number - is not).
-      REDIS_DIGITS = /\A\d+\z/
-
-      module_function
-
-      def redis_db_error(value)
-        return if value.nil? || (value.is_a?(Integer) && !value.negative?)
-        return if value.is_a?(String) && value.match?(REDIS_DIGITS)
-
-        'expected a non-negative Integer or a digit String (mirrors RedisConnectionHandler).'
-      end
-
-      def elasticsearch_prefix_error(value)
-        prefix = value.presence&.to_s
-        reason = prefix && invalid_prefix_reason(prefix)
-        return unless reason
-
-        "#{reason} (mirrors ElasticsearchConnectionHandler)."
-      end
-
-      def identifier_value_error(value)
-        return if value.nil? || ((value.is_a?(String) || value.is_a?(Symbol)) && value.to_s.strip.present?)
-
-        'expected a non-blank String or Symbol.'
-      end
-
-      # Mirrors ElasticsearchConnectionHandler#invalid_reason exactly,
-      # including its check order, but reads the character classes off the
-      # handler's own public constants so they cannot drift.
-      def invalid_prefix_reason(prefix)
-        handler = Connections::ElasticsearchConnectionHandler
-        return 'must be lowercase' if prefix.match?(handler::UPPERCASE)
-        return 'must not begin with _, - or +' if prefix.match?(handler::LEADING)
-        return 'must not contain whitespace' if prefix.match?(handler::WHITESPACE)
-
-        'must not contain \\ / * ? " < > | , or #' if prefix.match?(handler::ILLEGAL)
-      end
-    end
-
     def initialize(configuration)
       @configuration = configuration
       @errors = []
@@ -107,7 +61,7 @@ module ConsoleKit
 
       check_required_keys(key, constants)
       check_constants_values(key, constants)
-      warn_unknown_keys(key, 'constants', constants.keys, TenantConfigurator::CONTEXT_MAPPING.values)
+      warn_unknown_keys(key, 'constants', constants.keys, TenantConfigurator.context_mapping.values)
     end
 
     def check_identifier(key)
@@ -135,30 +89,20 @@ module ConsoleKit
                 "(expected: #{required.join(', ')})."
     end
 
+    # Each registered handler owns exactly one constants key. Calling its own
+    # `.target_error` here, rather than re-deriving the rule, is what keeps
+    # this check and the handler's own `#prepare` from silently drifting apart.
     def check_constants_values(key, constants)
-      check_redis_db(key, constants[:redis_db]) if constants.key?(:redis_db)
-      check_es_prefix(key, constants[:elasticsearch_prefix]) if constants.key?(:elasticsearch_prefix)
-      check_identifier_value(key, :mongo_db, constants[:mongo_db]) if constants.key?(:mongo_db)
-      check_identifier_value(key, :shard, constants[:shard]) if constants.key?(:shard)
+      Connections::BaseConnectionHandler.registry.each do |handler_class|
+        field = handler_class.constants_key
+        next unless constants.key?(field)
+
+        check_backend_value(key, field, constants[field], handler_class)
+      end
     end
 
-    def check_redis_db(key, value)
-      reason = FieldRules.redis_db_error(value)
-      return unless reason
-
-      errors << "ConsoleKit: tenant #{key.inspect} redis_db #{scrub_value(value)} is invalid: #{reason}"
-    end
-
-    def check_es_prefix(key, value)
-      reason = FieldRules.elasticsearch_prefix_error(value)
-      return unless reason
-
-      errors << "ConsoleKit: tenant #{key.inspect} elasticsearch_prefix #{scrub_value(value.to_s)} is invalid: " \
-                "#{reason}"
-    end
-
-    def check_identifier_value(key, field, value)
-      reason = FieldRules.identifier_value_error(value)
+    def check_backend_value(key, field, value, handler_class)
+      reason = handler_class.target_error(value)
       return unless reason
 
       errors << "ConsoleKit: tenant #{key.inspect} #{field} #{scrub_value(value)} is invalid: #{reason}"
@@ -180,7 +124,7 @@ module ConsoleKit
       klass = resolve_context_class
       return unless klass
 
-      attributes = [:partner_identifier] + TenantConfigurator::ContextWrapper::HANDLER_ATTRIBUTES.values
+      attributes = TenantConfigurator.context_mapping.keys
       missing = attributes.reject { |attr| klass.method_defined?(:"#{attr}=") }
       return if missing.empty?
 

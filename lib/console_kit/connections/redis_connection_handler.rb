@@ -42,9 +42,15 @@ module ConsoleKit
     #                   decided by the client's own capabilities, not by this
     #                   verdict.
     class RedisConnectionHandler < BaseConnectionHandler
-      CONTEXT_ATTRIBUTE = :tenant_redis_db
-      DISPLAY_NAME = 'Redis'
+      backend :redis,
+              display_name: 'Redis',
+              context_attribute: :tenant_redis_db,
+              constants_key: :redis_db,
+              detail_label: 'Redis DB'
+
       DEFAULT_REDIS_DB = 0
+      # A digit-only String is accepted; anything else - including a float or a
+      # negative number - is not.
 
       PROCESS_GLOBAL_WARNING = 'Redis DB selection is process-wide with this client, so it is NOT isolated per ' \
                                'thread. Threads on different tenants share one logical DB.'
@@ -52,6 +58,10 @@ module ConsoleKit
       class << self
         # Reset to re-arm the one-time process-global isolation warning.
         attr_accessor :isolation_warned
+
+        # The adapter owns what a client will accept as a logical DB, so the
+        # rule lives there and this delegates - one rule, one definition.
+        def target_error(value) = RedisClientAdapter.db_index_error(value)
       end
 
       def available? = !!defined?(Redis) || !!defined?(RedisClient)
@@ -61,6 +71,7 @@ module ConsoleKit
 
       # Validate/resolve only, never mutates.
       def prepare(target)
+        validate_target!(target)
         db = coerce_db(target)
         return if db == DEFAULT_REDIS_DB || (adapter.selectable? && adapter.db_readable?)
 
@@ -155,15 +166,7 @@ module ConsoleKit
           raise(ConfigurationError, "ConsoleKit: Redis DB #{target.inspect} is not a non-negative integer.")
       end
 
-      # Redis' own `databases` setting is configurable, so no upper bound is
-      # imposed here; an index above it is rejected by the server and surfaces
-      # from #connect! as a ConnectionError.
-      def normalize(target)
-        return target if target.is_a?(Integer) && !target.negative?
-        return nil unless target.is_a?(String) && target.match?(/\A\d+\z/)
-
-        target.to_i
-      end
+      def normalize(target) = RedisClientAdapter.db_index(target)
 
       def unsupported_message(db)
         "#{display_name} DB #{db} was requested but this client exposes no connection that can be selected and " \

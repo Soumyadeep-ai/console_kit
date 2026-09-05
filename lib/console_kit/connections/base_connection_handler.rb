@@ -1,15 +1,64 @@
 # frozen_string_literal: true
 
-require 'active_support/core_ext/class/subclasses'
-require 'active_support/core_ext/string/inflections'
 require 'active_support/core_ext/string/filters'
 require_relative 'diagnostic_helpers'
 require_relative '../errors'
+require_relative '../output'
+require_relative '../instrumentation'
 require_relative '../diagnostics'
 
 module ConsoleKit
   module Connections
+    # Declaration-ordered list of the connection handler classes ConsoleKit knows about.
+    #
+    # Registration is explicit - a handler joins when it declares its backend -
+    # rather than implicit via Class#descendants. That is what makes a Zeitwerk
+    # reload safe at the root: the reloaded generation of a class replaces its
+    # own entry in place, so one backend key can never be claimed by two live
+    # generations and nothing downstream has to de-duplicate. It also fixes the
+    # apply and rollback order at declaration order instead of leaving it to a
+    # sort on the key.
+    module HandlerRegistry
+      COLLISION_WARNING = 'ConsoleKit: %<previous>s and %<current>s both claim the backend key %<key>p. Only ' \
+                          '%<current>s will be switched, verified and rolled back.'
+
+      class << self
+        def all = @all ||= []
+
+        def add(handler_class)
+          index = all.index { |klass| klass.backend_key == handler_class.backend_key }
+          return all << handler_class unless index
+
+          report_collision(all[index], handler_class)
+          all[index] = handler_class
+        end
+
+        def remove(handler_class) = all.delete(handler_class)
+
+        private
+
+        # A second class under the SAME name is a reload generation of the same
+        # handler and is expected. Two differently named classes claiming one
+        # key is a bug in the host application, so it is reported. Anonymous
+        # classes carry no name to compare, so they are left alone.
+        def report_collision(previous, current)
+          return if previous.name.nil? || current.name.nil? || previous.name == current.name
+
+          Instrumentation.increment('console_kit.handler_collision')
+          Output.print_warning(format(COLLISION_WARNING, previous: previous, current: current,
+                                                         key: current.backend_key))
+        end
+      end
+    end
+
     # Parent class for connection handlers.
+    #
+    # A handler is the SINGLE source of truth for its backend. `backend` writes
+    # down everything the rest of ConsoleKit needs to know about it - its key,
+    # display name, context attribute, tenant-constants key and console label -
+    # and `.target_error` is the one rule that decides whether a target value is
+    # usable. Nothing outside a handler file names a backend, so adding one
+    # means adding one file.
     #
     # Every handler implements a transactional contract so the tenant switch
     # coordinator can apply a tenant, prove it landed, and undo it on failure:
@@ -25,19 +74,33 @@ module ConsoleKit
     class BaseConnectionHandler
       include DiagnosticHelpers
 
-      # Subclasses override these two constants.
-      CONTEXT_ATTRIBUTE = nil
-      DISPLAY_NAME = nil
-
       class << self
-        def registry = descendants
+        attr_reader :backend_key, :display_name, :context_attribute, :constants_key, :detail_label
 
-        def backend_key
-          @backend_key ||= name.to_s.demodulize.delete_suffix('ConnectionHandler').underscore.to_sym
+        # Declares a backend and registers the handler for it.
+        def backend(key, display_name:, context_attribute:, constants_key:, detail_label:)
+          @backend_key = key
+          @display_name = display_name
+          @context_attribute = context_attribute
+          @constants_key = constants_key
+          @detail_label = detail_label
+          HandlerRegistry.add(self)
         end
 
-        def display_name = self::DISPLAY_NAME || name.to_s.demodulize.delete_suffix('ConnectionHandler')
-        def context_attribute_name = self::CONTEXT_ATTRIBUTE
+        def registry = HandlerRegistry.all
+        def unregister(handler_class) = HandlerRegistry.remove(handler_class)
+
+        # The one rule that answers "can this backend use this target value, and
+        # if not why". `#prepare` raises on it and Configuration#validate!
+        # collects it, so the two cannot drift. nil means the value is usable.
+        def target_error(_value) = nil
+
+        # Shared rule for backends whose target is a plain name.
+        def identifier_error(value)
+          return if value.nil? || ((value.is_a?(String) || value.is_a?(Symbol)) && value.to_s.strip.present?)
+
+          'expected a non-blank String or Symbol'
+        end
       end
 
       attr_reader :context
@@ -49,7 +112,7 @@ module ConsoleKit
 
       # Desired backend value for the current context, or nil to mean "default".
       def target
-        attr_name = self.class.context_attribute_name
+        attr_name = self.class.context_attribute
         attr_name && context_attribute(attr_name).presence
       end
 
@@ -82,6 +145,15 @@ module ConsoleKit
       end
 
       private
+
+      # `#prepare`'s half of the shared rule.
+      def validate_target!(target)
+        reason = self.class.target_error(target)
+        return if reason.nil?
+
+        raise ConfigurationError,
+              "ConsoleKit: #{self.class.constants_key} #{target.inspect} is invalid: #{reason}."
+      end
 
       def measure_latency
         start = clock_time

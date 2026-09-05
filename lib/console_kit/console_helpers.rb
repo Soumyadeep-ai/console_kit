@@ -29,11 +29,6 @@ module ConsoleKit
       names
     end
 
-    DETAIL_LABELS = {
-      'Partner' => :partner_code, 'Shard' => :shard, 'Mongo DB' => :mongo_db,
-      'Redis DB' => :redis_db, 'ES Prefix' => :elasticsearch_prefix, 'Environment' => :environment
-    }.freeze
-
     private
 
     def no_tenant_warning
@@ -55,11 +50,23 @@ module ConsoleKit
     class << self
       def print_tenant_details(tenant, constants)
         ConsoleKit::Output.print_header("Tenant: #{tenant}")
-        DETAIL_LABELS.each do |label, key|
+        detail_labels.each do |label, key|
           next unless constants.key?(key)
 
           ConsoleKit::Output.print_info("  #{label.ljust(13)}#{constants[key]}")
         end
+      end
+
+      private
+
+      # 'Partner' and 'Environment' are not backends; every entry in between
+      # comes straight off the registered handlers, so a new backend needs no
+      # update here.
+      def detail_labels
+        backend_labels = ConsoleKit::Connections::BaseConnectionHandler.registry.to_h do |handler|
+          [handler.detail_label, handler.constants_key]
+        end
+        { 'Partner' => :partner_code }.merge(backend_labels).merge('Environment' => :environment)
       end
     end
   end

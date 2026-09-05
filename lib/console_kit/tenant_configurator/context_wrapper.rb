@@ -7,13 +7,6 @@ module ConsoleKit
     # All context mutation goes through here so it can be snapshotted and put back
     # verbatim when a tenant switch fails.
     class ContextWrapper
-      HANDLER_ATTRIBUTES = {
-        Connections::SqlConnectionHandler => :tenant_shard,
-        Connections::MongoConnectionHandler => :tenant_mongo_db,
-        Connections::RedisConnectionHandler => :tenant_redis_db,
-        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
-      }.freeze
-
       # Recorded by #current_values when a context getter raises. Writing nil over
       # a value we could not read would silently destroy it, and reporting the
       # rollback as successful would be a lie - so the attribute is skipped on
@@ -39,7 +32,8 @@ module ConsoleKit
         end
 
         def handler_attrs(methods)
-          HANDLER_ATTRIBUTES.each_with_object([]) do |(handler, attr), list|
+          Connections::BaseConnectionHandler.registry.each_with_object([]) do |handler, list|
+            attr = handler.context_attribute
             next unless methods.include?(:"#{attr}=")
             next unless handler_available?(handler)
 

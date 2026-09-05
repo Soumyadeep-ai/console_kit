@@ -28,8 +28,33 @@ module ConsoleKit
       # Matches anything that could carry a host, ACL username or password out
       # of a client error message.
       CREDENTIAL_URL = %r{\b(?:rediss?|unix)://\S*}i
+      # A logical Redis DB index. This lives here rather than on the handler
+      # because this class owns what a client will accept; the handler's
+      # target_error delegates, so there is exactly one rule.
+      DIGITS = /\A\d+\z/
 
-      def self.scrub(message) = message.to_s.gsub(CREDENTIAL_URL, '[redis-url]')
+      class << self
+        def scrub(message) = message.to_s.gsub(CREDENTIAL_URL, '[redis-url]')
+
+        # The Integer a client would accept for this value, or nil if the value
+        # is not a usable DB index. Redis' own `databases` setting is
+        # configurable, so no upper bound is imposed here; an index above it is
+        # rejected by the server and surfaces from #connect! as a ConnectionError.
+        def db_index(value)
+          return value if value.is_a?(Integer) && !value.negative?
+          return nil unless value.is_a?(String) && value.match?(DIGITS)
+
+          value.to_i
+        end
+
+        # nil means "use the default DB" and is always valid.
+        def db_index_error(value)
+          return if value.nil? || (value.is_a?(Integer) && !value.negative?)
+          return if value.is_a?(String) && value.match?(DIGITS)
+
+          'expected a non-negative Integer or a digit String'
+        end
+      end
 
       # The client for the CURRENT thread. Never memoized: under the :scoped
       # model each thread must get its own object.

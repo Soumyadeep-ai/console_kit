@@ -15,15 +15,14 @@ module ConsoleKit
   # coordinator; this module keeps the pre-1.5 non-raising API used by the
   # console flow (it reports failures through Output and returns false).
   module TenantConfigurator
-    CONTEXT_MAPPING = {
-      partner_identifier: :partner_code,
-      tenant_shard: :shard,
-      tenant_mongo_db: :mongo_db,
-      tenant_redis_db: :redis_db,
-      tenant_elasticsearch_prefix: :elasticsearch_prefix
-    }.freeze
-
     class << self
+      # Context attribute -> tenant constants key. `partner_identifier` is not a
+      # backend, so it is the one fixed entry; every other entry comes straight
+      # off the registered handlers, so a new backend needs no update here.
+      def context_mapping
+        { partner_identifier: :partner_code }.merge(backend_context_mapping)
+      end
+
       def configuration_success? = StateStore.configured?
       alias configuration_success configuration_success?
 
@@ -59,6 +58,10 @@ module ConsoleKit
       end
 
       private
+
+      def backend_context_mapping
+        Connections::BaseConnectionHandler.registry.to_h { |handler| [handler.context_attribute, handler.constants_key] }
+      end
 
       def perform_clear(ctx, wrapper)
         return unless configuration_success || wrapper.any_set?

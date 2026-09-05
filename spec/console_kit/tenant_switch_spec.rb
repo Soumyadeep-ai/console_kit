@@ -6,7 +6,7 @@ RSpec.describe ConsoleKit::TenantSwitch do
   let(:handler_class) do
     Class.new do
       class << self
-        attr_accessor :context_attribute_name
+        attr_accessor :context_attribute
       end
 
       attr_reader :identity, :restored, :backend_key
@@ -50,7 +50,7 @@ RSpec.describe ConsoleKit::TenantSwitch do
 
   def build_handler(key, attribute, failure: nil)
     klass = Class.new(handler_class)
-    klass.context_attribute_name = attribute
+    klass.context_attribute = attribute
     klass.new(key, failure: failure)
   end
 

@@ -18,9 +18,125 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
   let(:handler) { described_class.new(context) }
 
   describe '.registry' do
-    it 'includes its subclasses' do
+    it 'includes the known handlers' do
+      expect(described_class.registry).to include(
+        ConsoleKit::Connections::MongoConnectionHandler,
+        ConsoleKit::Connections::SqlConnectionHandler
+      )
+    end
+
+    it 'does not include a bare subclass that never declares a backend' do
       subclass = Class.new(described_class)
-      expect(described_class.registry).to include(subclass)
+      expect(described_class.registry).not_to include(subclass)
+    end
+  end
+
+  describe '.backend' do
+    let(:handler_class) { stub_const('TestOnlyHandler', Class.new(described_class)) }
+
+    after { ConsoleKit::Connections::HandlerRegistry.remove(handler_class) }
+
+    def declare(klass, key)
+      klass.backend(key, display_name: 'Test', context_attribute: :tenant_test, constants_key: :test,
+                         detail_label: 'Test')
+    end
+
+    it 'registers the class in the registry' do
+      declare(handler_class, :test_only)
+      expect(described_class.registry).to include(handler_class)
+    end
+
+    it 'records the declared backend_key' do
+      declare(handler_class, :test_only)
+      expect(handler_class.backend_key).to eq(:test_only)
+    end
+  end
+
+  describe ConsoleKit::Connections::HandlerRegistry do
+    def declare(name, key)
+      klass = stub_const(name, Class.new(ConsoleKit::Connections::BaseConnectionHandler))
+      klass.backend(key, display_name: name, context_attribute: :"tenant_#{key}", constants_key: key,
+                         detail_label: name)
+      klass
+    end
+
+    describe 'declaration order' do
+      let(:second) { declare('SecondTestHandler', :second_test_key) }
+      let(:first) { declare('FirstTestHandler', :first_test_key) }
+
+      after do
+        described_class.remove(second)
+        described_class.remove(first)
+      end
+
+      it 'preserves the order backends were declared in, not key order' do
+        second
+        first
+        keys = described_class.all.map(&:backend_key)
+        expect(keys.index(:second_test_key)).to be < keys.index(:first_test_key)
+      end
+    end
+
+    describe 'a reload generation replacing itself' do
+      let(:first_generation) { declare('ReloadTestHandler', :reload_test_key) }
+      let(:second_generation) { declare('ReloadTestHandler', :reload_test_key) }
+
+      before { allow(ConsoleKit::Output).to receive(:print_warning) }
+      after { described_class.remove(second_generation) }
+
+      it 'keeps the newest generation under the shared key' do
+        first_generation
+        second_generation
+        expect(described_class.all).to include(second_generation)
+      end
+
+      it 'drops the earlier generation' do
+        first_generation
+        second_generation
+        expect(described_class.all).not_to include(first_generation)
+      end
+
+      it 'says nothing, because a reload duplicate is expected' do
+        first_generation
+        second_generation
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+    end
+
+    describe 'two differently named classes claiming one key' do
+      let(:alpha) { declare('AlphaTestHandler', :collided_test_key) }
+      let(:beta) { declare('BetaTestHandler', :collided_test_key) }
+
+      before { allow(ConsoleKit::Output).to receive(:print_warning) }
+      after { described_class.remove(beta) }
+
+      it 'keeps the second declaration under the shared key' do
+        alpha
+        beta
+        expect(described_class.all).to include(beta)
+      end
+
+      it 'drops the first declaration' do
+        alpha
+        beta
+        expect(described_class.all).not_to include(alpha)
+      end
+
+      it 'warns that both classes claim the same backend key' do
+        alpha
+        beta
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including(':collided_test_key'))
+      end
+    end
+
+    describe '.remove' do
+      let(:handler_class) { declare('RemovableTestHandler', :removable_test_key) }
+
+      it 'takes a spec-only handler back out of the registry' do
+        handler_class
+        described_class.remove(handler_class)
+        expect(described_class.all).not_to include(handler_class)
+      end
     end
   end
 
@@ -82,20 +198,6 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
   describe 'initialization' do
     it 'assigns the context' do
       expect(handler.context).to eq(context)
-    end
-  end
-
-  describe 'subclassing behavior' do
-    it 'registers subclasses automatically upon definition' do
-      stub_const('MyNewHandler', Class.new(described_class))
-      expect(described_class.registry).to include(MyNewHandler)
-    end
-
-    it 'includes the known handlers' do
-      expect(described_class.registry).to include(
-        ConsoleKit::Connections::MongoConnectionHandler,
-        ConsoleKit::Connections::SqlConnectionHandler
-      )
     end
   end
 end

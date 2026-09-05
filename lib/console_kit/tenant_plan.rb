@@ -27,10 +27,10 @@ module ConsoleKit
     private
 
     def target_for(handler, constants)
-      attr_name = handler.class.context_attribute_name
+      attr_name = handler.class.context_attribute
       return nil unless attr_name
 
-      constants[TenantConfigurator::CONTEXT_MAPPING[attr_name]].presence
+      constants[TenantConfigurator.context_mapping[attr_name]].presence
     end
 
     def resolve_constants

@@ -20,7 +20,25 @@ module ConsoleKit
       THREAD_KEY = :console_kit_elasticsearch_prefix
       REPORTED_KEY = :console_kit_elasticsearch_prefix_conflict
 
+      # What makes an index-name prefix legal. Lives here rather than on the
+      # handler because this class owns the prefix; the handler's target_error
+      # delegates so there is exactly one rule.
+      UPPERCASE = /[[:upper:]]/
+      LEADING = /\A[_\-+]/
+      WHITESPACE = /\s/
+      ILLEGAL = %r{[\\/*?"<>|,#]}
+
       class << self
+        # nil or a blank prefix means "use the default" and is always valid.
+        def prefix_error(prefix)
+          return if prefix.nil?
+          return 'must be lowercase' if prefix.match?(UPPERCASE)
+          return 'must not begin with _, - or +' if prefix.match?(LEADING)
+          return 'must not contain whitespace' if prefix.match?(WHITESPACE)
+
+          'must not contain \\ / * ? " < > | , or #' if prefix.match?(ILLEGAL)
+        end
+
         def model = defined?(Elasticsearch::Model) ? Elasticsearch::Model : nil
         def settable? = model.respond_to?(:index_name_prefix=)
         def readable? = model.respond_to?(:index_name_prefix)

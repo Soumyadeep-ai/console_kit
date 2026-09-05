@@ -104,7 +104,7 @@ module ConsoleKit
     end
 
     def apply_context(constants)
-      context_wrapper.assign(constants, TenantConfigurator::CONTEXT_MAPPING)
+      context_wrapper.assign(constants, TenantConfigurator.context_mapping)
     end
 
     def connect_all(handlers, targets, attempted)
