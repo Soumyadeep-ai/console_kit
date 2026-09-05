@@ -82,6 +82,12 @@ module ConsoleKit
       # and re-asking is cheap: while a timed-out check is still running the
       # runner answers :busy immediately instead of starting another one.
       UNCACHEABLE = %i[error timeout].freeze
+      # Only :full is ever cached, so a key is really (tenant, backend). Four
+      # backends today, and a console operator rarely keeps more than a handful
+      # of tenants "warm" in one session - 32 gives comfortable headroom (8
+      # tenants x 4 backends) while keeping a long-lived console from
+      # accumulating one entry per distinct tenant ever visited.
+      CAPACITY = 32
 
       class << self
         def fetch_row(backend, level)
@@ -99,16 +105,49 @@ module ConsoleKit
 
         def store = Thread.current[STORE_KEY] ||= {}
 
+        # A stale hit is evicted on the spot rather than merely ignored, so an
+        # entry nobody rereads still cannot occupy a capacity slot forever.
         def read(key)
           entry = store[key]
-          entry && fresh?(entry) ? entry[:row] : nil
+          return nil unless entry
+
+          unless fresh?(entry)
+            store.delete(key)
+            return nil
+          end
+
+          touch(key, entry)
+          entry[:row]
         end
 
         def write(key, row)
           return row if UNCACHEABLE.include?(row[:status])
 
-          store[key] = { row: row, expires_at: now + CACHE_TTL_SECONDS, state: state }
+          purge_expired!
+          touch(key, row: row, expires_at: now + CACHE_TTL_SECONDS, state: state)
+          evict_to_capacity!
           row
+        end
+
+        # Ruby Hashes preserve insertion order, so deleting and reinserting a
+        # key moves it to the end. That makes `each_key.first` the
+        # least-recently-used key, with no extra bookkeeping needed.
+        def touch(key, entry)
+          store.delete(key)
+          store[key] = entry
+        end
+
+        # Nothing that already failed freshness will ever pass it again (TTL only
+        # moves forward, a TenantState identity never changes back), so a stale
+        # entry is dead weight - dropping it here means it stops costing a
+        # capacity slot the moment it goes stale, not merely when eviction
+        # eventually reaches it.
+        def purge_expired!
+          store.delete_if { |_, entry| !fresh?(entry) }
+        end
+
+        def evict_to_capacity!
+          store.delete(store.each_key.first) while store.size > CAPACITY
         end
 
         def fresh?(entry) = entry[:expires_at] > now && entry[:state].equal?(state)

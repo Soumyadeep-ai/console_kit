@@ -44,5 +44,24 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
     it 'handles a nil message' do
       expect(described_class.scrub(nil)).to eq('')
     end
+
+    # "hunter2=password" reads as a value followed by a keyword, not a key=value
+    # assignment, so only CREDENTIAL_PHRASE fires on it in one scan, matching
+    # "password extra" as its trailing token. A naive chain that ran
+    # CREDENTIAL_PRINCIPAL afterwards would then see "for user hunter2=[redacted]"
+    # and swallow the whole thing - losing "extra" - because CREDENTIAL_PRINCIPAL's
+    # trailing \S+ cannot distinguish a freshly inserted [redacted] marker from
+    # real content. A single scan over the original message never produces that
+    # intermediate text, so CREDENTIAL_PRINCIPAL wins the match outright and
+    # "extra" survives untouched.
+    it 'redacts in a single scan, so a later shape cannot re-match an earlier redaction' do
+      message = 'for user hunter2=password extra'
+      expect(described_class.scrub(message)).to eq('[redacted] extra')
+    end
+
+    it 'is idempotent' do
+      message = 'authentication failed for user admin with password hunter2'
+      expect(described_class.scrub(described_class.scrub(message))).to eq(described_class.scrub(message))
+    end
   end
 end

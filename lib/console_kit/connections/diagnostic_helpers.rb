@@ -25,8 +25,14 @@ module ConsoleKit
       # `User svc_admin@admin is not authorized` - the @ is what distinguishes a
       # principal from the ordinary English word "user".
       CREDENTIAL_PRINCIPAL_AT = /\buser\s+["']?\S+@\S+/i
-      SCRUBBERS = [CREDENTIAL_URL, CREDENTIAL_ASSIGNMENT, CREDENTIAL_PHRASE,
-                   CREDENTIAL_PRINCIPAL, CREDENTIAL_PRINCIPAL_AT].freeze
+      # One alternation, one scan: gsub only ever looks at the ORIGINAL message,
+      # so a shape can never match text that an earlier redaction in the same
+      # call inserted (the multi-pass chain this replaced could - a later
+      # pass would re-scan the previous pass's own `[redacted]` markers). Order
+      # in the list only breaks ties when two shapes could start at the same
+      # character.
+      CREDENTIAL_PATTERN = Regexp.union(CREDENTIAL_URL, CREDENTIAL_ASSIGNMENT, CREDENTIAL_PHRASE,
+                                        CREDENTIAL_PRINCIPAL, CREDENTIAL_PRINCIPAL_AT).freeze
       REDACTED = '[redacted]'
       BUSY_REASON = 'A previous check is still running'
 
@@ -40,7 +46,7 @@ module ConsoleKit
       # class as a password, and removing them would gut the diagnostic value of
       # a connection error. Everything that is half of a credential is removed.
       def scrub(message)
-        SCRUBBERS.reduce(message.to_s) { |text, pattern| text.gsub(pattern, REDACTED) }
+        message.to_s.gsub(CREDENTIAL_PATTERN, REDACTED)
       end
 
       def error_diagnostics(name, error)

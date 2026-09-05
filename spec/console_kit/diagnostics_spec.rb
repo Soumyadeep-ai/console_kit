@@ -290,6 +290,63 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
+  describe 'the bounded LRU cache' do
+    before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme') }
+
+    def store_size
+      described_class::Cache.send(:store).size
+    end
+
+    it 'never grows past its capacity, however many distinct keys are cached' do
+      (described_class::Cache::CAPACITY + 10).times { |i| counting_fetch(:"lru_cap_backend#{i}", [0]) }
+      expect(store_size).to eq(described_class::Cache::CAPACITY)
+    end
+
+    it 'evicts the least-recently-used entry first when capacity is exceeded' do
+      described_class::Cache::CAPACITY.times { |i| counting_fetch(:"lru_order_backend#{i}", [0]) }
+      counting_fetch(:lru_order_overflow_backend, [0])
+      counter = [0]
+      counting_fetch(:lru_order_backend0, counter)
+      expect(counter.first).to eq(1)
+    end
+
+    context 'when an entry is touched before capacity is exceeded' do
+      let(:counter) { [0] }
+
+      before do
+        described_class::Cache::CAPACITY.times { |i| counting_fetch(:"lru_touch_backend#{i}", [0]) }
+        counting_fetch(:lru_touch_backend0, [0]) # promotes backend0 ahead of backend1
+        counting_fetch(:lru_touch_overflow_backend, [0]) # evicts the new LRU, backend1
+        counting_fetch(:lru_touch_backend0, counter)
+      end
+
+      it 'keeps the touched entry over one merely inserted earlier' do
+        expect(counter.first).to eq(0)
+      end
+    end
+
+    context 'when an entry has expired' do
+      let(:clock) { [1_000_000.0] }
+
+      before { allow(ConsoleKit::Connections::DiagnosticHelpers).to receive(:clock_time) { clock.first } }
+
+      it 'does not occupy a capacity slot after it expires' do
+        counting_fetch(:lru_expired_backend, [0])
+        clock[0] += described_class::CACHE_TTL_SECONDS + 1
+        (described_class::Cache::CAPACITY - 1).times { |i| counting_fetch(:"lru_expired_filler_#{i}", [0]) }
+        expect(store_size).to eq(described_class::Cache::CAPACITY - 1)
+      end
+
+      it 'is re-fetched from the backend rather than served stale once expired' do
+        counting_fetch(:lru_expired_reread_backend, [0])
+        clock[0] += described_class::CACHE_TTL_SECONDS + 1
+        counter = [0]
+        counting_fetch(:lru_expired_reread_backend, counter)
+        expect(counter.first).to eq(1)
+      end
+    end
+  end
+
   # Elasticsearch and Redis are documented as process-global: another thread
   # moving one changes nothing this thread's TenantState can show, so a cached
   # row would keep reporting a tenant that has already been switched away.
