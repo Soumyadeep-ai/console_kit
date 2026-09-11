@@ -23,19 +23,23 @@ module ConsoleKit
                           '%<current>s will be switched, verified and rolled back.'
 
       class << self
-        def all = @all ||= []
+        # A frozen view. Callers iterate it every switch; handing out the live
+        # array would let any of them reorder or empty the registry.
+        def all = entries.dup.freeze
 
         def add(handler_class)
-          index = all.index { |klass| klass.backend_key == handler_class.backend_key }
-          return all << handler_class unless index
+          index = entries.index { |klass| klass.backend_key == handler_class.backend_key }
+          return entries << handler_class unless index
 
-          report_collision(all[index], handler_class)
-          all[index] = handler_class
+          report_collision(entries[index], handler_class)
+          entries[index] = handler_class
         end
 
-        def remove(handler_class) = all.delete(handler_class)
+        def remove(handler_class) = entries.delete(handler_class)
 
         private
+
+        def entries = @entries ||= []
 
         # A second class under the SAME name is a reload generation of the same
         # handler and is expected. Two differently named classes claiming one

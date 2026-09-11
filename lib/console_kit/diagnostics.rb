@@ -29,7 +29,6 @@ module ConsoleKit
     TIMEOUT_COUNTER = 'console_kit.diagnostics_timeout'
     # A bug in ConsoleKit itself must never be laundered into an :error row that
     # hides it. A dependency being unreachable is a legitimate :error row.
-    PROGRAMMING_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError].freeze
 
     class << self
       # Diagnostic rows for every available handler. :full rows are memoised for
@@ -48,7 +47,7 @@ module ConsoleKit
               "ConsoleKit: unknown diagnostics level #{level.inspect}. Expected one of #{LEVELS.inspect}."
       end
 
-      def programming_error?(error) = PROGRAMMING_ERRORS.any? { |klass| error.is_a?(klass) }
+      def programming_error?(error) = ConsoleKit.programming_error?(error)
 
       private
 

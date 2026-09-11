@@ -34,7 +34,7 @@ module ConsoleKit
 
       class << self
         # Errors that mean "our own code is wrong" and must never be swallowed.
-        def programming_error?(error) = error.is_a?(NameError) || error.is_a?(ArgumentError)
+        def programming_error?(error) = ConsoleKit.programming_error?(error)
       end
 
       attr_reader :base_class

@@ -2,7 +2,18 @@
 
 require_relative 'connections/diagnostic_helpers'
 
+# Main module for ConsoleKit
 module ConsoleKit
+  # Errors that mean ConsoleKit itself is broken rather than that a dependency
+  # is unavailable. They must never be rescued into a normal "unavailable"
+  # result, because that is exactly how a real bug hides. Defined once, here,
+  # so every rescue site classifies identically.
+  PROGRAMMING_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError].freeze
+
+  class << self
+    def programming_error?(error) = PROGRAMMING_ERRORS.any? { |klass| error.is_a?(klass) }
+  end
+
   # Base error class for ConsoleKit-related exceptions.
   class Error < StandardError; end
 
