@@ -164,11 +164,15 @@ The exception hierarchy, all under `ConsoleKit::Error`:
 | `TenantSwitchError` | a switch failed; carries the root cause and any rollback failures |
 | `RollbackError` | restoring previous state failed |
 
-Credentials are scrubbed from error messages, diagnostic rows and console output. Connection URIs,
-`key=value` and `key => value` credential fragments, bare `password <value>` phrases and
-`for user <name>` principals are all removed before a message is built. Hostnames and ports are
-deliberately kept - they are not secrets, and removing them would gut the diagnostic value of a
-connection error.
+Credentials are scrubbed from error messages, diagnostic rows and console output: connection URIs,
+`key=value` and `key => value` fragments, `Authorization: Bearer <token>` style auth headers, bare
+`password <value>` phrases and `for user <name>` principals. Hostnames and ports are deliberately
+kept - they are not secrets, and removing them would gut the diagnostic value of a connection error.
+
+Scrubbing is shape-matching over strings ConsoleKit did not produce, so treat it as defence in
+depth rather than a boundary: it errs toward redacting, and a client version emitting a shape it has
+not seen could still get through. Do not put secrets anywhere they could be logged in the first
+place.
 
 ## Programmatic API
 
@@ -374,10 +378,11 @@ workers - the thread count is capped no matter how often you type `dashboard`, a
 previous check is still running reports as busy rather than starting another one. `:basic` needs no
 timeout because it never leaves the process.
 
-Results are cached for a couple of seconds. A tenant switch **on the calling thread** invalidates
-that cache immediately. It cannot detect another thread moving a process-global backend out from
-under you, so on a multi-threaded process a `:basic` row can be up to the cache window out of date
-for Redis and Elasticsearch.
+Only `:full` results are cached, for a couple of seconds; `:basic` is never cached, because it is a
+local read and caching it bought nothing while costing correctness. A tenant switch **on the calling
+thread** invalidates that cache immediately. It cannot detect another thread moving a process-global
+backend out from under you, so on a multi-threaded process a `:full` row can be up to the cache
+window out of date for Redis and Elasticsearch.
 
 To auto-display the dashboard on every tenant switch, add to your initializer:
 

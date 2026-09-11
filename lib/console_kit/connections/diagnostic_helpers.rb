@@ -14,10 +14,21 @@ module ConsoleKit
       SECRET_KEY = /password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth(?:orization)?/i
       # key=value, key: value, key => value and "key"=>"value". The `:(?!:)`
       # keeps `Mongo::Auth::Unauthorized` from being read as an assignment.
-      CREDENTIAL_ASSIGNMENT = /["']?\b#{SECRET_KEY}\b["']?\s*(?:=>|=|:(?!:))\s*["']?\S+/
+      # An auth scheme puts the word and the secret in separate tokens
+      # (`Authorization: Bearer <jwt>`), so stopping at the first space would
+      # redact the label and leave the credential - the useless half.
+      AUTH_SCHEME = /(?:Bearer|Basic|Token|Digest|ApiKey)\s+/i
+      CREDENTIAL_ASSIGNMENT = /["']?\b#{SECRET_KEY}\b["']?\s*(?:=>|=|:(?!:))\s*["']?#{AUTH_SCHEME}?\S+/
       # `password hunter2` with no separator at all. The negative lookahead stops
       # `password authentication failed` from being mangled into nonsense.
-      SECRET_NOISE = /authentication|auth|is|was|for|error|required|mismatch|incorrect|invalid|failed|missing|expired/i
+      # Ordinary English that happens to follow a secret-ish word. Without this
+      # `token limit exceeded` and `auth type not supported` are redacted into
+      # uselessness, and an error an operator cannot read is its own failure.
+      SECRET_NOISE = /
+        authentication|auth|is|was|for|error|required|mismatch|incorrect|invalid|failed|missing|expired|
+        limit|type|count|name|header|value|must|cannot|not|and|or|in|of|to|exceeded|denied|unsupported|
+        supported|rejected|refused|revoked|length|format|scheme|provider|store|file|path|key
+      /xi
       CREDENTIAL_PHRASE = /\b#{SECRET_KEY}\s+(?!#{SECRET_NOISE}\b)["']?\S+/i
       # `for user "svc_admin"`, `username admin` - a principal is not a password,
       # but it is half of one and routinely appears in auth failures.
@@ -45,8 +56,11 @@ module ConsoleKit
       # Hostnames are deliberately NOT scrubbed: they are not secrets in the same
       # class as a password, and removing them would gut the diagnostic value of
       # a connection error. Everything that is half of a credential is removed.
+      # `String#scrub` first: this runs inside TenantSwitchError's constructor, so
+      # an invalid byte sequence in a driver's message would otherwise raise from
+      # the constructor, replace the root cause, and escape switch_tenant.
       def scrub(message)
-        message.to_s.gsub(CREDENTIAL_PATTERN, REDACTED)
+        message.to_s.scrub.gsub(CREDENTIAL_PATTERN, REDACTED)
       end
 
       def error_diagnostics(name, error)

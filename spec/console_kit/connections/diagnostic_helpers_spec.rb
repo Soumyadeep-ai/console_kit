@@ -63,5 +63,49 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       message = 'authentication failed for user admin with password hunter2'
       expect(described_class.scrub(described_class.scrub(message))).to eq(described_class.scrub(message))
     end
+
+    # An HTTP-flavoured client (Elasticsearch, any REST backend) puts the scheme
+    # and the secret in separate words. Stopping at the first space redacted the
+    # label and left the credential.
+    context 'with an auth header' do
+      it 'redacts a bearer token' do
+        message = 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def'
+        expect(described_class.scrub(message)).not_to include('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')
+      end
+
+      it 'redacts basic credentials' do
+        expect(described_class.scrub('api_key: Basic YWRtaW46aHVudGVyMg==')).not_to include('YWRtaW46aHVudGVyMg==')
+      end
+
+      it 'redacts a token scheme value' do
+        expect(described_class.scrub('authorization = Token s3cr3tvalue')).not_to include('s3cr3tvalue')
+      end
+    end
+
+    # scrub runs inside TenantSwitchError's constructor, so raising here would
+    # replace the root cause with an encoding error and escape switch_tenant.
+    context 'with a message that is not valid UTF-8' do
+      let(:invalid) { "connection failed \xC3(".dup.force_encoding('UTF-8') }
+
+      it 'does not raise' do
+        expect { described_class.scrub(invalid) }.not_to raise_error
+      end
+
+      it 'keeps the readable part' do
+        expect(described_class.scrub(invalid)).to include('connection failed')
+      end
+    end
+
+    # Over-redaction destroys the diagnostic value of an error. These carry no
+    # secret at all and must survive intact.
+    context 'with ordinary words that merely look like secrets' do
+      it 'keeps a token limit message' do
+        expect(described_class.scrub('token limit exceeded for index')).to eq('token limit exceeded for index')
+      end
+
+      it 'keeps an auth type message' do
+        expect(described_class.scrub('auth type not supported')).to eq('auth type not supported')
+      end
+    end
   end
 end
