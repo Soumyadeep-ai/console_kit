@@ -373,13 +373,16 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       expect { handler.prepare('acme_db') }.to raise_error(/MongoDB/)
     end
 
-    it 'mutates nothing when it refuses' do
-      begin
+    context 'when it has already refused' do
+      before do
         handler.prepare('acme_db')
       rescue ConsoleKit::UnsupportedBackendError
         nil
       end
-      expect(MongoidMocks::DatabaseOverrideOnly.overrides).to be_empty
+
+      it 'mutated nothing' do
+        expect(MongoidMocks::DatabaseOverrideOnly.overrides).to be_empty
+      end
     end
 
     it 'still allows a nil target, which asks for no override at all' do

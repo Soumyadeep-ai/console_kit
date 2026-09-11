@@ -204,6 +204,36 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
+  # A Zeitwerk reload declares the handler class a second time, and the new
+  # generation replaces the old one in the registry. The reloader then discards
+  # the previous constant, which unregisters generation N - that must not take
+  # generation N+1 with it. Reload-only, so no CI run ever reaches it.
+  describe 'unregistering a generation a reload has already replaced' do
+    # Built lazily, so it only joins the registry inside this group.
+    def reloaded_vault
+      @reloaded_vault ||= Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :vault, display_name: 'Vault', context_attribute: :tenant_vault_path,
+                        constants_key: :vault_path, detail_label: 'Vault Path'
+      end
+    end
+
+    before do
+      reloaded_vault
+      ConsoleKit::Connections::BaseConnectionHandler.unregister(vault_handler)
+    end
+
+    after { ConsoleKit::Connections::BaseConnectionHandler.unregister(reloaded_vault) }
+
+    it 'still has a handler for the backend key' do
+      keys = ConsoleKit::Connections::BaseConnectionHandler.registry.map(&:backend_key)
+      expect(keys).to include(:vault)
+    end
+
+    it 'keeps the generation that replaced it' do
+      expect(ConsoleKit::Connections::BaseConnectionHandler.registry).to include(reloaded_vault)
+    end
+  end
+
   describe 'registry hygiene' do
     it 'removes the fictional backend again, so it cannot leak into other examples' do
       ConsoleKit::Connections::BaseConnectionHandler.unregister(vault_handler)
