@@ -1,0 +1,106 @@
+# frozen_string_literal: true
+
+require 'spec_helper'
+
+RSpec.describe ConsoleKit::Connections::SqlStrategy do
+  subject(:strategy) { described_class.new(base_class) }
+
+  # Rails connects lazily. An application that has booted but has not run a
+  # query yet has no pool registered at all, so every read through
+  # `connection_pool` raises ConnectionNotEstablished. That is the shape of the
+  # very first console command after boot, and none of it is a failure.
+  describe 'a base class that has never been connected' do
+    let(:base_class) { ActiveRecordMock.unconnected_sharded_base(configs: %w[primary shard_one]) }
+
+    it 'claims no database configuration identity' do
+      expect(strategy.snapshot[:db_config_name]).to be_nil
+    end
+
+    it 'still captures the shard, which needs no pool' do
+      expect(strategy.snapshot[:shard]).to eq(:default)
+    end
+
+    it 'describes no pool to the dashboard instead of raising' do
+      expect(strategy.pool_details).to eq({})
+    end
+
+    it 'does not declare a real shard unresolvable just because nothing is connected' do
+      expect(strategy).to be_resolvable(:shard_one)
+    end
+
+    it 'reports the shard as not natively reachable, since no pool is registered for it' do
+      expect(strategy).not_to be_native(:shard_one)
+    end
+
+    it 'establishes the requested configuration on the first switch' do
+      strategy.apply(:shard_one)
+      expect(base_class.connection_pool.db_config.name).to eq('shard_one')
+    end
+
+    it 'resolves the identity of that first switch' do
+      strategy.apply(:shard_one)
+      expect(strategy.identity(:shard_one)).to eq(%w[shard_one shard_one])
+    end
+  end
+
+  # #pool_details is the resilience boundary of this file: a dead database must
+  # degrade to "no details", while a bug in ConsoleKit itself must not be
+  # laundered into one.
+  describe '#pool_details when the pool chain raises' do
+    let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary]) }
+
+    it 'absorbs a genuine connection failure into an empty description' do
+      allow(base_class).to receive(:connection_pool).and_raise(StandardError, 'could not connect to server')
+      expect(strategy.pool_details).to eq({})
+    end
+
+    it 'lets a NameError out, because that is a bug rather than a dead database' do
+      allow(base_class).to receive(:connection_pool).and_raise(NameError, 'uninitialized constant TrilogyAdapter')
+      expect { strategy.pool_details }.to raise_error(NameError)
+    end
+
+    it 'lets an ArgumentError out for the same reason' do
+      allow(base_class).to receive(:connection_pool).and_raise(ArgumentError, 'wrong number of arguments')
+      expect { strategy.pool_details }.to raise_error(ArgumentError)
+    end
+
+    it 'lets a programming error out of #snapshot rather than recording a nil identity' do
+      allow(base_class).to receive(:connection_pool).and_raise(NameError, 'uninitialized constant TrilogyAdapter')
+      expect { strategy.snapshot }.to raise_error(NameError)
+    end
+  end
+
+  # A backend the snapshot never captured - one that became available only
+  # after the snapshot was taken - has no state to put back.
+  describe '#restore with no snapshot' do
+    let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary]) }
+
+    it 'is a no-op rather than a NoMethodError on nil' do
+      expect { strategy.restore(nil) }.not_to raise_error
+    end
+  end
+
+  # Rails 6.0 and earlier called this attribute `spec_name`; 6.1 renamed it to
+  # `name`. The strategy feature-detects instead of version-sniffing.
+  describe 'a database configuration from before the Rails 6.1 spec_name rename' do
+    let(:base_class) { ActiveRecordMock.legacy_config_base(spec_name: 'primary') }
+
+    it 'reads the live identity through spec_name' do
+      expect(strategy.snapshot[:db_config_name]).to eq('primary')
+    end
+
+    it 'reports that identity to the dashboard' do
+      expect(strategy.pool_details[:config]).to eq('primary')
+    end
+  end
+
+  # `sql_base_class` can be pointed at a class that resolves but is not an
+  # ActiveRecord base, in which case there is nothing to describe.
+  describe 'a base class that is not ActiveRecord at all' do
+    let(:base_class) { Class.new }
+
+    it 'describes no pool instead of raising NoMethodError' do
+      expect(strategy.pool_details).to eq({})
+    end
+  end
+end

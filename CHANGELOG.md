@@ -26,6 +26,9 @@ completes fully or leaves the previous tenant exactly as it was.
 - **Strict configuration validation.** `ConsoleKit.configuration.validate!` now reports every problem in one pass: tenant structure, identifiers, duplicate identifiers colliding by case or type, required constants, Redis DB numbers, Elasticsearch prefixes, shard and Mongoid client names. Unrecognised constants keys and a `context_class` missing writers are reported as warnings.
 - **Isolation reporting.** `RedisConnectionHandler#isolation_model` / `#thread_isolated?` and the Elasticsearch equivalents report at runtime whether a backend is genuinely per-thread or process-global.
 
+- **`TenantState#dropped_backends` and dropped-backend reporting.** A handler that exists but is only half-implemented is dropped from a switch. It is now recorded on the committed state and reported by `verify_tenant!`, so a switch that silently skipped a backend can no longer look fully verified. A backend whose gem is simply absent is not reported - that is a supported setup.
+- **Handlers declare their own backend.** `backend :key, display_name:, context_attribute:, constants_key:, detail_label:` plus `.target_error` as the single validation rule. Adding a backend means adding one file; nothing outside a handler names a backend. Registration is explicit rather than `Class#descendants`, and the registry is keyed by backend, so two live reload generations of one backend cannot be represented.
+
 ### Changed
 - **Connection pool churn removed.** The SQL handler now uses the native `connecting_to(shard:)` path when the target is a registered shard, detected by capability check rather than by Rails version. The `establish_connection` fallback re-establishes only when the resolved configuration actually changes, and no longer disconnects a pool that Rails is about to replace anyway. Switching to the shard already in use performs no pool work.
 - **`reapply`** no longer re-establishes a connection that is already on the target shard.
@@ -46,6 +49,10 @@ completes fully or leaves the previous tenant exactly as it was.
 - **The Redis isolation probe returned a verdict when it failed.** A programming error inside ConsoleKit was rescued into `:process_global` - an isolation claim the rest of the system then trusted. Programming errors re-raise, and a genuine probe failure reports the new `:unknown`.
 - **Handler discovery returned reload duplicates in non-deterministic order.** The registry is `descendants`, so a Zeitwerk reload leaves stale generations registered: the switch connected both while the snapshot map kept only one, so a rollback could restore a handler from a different generation's snapshot. Handlers are now deduplicated by backend and ordered deterministically.
 - **`level: :basic` diagnostics were cached and could go stale.** Cache freshness keys on `TenantState` identity, which only changes when the calling thread switches, so a foreign thread moving a process-global backend left a stale row reported as current. `:basic` is a pure local read, so it is no longer cached at all; the TTL cache applies to `:full`, which is what the dashboard-hammering requirement was about.
+
+- **`verify_tenant!` re-resolved the tenant through the mutable global configuration**, so a `reload!` or a second `configure` made it raise `TenantNotFoundError` about a tenant that was verifiably still connected. It now verifies against the constants frozen into the state at commit time.
+- **Two definitions of "programming error" had drifted.** `TypeError` was re-raised in one subsystem and swallowed as "dependency unavailable" in another - exactly the masking the narrowing existed to prevent. There is now one list.
+- **The handler registry was handed out as a live mutable array**, so any caller could reorder or empty the collection that decides what a switch touches.
 
 ### Security
 - **Credentials no longer reach error messages.** Tenant constants can carry connection URIs, so an authentication failure could put a plaintext password into `TenantSwitchError#message` and from there into logs and consoles. Root causes, rollback failures, diagnostic rows, configuration-validation messages and the interactive console's own error output are all scrubbed.
@@ -78,6 +85,9 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 - **Elasticsearch prefixes** containing uppercase characters, whitespace, a leading `_`, `-` or `+`, or any of `\ / * ? " < > | , #` now raise `ConfigurationError` before any mutation. Previously they were passed through and rejected later, or silently produced unusable index names.
 - **Incomplete tenant entries now fail `validate!`.** A tenant with no `:constants`, or missing `shard` / `partner_code`, previously validated as fine and only broke at switch time.
 - **A failed backend switch now raises rather than warning.** `ConsoleKit.switch_tenant` raises `TenantSwitchError`; the interactive console flow still reports through `Output` and returns `false`.
+
+### Removed
+- `StateStore#push` / `#pop` / `#stack` / `#depth` and `TenantState#to_h`, all added unreleased in this cycle and never called. `with_tenant` restores from a local stack frame; routing it through the store would give one slot two writers and desync it the moment a switch committed or an unwind failed. Nesting depth is not observable, by design.
 
 ### Internal API notes
 These are not part of the documented public surface, but they changed shape and are visible to anyone who reached for them:

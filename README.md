@@ -218,7 +218,20 @@ end
 
 `verify_tenant!` raises `ConnectionVerificationError` on a mismatch and does **not** roll back - it
 is a report on the current state, not a repair. If it fails, the backends really are inconsistent
-and you should switch again explicitly.
+and you should switch again explicitly. It checks against the tenant constants frozen at the moment
+you switched, so reloading or replacing your configuration afterwards does not make it lie.
+
+It also reports backends that were never switched at all. A handler that exists but is broken is
+dropped from the switch, and a switch that silently skipped a backend must not be allowed to look
+fully verified:
+
+```ruby
+ConsoleKit.verify_tenant!.dropped_backends
+# => [:elasticsearch]   # this backend was never switched, verified or rolled back
+```
+
+A backend whose gem simply is not installed is not "dropped" - that is a supported setup and is
+never reported.
 
 ## Concurrency and Isolation
 

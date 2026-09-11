@@ -174,6 +174,76 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
+  # Clearing the tenant has to be PROVABLE, not assumed: an override left
+  # behind means the console is still pointed at the previous tenant's data
+  # while reporting itself clean.
+  describe '#verify! after a reset that did not fully clear' do
+    it 'passes when both overrides really are gone' do
+      expect { handler.verify!(nil) }.not_to raise_error
+    end
+
+    context 'when a database override was left behind' do
+      before { Mongoid::Threaded.database_override = 'acme_db' }
+
+      it 'raises ConnectionVerificationError instead of reporting a clean reset' do
+        expect { handler.verify!(nil) }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+
+      it 'names the override that is still set' do
+        expect { handler.verify!(nil) }.to raise_error(/acme_db/)
+      end
+    end
+
+    context 'when a client override was left behind' do
+      before { Mongoid::Threaded.client_override = 'acme_client' }
+
+      it 'raises ConnectionVerificationError' do
+        expect { handler.verify!(nil) }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+
+      it 'names the client that is still set' do
+        expect { handler.verify!(nil) }.to raise_error(/acme_client/)
+      end
+    end
+  end
+
+  # Every Mongoid API this handler touches beyond `override_database` is
+  # feature-detected, so a Mongoid-compatible facade that offers nothing else
+  # must still switch, and must degrade honestly where it cannot read state
+  # back.
+  describe 'a Mongoid that exposes only override_database' do
+    let(:legacy) { MongoidMocks::DatabaseOverrideOnly }
+
+    before { stub_const('Mongoid', legacy) }
+
+    it 'accepts the target, because database overrides are supported' do
+      expect { handler.prepare('mongo_foo') }.not_to raise_error
+    end
+
+    it 'switches through the database override' do
+      handler.connect!('mongo_foo')
+      expect(legacy.overrides).to eq(['mongo_foo'])
+    end
+
+    it 'clears through the database override alone' do
+      handler.connect!(nil)
+      expect(legacy.overrides).to eq([nil])
+    end
+
+    it 'restores through the database override alone' do
+      handler.restore(client: 'client_a', database: 'db_a')
+      expect(legacy.overrides).to eq(['db_a'])
+    end
+
+    it 'reports no client override, because there is no way to read one' do
+      expect(handler.snapshot[:client]).to be_nil
+    end
+
+    it 'reports no database override for the same reason' do
+      expect(handler.snapshot[:database]).to be_nil
+    end
+  end
+
   describe '#diagnostics' do
     context 'when MongoDB is available at level: :basic' do
       let(:database) { instance_double(Mongoid::Database, name: 'mongo_foo') }

@@ -552,6 +552,62 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
+  # Rails connects lazily, so the first console command after boot runs against
+  # an ActiveRecord that has never resolved a pool: `connection_pool` raises
+  # until something establishes one.
+  describe 'a base class that has not connected to anything yet' do
+    let(:base_class) { ActiveRecordMock.unconnected_sharded_base(configs: config_names) }
+
+    it 'accepts a real shard instead of rejecting it as unregistered' do
+      expect { handler.prepare('shard_one') }.not_to raise_error
+    end
+
+    it 'lands the first switch on the requested configuration' do
+      handler.connect!('shard_one')
+      expect(base_class.connection_pool.db_config.name).to eq('shard_one')
+    end
+
+    it 'verifies that first switch' do
+      handler.connect!('shard_one')
+      expect(handler.verify!('shard_one')).to be(true)
+    end
+
+    it 'reports the connection as :unknown on the dashboard rather than as an error' do
+      expect(handler.diagnostics(level: :basic)[:status]).to eq(:unknown)
+    end
+
+    it 'reports no details, because none can be read without a pool' do
+      expect(handler.diagnostics(level: :basic)[:details]).to eq({})
+    end
+  end
+
+  # `SELECT version()` is a courtesy detail, not the point of the probe.
+  describe '#diagnostics when the version query fails' do
+    subject(:result) { handler.diagnostics(level: :full) }
+
+    let(:conn) { base_class.connection }
+
+    context 'when the database refuses the query' do
+      before { allow(conn).to receive(:select_value).and_raise(StandardError, 'function version() does not exist') }
+
+      it 'still reports the connection as connected' do
+        expect(result[:status]).to eq(:connected)
+      end
+
+      it 'reports an empty version rather than failing the whole probe' do
+        expect(result[:details][:version]).to eq('')
+      end
+    end
+
+    context 'when the failure is a bug rather than a database refusal' do
+      before { allow(conn).to receive(:select_value).and_raise(NameError, 'undefined local variable sql') }
+
+      it 'surfaces it as an error instead of an empty version' do
+        expect(result[:status]).to eq(:error)
+      end
+    end
+  end
+
   describe 'the shared connection handler contract' do
     include_context 'with the SQL handler contract'
 

@@ -54,6 +54,25 @@ module RedisFakes
   # A client that cannot report its DB by any route.
   class Opaque < Base; end
 
+  # The redis-client gem's client: it reports its DB through a frozen `config`
+  # and sends every command through `#call`, so there is no `#select` method to
+  # drive. Deliberately not a Base subclass - it must not inherit a `select` the
+  # real client does not have.
+  class CommandOnly
+    # Minimal RedisClient::Config stand-in.
+    Config = Struct.new(:db)
+
+    attr_reader :calls
+
+    def initialize(db = 0)
+      @db = db
+      @calls = []
+    end
+
+    def config = Config.new(@db)
+    def call(*command) = @calls << command
+  end
+
   # redis-rb 5.x: `Redis.current` was removed in 5.0, so there is no class-level
   # handle for ConsoleKit to reach at all.
   class V5 < DbReader; end

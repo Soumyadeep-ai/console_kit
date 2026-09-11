@@ -52,6 +52,26 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
 
+    # The Railtie applies the prompt at console boot, which is before any tenant
+    # has been chosen.
+    context 'when no tenant has been chosen yet' do
+      let(:irb_conf) { { PROMPT: {}, PROMPT_MODE: nil } }
+
+      before do
+        irb_module = Module.new do
+          def self.conf; end
+        end
+        stub_const('IRB', irb_module)
+        allow(IRB).to receive(:conf).and_return(irb_conf)
+        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+      end
+
+      it 'shows the no-tenant label instead of an empty one' do
+        described_class.apply
+        expect(irb_conf[:PROMPT][:CONSOLE_KIT][:PROMPT_I]).to include('[no-tenant]')
+      end
+    end
+
     context 'when Pry is defined' do
       let(:pry_config) { Struct.new(:prompt).new }
 

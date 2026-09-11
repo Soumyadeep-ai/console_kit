@@ -64,6 +64,29 @@ module Mongoid
   end
 end
 
+# Mongoid-compatible stand-ins that expose LESS than the current Mongoid does.
+#
+# MongoConnectionHandler feature-detects every one of these APIs with
+# `respond_to?`/`defined?` rather than by version, so the shapes below are the
+# ones those guards exist for.
+module MongoidMocks
+  # A facade offering only the public override API. `override_client` arrived
+  # with the Mongoid 5 session-to-client rename, and Mongoid's internals
+  # (`Mongoid::Threaded`, `Mongoid::Config`) are not part of the facade at all,
+  # so ConsoleKit can apply an override here but can read none of its state
+  # back. `overrides` is an inspection hook for specs, not part of the API the
+  # handler talks to.
+  module DatabaseOverrideOnly
+    class << self
+      def overrides = @overrides ||= []
+
+      def override_database(name) = overrides << name
+
+      def reset! = @overrides = []
+    end
+  end
+end
+
 RSpec.configure do |config|
   config.after do
     next unless defined?(Mongoid::Threaded)
@@ -72,4 +95,6 @@ RSpec.configure do |config|
     Mongoid::Threaded.database_override = nil
     Mongoid::Config.clients = {} if defined?(Mongoid::Config)
   end
+
+  config.after { MongoidMocks::DatabaseOverrideOnly.reset! }
 end

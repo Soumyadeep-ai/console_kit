@@ -209,6 +209,37 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
     end
   end
 
+  describe 'a context class that can carry every backend' do
+    let(:full_context) do
+      Class.new do
+        attr_writer :partner_identifier, :tenant_shard, :tenant_mongo_db,
+                    :tenant_redis_db, :tenant_elasticsearch_prefix
+      end
+    end
+
+    before do
+      stub_const('FullContext', full_context)
+      config.context_class = 'FullContext'
+      config.tenants = valid_tenants
+    end
+
+    it 'warns about nothing' do
+      validate!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning)
+    end
+  end
+
+  # A tenant that uses only some of the backends is an ordinary deployment, not
+  # a misconfiguration: an absent constants key means "leave that backend
+  # alone", and only :shard and :partner_code are ever required.
+  describe 'a tenant that configures only the backends it uses' do
+    before { config.tenants = { acme: { constants: { shard: :shard1, partner_code: 'acme' } } } }
+
+    it 'validates a SQL-only tenant without error' do
+      expect { validate! }.not_to raise_error
+    end
+  end
+
   describe 'credential scrubbing' do
     let(:credential_url) { 'redis://user:hunter2@cache.internal:6379/1' }
     let(:error_message) do

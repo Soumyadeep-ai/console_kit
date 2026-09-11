@@ -536,6 +536,27 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
     end
   end
 
+  # An elasticsearch-model too old to expose index_name_prefix can still be
+  # reset to "no prefix", and ConsoleKit's own record is then the only account
+  # of what this thread asked for.
+  describe 'a library version that exposes no index_name_prefix' do
+    before { stub_const('Elasticsearch::Model', Elasticsearch::ModelWithoutPrefix) }
+
+    it 'falls back to the prefix ConsoleKit recorded for this thread' do
+      registry.record('acme')
+      expect(handler.effective_prefix).to eq('acme')
+    end
+
+    it 'resets to no prefix without raising' do
+      expect { handler.connect!(nil) }.not_to raise_error
+    end
+
+    it 'verifies that reset' do
+      handler.connect!(nil)
+      expect(handler.verify!(nil)).to be(true)
+    end
+  end
+
   describe 'context attribute access' do
     it 'reads tenant_elasticsearch_prefix from context' do
       expect(handler.send(:context_attribute, :tenant_elasticsearch_prefix)).to eq('acme')

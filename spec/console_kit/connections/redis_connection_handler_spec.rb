@@ -382,6 +382,24 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       handler.restore(db: nil)
       expect(client.selects).to be_empty
     end
+
+    # Rollback is the one path that reaches SELECT with a client that was never
+    # allowed to switch: #prepare refuses a non-default DB for such a client and
+    # #connect! returns early, but a snapshot taken earlier can still name one.
+    context 'when the client has no SELECT to drive' do
+      let(:command_only) { RedisFakes::CommandOnly.new }
+
+      before { Redis.current = command_only }
+
+      it 'is a silent no-op rather than a NoMethodError' do
+        expect { handler.restore(db: 5) }.not_to raise_error
+      end
+
+      it 'sends the client no command at all' do
+        handler.restore(db: 5)
+        expect(command_only.calls).to be_empty
+      end
+    end
   end
 
   describe '#verify!' do
@@ -511,6 +529,40 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
 
       it 'falls back to the configured DB index' do
         expect(handler.diagnostics(level: :basic)[:details][:db]).to eq(2)
+      end
+    end
+
+    # `available?` only asks whether a Redis library is loaded. A loaded library
+    # with no reachable client handle has nothing to ping, so a :full check has
+    # to degrade to the basic answer instead of claiming it pinged.
+    context 'when level is :full and no client is reachable' do
+      before { stub_const('Redis', RedisFakes::V5) }
+
+      it 'returns status :unknown rather than :connected' do
+        expect(handler.diagnostics(level: :full)[:status]).to eq(:unknown)
+      end
+
+      it 'measures no latency, because nothing was pinged' do
+        expect(handler.diagnostics(level: :full)[:latency_ms]).to be_nil
+      end
+
+      it 'reports the isolation model that explains the degradation' do
+        expect(handler.diagnostics(level: :full)[:details][:isolation]).to eq(:none)
+      end
+    end
+
+    context 'when level is :full and only the redis-client gem is loaded' do
+      before do
+        hide_const('Redis')
+        stub_const('RedisClient', RedisFakes::CommandOnly)
+      end
+
+      it 'returns status :unknown, because RedisClient exposes no process-wide handle' do
+        expect(handler.diagnostics(level: :full)[:status]).to eq(:unknown)
+      end
+
+      it 'reports no server version, because nothing was asked for one' do
+        expect(handler.diagnostics(level: :full)[:details]).not_to include(:version)
       end
     end
 
