@@ -9,7 +9,14 @@ require_relative '../diagnostics'
 
 module ConsoleKit
   module Connections
-    # Declaration-ordered list of the connection handler classes ConsoleKit knows about.
+    # Declaration-ordered map of backend key to the handler class that owns it.
+    #
+    # Keying by backend_key rather than scanning a list makes "one live handler
+    # per backend" structurally impossible to violate instead of something that
+    # has to be detected: a reloaded generation replaces its own entry, in place,
+    # keeping its declaration position. Ruby preserves insertion order, so apply
+    # order - and therefore rollback order, which is its reverse - stays fixed at
+    # declaration order.
     #
     # Registration is explicit - a handler joins when it declares its backend -
     # rather than implicit via Class#descendants. That is what makes a Zeitwerk
@@ -24,22 +31,27 @@ module ConsoleKit
 
       class << self
         # A frozen view. Callers iterate it every switch; handing out the live
-        # array would let any of them reorder or empty the registry.
-        def all = entries.dup.freeze
+        # collection would let any of them reorder or empty the registry that
+        # decides what a switch touches.
+        def all = entries.values.freeze
 
         def add(handler_class)
-          index = entries.index { |klass| klass.backend_key == handler_class.backend_key }
-          return entries << handler_class unless index
-
-          report_collision(entries[index], handler_class)
-          entries[index] = handler_class
+          previous = entries[handler_class.backend_key]
+          report_collision(previous, handler_class) if previous
+          entries[handler_class.backend_key] = handler_class
         end
 
-        def remove(handler_class) = entries.delete(handler_class)
+        # Keyed removal, guarded by identity: unregistering a handler that has
+        # already been replaced by a reload generation must not remove the
+        # generation that replaced it.
+        def remove(handler_class)
+          key = handler_class.backend_key
+          entries.delete(key) if entries[key].equal?(handler_class)
+        end
 
         private
 
-        def entries = @entries ||= []
+        def entries = @entries ||= {}
 
         # A second class under the SAME name is a reload generation of the same
         # handler and is expected. Two differently named classes claiming one
