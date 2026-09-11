@@ -154,7 +154,7 @@ module ConsoleKit
 
     def verify_committed(state)
       handlers = Connections::ConnectionManager.available_handlers(context)
-      verify_all(handlers, TenantPlan.new(state.tenant_key).targets_for(handlers))
+      verify_all(handlers, TenantPlan.new(state.tenant_key, constants: state.constants).targets_for(handlers))
       nil
     end
 

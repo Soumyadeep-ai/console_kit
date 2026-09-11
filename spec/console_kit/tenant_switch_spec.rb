@@ -256,4 +256,34 @@ RSpec.describe ConsoleKit::TenantSwitch do
       expect(e.message).to include('partner_identifier')
     end
   end
+
+  # `ConsoleKit.verify_tenant!` is reachable from the console at any moment,
+  # including before a tenant has ever been chosen. There is nothing to verify
+  # then, and answering "verified" would be a lie.
+  describe '.verify_current! before any tenant has been configured' do
+    it 'raises ConfigurationError rather than verifying nothing' do
+      expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
+    end
+  end
+
+  describe 'verifying after the configuration has drifted' do
+    # A console session can outlive the configuration it started with: a reload
+    # or a re-`configure` can replace the tenant map underneath a thread that is
+    # already switched. Verification asks "is this connection still the tenant I
+    # committed", so it must read the constants frozen into the state at commit
+    # time, not re-resolve them through the mutable global config.
+    before do
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
+      ConsoleKit::Output.silence { described_class.call(:acme) }
+      ConsoleKit.configuration.tenants = { globex: { constants: { shard: 's', partner_code: 'G' } } }
+    end
+
+    it 'still verifies the tenant it actually committed' do
+      expect { ConsoleKit.verify_tenant! }.not_to raise_error
+    end
+
+    it 'keeps reporting that tenant as current' do
+      expect(ConsoleKit.current_tenant).to eq(:acme)
+    end
+  end
 end

@@ -13,8 +13,12 @@ module ConsoleKit
 
     attr_reader :tenant_key
 
-    def initialize(tenant_key)
+    # `constants` may be supplied by a caller that already froze them - a
+    # committed TenantState - so verification does not have to re-resolve them
+    # through a configuration that may have been replaced since the switch.
+    def initialize(tenant_key, constants: nil)
       @tenant_key = tenant_key
+      @constants = constants
     end
 
     def constants = @constants ||= resolve_constants
