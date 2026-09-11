@@ -6,17 +6,24 @@ module ConsoleKit
   # Immutable description of one fully-applied tenant state.
   #
   # A state carries everything needed to *undo* itself: the context values that
-  # were present before it was applied and one opaque snapshot per backend.
+  # were present before it was applied and one opaque snapshot per backend - plus
+  # the backends it could not drive at all, which is the one thing it cannot
+  # undo and therefore the one thing a verification has to report.
   class TenantState
-    EMPTY_UNDO = { context: {}.freeze, backends: {}.freeze }.freeze
+    NO_DROPPED = [].freeze
+    EMPTY_UNDO = { context: {}.freeze, backends: {}.freeze, dropped: NO_DROPPED }.freeze
 
     attr_reader :tenant_key, :constants, :context_values, :undo, :captured_at
 
     class << self
       def empty = new
 
-      def undo_bundle(context:, backends:)
-        { context: context.freeze, backends: backends.freeze }.freeze
+      # Everything the switch captured about the process it was about to change:
+      # the previous context values, one opaque snapshot per backend it could
+      # drive, and the keys of the backends it could NOT drive - the part of the
+      # process this bundle is unable to put back.
+      def undo_bundle(context:, backends:, dropped: NO_DROPPED)
+        { context: context.freeze, backends: backends.freeze, dropped: dropped.freeze }.freeze
       end
     end
 
@@ -37,15 +44,13 @@ module ConsoleKit
     def configured? = @configured
     def undo_context = @undo[:context]
     def undo_backends = @undo[:backends]
+
+    # Backends that were never part of this state: handlers that exist but are
+    # broken, so the switch could not snapshot, apply, verify or roll them back.
+    # They are still serving whatever tenant they were already on.
+    def dropped_backends = @undo[:dropped] || NO_DROPPED
     def snapshot_for(backend) = @undo[:backends][backend]
     def age_ms = ((Connections::DiagnosticHelpers.clock_time - @captured_at) * 1000).round(1)
-
-    def to_h
-      {
-        tenant_key: @tenant_key, configured: @configured,
-        context_values: @context_values, backends: @undo[:backends].keys
-      }
-    end
 
     def inspect = "#<ConsoleKit::TenantState #{@tenant_key.inspect} backends=#{@undo[:backends].keys.inspect}>"
   end
@@ -53,10 +58,11 @@ module ConsoleKit
   # Single source of truth for per-thread tenant state.
   #
   # Everything ConsoleKit knows about "the tenant this thread is on" lives in one
-  # thread-local slot holding a TenantState, plus a stack used by nested scopes.
+  # thread-local slot holding a TenantState. Nesting is unwound by `with_tenant`
+  # from its own stack frame, so there is deliberately no second scope stack
+  # here to drift out of step with it - and no observable nesting depth.
   module StateStore
     STATE_KEY = :console_kit_state
-    STACK_KEY = :console_kit_state_stack
 
     class << self
       def current = Thread.current[STATE_KEY] || TenantState.empty
@@ -71,19 +77,6 @@ module ConsoleKit
 
       def clear!
         Thread.current[STATE_KEY] = nil
-        Thread.current[STACK_KEY] = nil
-      end
-
-      def stack = Thread.current[STACK_KEY] ||= []
-      def depth = stack.size
-
-      def push(state)
-        stack.push(current)
-        self.current = state
-      end
-
-      def pop
-        self.current = stack.pop
       end
     end
   end

@@ -12,7 +12,8 @@ module ConsoleKit
     # Manages available connection handlers
     class ConnectionManager
       DROPPED_WARNING = 'was skipped because it is only half-implemented (%<reason>s). That backend will NOT be ' \
-                        'switched, verified or rolled back, and a switch will still report itself as verified.'
+                        'switched, verified or rolled back; it is recorded on the tenant state so the switch ' \
+                        'cannot report itself as fully verified.'
 
       class << self
         # `BaseConnectionHandler.registry` is explicit registration, not
@@ -20,8 +21,13 @@ module ConsoleKit
         # two live generations of the same backend key - HandlerRegistry sorts
         # that out (and warns) at registration time. Nothing here has to
         # de-duplicate or re-order it.
-        def available_handlers(context)
-          handler_classes.filter_map { |klass| resolve(klass, context) }
+        #
+        # `dropped` is an optional collector. A caller that is about to commit
+        # tenant state passes one in, because a dropped backend is left on
+        # whatever tenant it was already serving and nothing downstream can
+        # discover that from the returned handler list alone.
+        def available_handlers(context, dropped = nil)
+          handler_classes.filter_map { |klass| resolve(klass, context, dropped) }
         end
 
         private
@@ -31,11 +37,12 @@ module ConsoleKit
         # raises NotImplementedError is broken rather than absent, and dropping
         # it silently is what lets a switch claim success while that backend
         # still serves another tenant, so it is reported before it is dropped.
-        def resolve(klass, context)
+        def resolve(klass, context, dropped)
           handler = klass.new(context)
           handler if handler.available?
         rescue NotImplementedError => e
           report_dropped(klass, e)
+          dropped << klass.backend_key if dropped
           nil
         end
 

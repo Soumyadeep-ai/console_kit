@@ -133,6 +133,15 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
         expect(ConsoleKit::Output)
           .to have_received(:print_warning).with(a_string_including('NOT be switched, verified or rolled back'))
       end
+
+      # A warning alone is lost the moment it scrolls past. The caller that
+      # commits tenant state needs the key itself, or nothing downstream can
+      # tell that the backend was left behind.
+      it 'hands the dropped backend key back to the caller that asked for one' do
+        dropped = []
+        described_class.available_handlers(context, dropped)
+        expect(dropped).to eq([:half_implemented])
+      end
     end
 
     context 'when the handler simply answers false, as an unloaded gem does' do
@@ -147,6 +156,12 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       it 'says nothing about it' do
         described_class.available_handlers(context)
         expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+
+      it 'does not count it as dropped' do
+        dropped = []
+        described_class.available_handlers(context, dropped)
+        expect(dropped).to be_empty
       end
     end
   end

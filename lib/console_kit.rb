@@ -17,6 +17,10 @@ require_relative 'console_kit/railtie' if defined?(Rails::Railtie)
 
 # Main module for ConsoleKit
 module ConsoleKit
+  INCOMPLETE_VERIFICATION = 'ConsoleKit: tenant %<tenant>p is verified only for the backends ConsoleKit could ' \
+                            'drive. Never switched, verified or rolled back, and possibly still serving another ' \
+                            'tenant: %<backends>s.'
+
   class << self
     def configure = yield(configuration)
     def configuration = @configuration ||= Configuration.new
@@ -58,7 +62,13 @@ module ConsoleKit
     def switch_tenant(key) = TenantSwitch.call(key)
 
     # Re-verify that every available backend still points at the current tenant.
-    def verify_tenant! = TenantSwitch.verify_current!
+    # A backend the switch never reached cannot be verified at all, so it is
+    # reported here rather than being quietly counted as clean.
+    def verify_tenant!
+      state = TenantSwitch.verify_current!
+      report_dropped_backends(state)
+      state
+    end
 
     # Nested, exception-safe tenant scope. Restores the enclosing tenant on exit.
     def with_tenant(key)
@@ -78,6 +88,19 @@ module ConsoleKit
     def disable_pretty_output = configuration.pretty_output = false
 
     private
+
+    # Raising here instead would be defensible, but it would fire on EVERY
+    # verify_tenant! in an application that legitimately ships one broken
+    # third-party handler, leaving it no way to verify anything at all - and it
+    # would say "a live connection is on the wrong tenant" when the truth is
+    # "a backend was never driven". The state carries the list either way.
+    def report_dropped_backends(state)
+      dropped = state.dropped_backends
+      return if dropped.empty?
+
+      Instrumentation.increment('console_kit.incomplete_verification')
+      Output.print_warning(format(INCOMPLETE_VERIFICATION, tenant: state.tenant_key, backends: dropped.join(', ')))
+    end
 
     # A rollback failure raised from an `ensure` would replace the exception the
     # block was already raising, and that exception is the root cause the

@@ -25,7 +25,9 @@ module ConsoleKit
       def clear(context: nil) = new(nil, context: context).call
 
       # Re-verify that every available backend still matches the current tenant.
-      # Raises ConnectionVerificationError on the first mismatch.
+      # Raises ConnectionVerificationError on the first mismatch. The returned
+      # state also names the backends the switch never reached, which no amount
+      # of verifying the ones it did reach can discover.
       def verify_current!
         state = StateStore.current
         raise ConfigurationError, 'No tenant is currently configured.' unless state.configured?
@@ -54,7 +56,8 @@ module ConsoleKit
 
     def perform
       plan = TenantPlan.new(tenant_key)
-      handlers = Connections::ConnectionManager.available_handlers(context)
+      @dropped_backends = []
+      handlers = Connections::ConnectionManager.available_handlers(context, @dropped_backends)
       targets = plan.targets_for(handlers)
       prepare_all(handlers, targets)
       transact(handlers, targets, plan.constants)
@@ -97,10 +100,9 @@ module ConsoleKit
     end
 
     def capture_undo(handlers)
-      TenantState.undo_bundle(
-        context: context_wrapper.current_values,
-        backends: handlers.to_h { |handler| [handler.backend_key, handler.snapshot] }
-      )
+      snapshots = handlers.to_h { |handler| [handler.backend_key, handler.snapshot] }
+      TenantState.undo_bundle(context: context_wrapper.current_values, backends: snapshots,
+                              dropped: @dropped_backends)
     end
 
     def apply_context(constants)
