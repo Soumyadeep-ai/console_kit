@@ -6,6 +6,10 @@ module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
+      UNSUPPORTED_OVERRIDE = 'client override API is not available in this Mongoid version.'
+      UNVERIFIABLE = 'state cannot be read back in this Mongoid version, so a switch could not be verified or ' \
+                     'rolled back. Give each tenant its own Mongoid client instead.'
+
       backend :mongo,
               display_name: 'MongoDB',
               context_attribute: :tenant_mongo_db,
@@ -23,9 +27,13 @@ module ConsoleKit
       # overrides at all.
       def prepare(target)
         validate_target!(target)
-        return if Mongoid.respond_to?(:override_database)
+        unless Mongoid.respond_to?(:override_database)
+          raise UnsupportedBackendError,
+                "#{display_name} #{UNSUPPORTED_OVERRIDE}"
+        end
+        return if target.nil? || readable?
 
-        raise UnsupportedBackendError, "#{display_name} client override API is not available in this Mongoid version."
+        raise UnsupportedBackendError, "#{display_name} #{UNVERIFIABLE}"
       end
 
       def snapshot
@@ -79,6 +87,16 @@ module ConsoleKit
           name: display_name, status: :connected, latency_ms: latency,
           details: { database: db.name, version: info['version'] }
         }
+      end
+
+      # A switch ConsoleKit cannot read back is a switch it cannot prove, and a
+      # state it cannot snapshot - so #prepare refuses one rather than letting it
+      # fail at verify with the override already applied and an empty snapshot
+      # that would clear it instead of restoring it.
+      def readable? = Mongoid.respond_to?(:default_client) && threaded_readable?
+
+      def threaded_readable?
+        defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:database_override)
       end
 
       def effective_client_name = Mongoid.default_client.name

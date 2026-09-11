@@ -208,24 +208,19 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   end
 
   # Every Mongoid API this handler touches beyond `override_database` is
-  # feature-detected, so a Mongoid-compatible facade that offers nothing else
-  # must still switch, and must degrade honestly where it cannot read state
-  # back.
+  # feature-detected. A facade that offers nothing else can still be cleared and
+  # restored, but it cannot be read back - so a switch to a tenant on it is
+  # refused up front rather than applied and then found unverifiable.
   describe 'a Mongoid that exposes only override_database' do
     let(:legacy) { MongoidMocks::DatabaseOverrideOnly }
 
     before { stub_const('Mongoid', legacy) }
 
-    it 'accepts the target, because database overrides are supported' do
-      expect { handler.prepare('mongo_foo') }.not_to raise_error
+    it 'refuses a tenant target it would not be able to verify' do
+      expect { handler.prepare('mongo_foo') }.to raise_error(ConsoleKit::UnsupportedBackendError)
     end
 
-    it 'switches through the database override' do
-      handler.connect!('mongo_foo')
-      expect(legacy.overrides).to eq(['mongo_foo'])
-    end
-
-    it 'clears through the database override alone' do
+    it 'still clears through the database override alone' do
       handler.connect!(nil)
       expect(legacy.overrides).to eq([nil])
     end
@@ -358,5 +353,37 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     include_context 'with the MongoDB handler contract'
 
     it_behaves_like 'a connection handler'
+  end
+
+  describe 'a Mongoid whose state cannot be read back' do
+    # A Mongoid facade can expose override_database while exposing no
+    # ::Threaded or ::Config to read the override back from. ConsoleKit cannot
+    # prove a switch landed on such a client, and cannot snapshot it either - so
+    # it must refuse before it mutates anything, the way the Redis handler
+    # refuses a client it cannot select on.
+    subject(:handler) { described_class.new(nil) }
+
+    before { stub_const('Mongoid', MongoidMocks::DatabaseOverrideOnly) }
+
+    it 'refuses at prepare rather than failing later at verify' do
+      expect { handler.prepare('acme_db') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'names the backend in the refusal' do
+      expect { handler.prepare('acme_db') }.to raise_error(/MongoDB/)
+    end
+
+    it 'mutates nothing when it refuses' do
+      begin
+        handler.prepare('acme_db')
+      rescue ConsoleKit::UnsupportedBackendError
+        nil
+      end
+      expect(MongoidMocks::DatabaseOverrideOnly.overrides).to be_empty
+    end
+
+    it 'still allows a nil target, which asks for no override at all' do
+      expect { handler.prepare(nil) }.not_to raise_error
+    end
   end
 end
