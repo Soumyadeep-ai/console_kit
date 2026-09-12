@@ -102,16 +102,37 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       expect(ConsoleKit::Setup.current_tenant).to eq('acme')
     end
+
+    context 'when no tenant was configured before the switch' do
+      before do
+        ConsoleKit::Setup.current_tenant = nil
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+      end
+
+      it 'clears nothing, because there is nothing to clear' do
+        described_class.reset
+
+        expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+      end
+
+      it 'still configures the selected tenant' do
+        described_class.reset
+
+        expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('globex')
+      end
+    end
   end
 
+  # Since 1.5.0 reapply performs a full transactional switch through TenantSwitch
+  # rather than going through TenantConfigurator.configure_tenant.
   describe '.reapply' do
-    it 're-configures the current tenant' do
+    it 're-applies the current tenant via TenantSwitch' do
       ConsoleKit::Setup.current_tenant = 'acme'
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+      allow(ConsoleKit::TenantSwitch).to receive(:call)
 
       described_class.reapply
 
-      expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('acme')
+      expect(ConsoleKit::TenantSwitch).to have_received(:call).with('acme')
     end
   end
 end

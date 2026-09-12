@@ -11,14 +11,11 @@ RSpec.describe ConsoleKit do
     end
   end
 
+  # A base class that really moves its pool onto the configuration it is given,
+  # so SqlConnectionHandler#verify! can read the identity back honestly instead
+  # of being stubbed into agreement.
   def self.build_application_record
-    Class.new do
-      def self.establish_connection(_arg = nil); end
-
-      def self.connection_pool
-        @connection_pool ||= Class.new { def disconnect!; end }.new
-      end
-    end
+    ActiveRecordMock.plain_base(configs: %w[primary shard_acme shard_globex])
   end
 
   shared_context 'with full context class' do
@@ -62,10 +59,15 @@ RSpec.describe ConsoleKit do
     include_context 'with full tenant config'
 
     describe 'configure → verify → clear cycle' do
-      it 'configures tenant and sets all context attributes', :aggregate_failures do
+      it 'sets partner_identifier from the tenant constants' do
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
 
         expect(context_class.partner_identifier).to eq('ACME')
+      end
+
+      it 'sets tenant_shard from the tenant constants' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
         expect(context_class.tenant_shard).to eq('shard_acme')
       end
 
@@ -75,11 +77,23 @@ RSpec.describe ConsoleKit do
         expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_acme)
       end
 
-      it 'clears all context attributes on clear', :aggregate_failures do
+      it 'leaves the SQL pool on the configured shard' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
+        expect(ApplicationRecord.connection_pool.db_config.name).to eq('shard_acme')
+      end
+
+      it 'clears partner_identifier on clear' do
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
         ConsoleKit::TenantConfigurator.clear
 
         expect(context_class.partner_identifier).to be_nil
+      end
+
+      it 'clears tenant_shard on clear' do
+        ConsoleKit::TenantConfigurator.configure_tenant('acme')
+        ConsoleKit::TenantConfigurator.clear
+
         expect(context_class.tenant_shard).to be_nil
       end
 
@@ -90,10 +104,13 @@ RSpec.describe ConsoleKit do
         expect(ApplicationRecord).to have_received(:establish_connection).with(no_args)
       end
 
-      it 'tracks configuration_success state correctly', :aggregate_failures do
+      it 'reports no configuration before a tenant is configured' do
         expect(ConsoleKit::TenantConfigurator.configuration_success).to be_falsey
+      end
 
+      it 'reports a successful configuration once a tenant is configured' do
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
+
         expect(ConsoleKit::TenantConfigurator.configuration_success).to be true
       end
 
@@ -129,21 +146,28 @@ RSpec.describe ConsoleKit do
     end
 
     describe 'tenant switching' do
+      let(:establish_calls) { [] }
+
       before do
+        allow(ApplicationRecord).to receive(:establish_connection).and_wrap_original do |original, *args|
+          establish_calls << args
+          original.call(*args)
+        end
         ConsoleKit::TenantConfigurator.configure_tenant('acme')
         ConsoleKit::TenantConfigurator.clear
         ConsoleKit::TenantConfigurator.configure_tenant('globex')
       end
 
-      it 'replaces one tenant with another', :aggregate_failures do
+      it 'replaces the partner identifier' do
         expect(context_class.partner_identifier).to eq('GBX')
+      end
+
+      it 'replaces the tenant shard' do
         expect(context_class.tenant_shard).to eq('shard_globex')
       end
 
-      it 'calls establish_connection for both tenants in order', :aggregate_failures do
-        expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_acme).ordered
-        expect(ApplicationRecord).to have_received(:establish_connection).with(no_args).ordered
-        expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_globex).ordered
+      it 'calls establish_connection for both tenants in order' do
+        expect(establish_calls).to eq([[:shard_acme], [], [:shard_globex]])
       end
     end
 
@@ -210,31 +234,54 @@ RSpec.describe ConsoleKit do
     end
 
     describe 'auto-select with single tenant' do
-      it 'auto-selects and configures the only tenant', :aggregate_failures do
-        ConsoleKit::Setup.setup
+      before { ConsoleKit::Setup.setup }
 
+      it 'auto-selects the only tenant' do
         expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      end
+
+      it 'reports the setup as successful' do
         expect(ConsoleKit::Setup.tenant_setup_successful?).to be true
+      end
+
+      it 'sets partner_identifier from the tenant constants' do
         expect(context_class.partner_identifier).to eq('ACME')
+      end
+
+      it 'sets tenant_shard from the tenant constants' do
         expect(context_class.tenant_shard).to eq('shard_acme')
       end
 
       it 'is idempotent — second call is a no-op' do
-        ConsoleKit::Setup.setup
         ConsoleKit::Setup.setup
 
         expect(ApplicationRecord).to have_received(:establish_connection).once
       end
     end
 
+    # Since 1.5.0 a re-applied switch still runs every stage, but the SQL
+    # strategy skips `establish_connection` when the pool already resolves to
+    # the shard being asked for, so re-applying no longer churns the pool.
     describe 'reapply silently re-applies current tenant' do
-      it 'reconfigures without output', :aggregate_failures do
+      let(:reapply_output) do
         ConsoleKit::Setup.setup
+        capture_all_output { ConsoleKit::Setup.reapply }
+      end
 
-        output = capture_all_output { ConsoleKit::Setup.reapply }
+      it 'produces no output' do
+        expect(reapply_output).to be_empty
+      end
 
-        expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_acme).twice
-        expect(output).to be_empty
+      it 'leaves the SQL pool on the tenant shard' do
+        reapply_output
+
+        expect(ApplicationRecord.connection_pool.db_config.name).to eq('shard_acme')
+      end
+
+      it 'does not re-establish a connection that is already on the shard' do
+        reapply_output
+
+        expect(ApplicationRecord).to have_received(:establish_connection).once
       end
     end
   end
@@ -309,7 +356,6 @@ RSpec.describe ConsoleKit do
     end
 
     before do
-      stub_const('Elasticsearch', Module.new)
       described_class.configure do |config|
         config.tenants = {
           'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME', elasticsearch_prefix: 'acme_idx' } }
@@ -365,16 +411,18 @@ RSpec.describe ConsoleKit do
       self.class.build_context_class(:tenant_shard, :partner_identifier)
     end
     let(:connected_diag) { ->(name) { { name: name, status: :connected, latency_ms: 10, details: {} } } }
+    # Diagnostics keys its per-thread row cache by backend, so every handler
+    # double has to answer #backend_key as well as #safe_diagnostics.
     let(:stub_handlers) do
       [
         instance_double(ConsoleKit::Connections::SqlConnectionHandler,
-                        safe_diagnostics: connected_diag.call('SQL')),
+                        backend_key: :sql, safe_diagnostics: connected_diag.call('SQL')),
         instance_double(ConsoleKit::Connections::ElasticsearchConnectionHandler,
-                        safe_diagnostics: connected_diag.call('Elasticsearch')),
+                        backend_key: :elasticsearch, safe_diagnostics: connected_diag.call('Elasticsearch')),
         instance_double(ConsoleKit::Connections::MongoConnectionHandler,
-                        safe_diagnostics: connected_diag.call('Mongo')),
+                        backend_key: :mongo, safe_diagnostics: connected_diag.call('Mongo')),
         instance_double(ConsoleKit::Connections::RedisConnectionHandler,
-                        safe_diagnostics: connected_diag.call('Redis'))
+                        backend_key: :redis, safe_diagnostics: connected_diag.call('Redis'))
       ]
     end
 
@@ -382,11 +430,7 @@ RSpec.describe ConsoleKit do
     let(:conn) { double(adapter_name: 'PostgreSQL', execute: true, select_value: 'PostgreSQL 14.0') }
 
     before do
-      stub_const('ApplicationRecord', Class.new do
-        def self.establish_connection(*); end
-        def self.connection; end
-        def self.connection_pool; end
-      end)
+      stub_const('ApplicationRecord', self.class.build_application_record)
 
       described_class.configure do |config|
         config.tenants = { 'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME' } } }
@@ -414,14 +458,40 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    it 'shows error status when connection fails', :aggregate_failures do
-      allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'timeout')
-      allow(ApplicationRecord).to receive(:connection_pool).and_return(double(size: 5))
+    # Pre-1.5 the dashboard proved a broken SQL connection by having
+    # ApplicationRecord.connection raise. The default :basic level issues no
+    # query at all now, so a broken connection is invisible to it: the honest
+    # error row is a backend that cannot even report its identity.
+    context 'when a backend cannot report its identity' do
+      before { allow(Mongoid).to receive(:default_client).and_raise(StandardError, 'timeout') }
 
-      output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+      it 'names the failing backend in the dashboard table' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
 
-      expect(output).to include('SQL')
-      expect(output).to include('Error')
+        expect(output).to include('MongoDB')
+      end
+
+      it 'renders an error status for it' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+
+        expect(output).to include('Error')
+      end
+    end
+
+    context 'when the SQL connection is broken' do
+      before { allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'timeout') }
+
+      it 'still reports SQL as connected, because :basic diagnostics query nothing' do
+        output = capture_all_output { ConsoleKit::Connections::Dashboard.display }
+
+        expect(output).to include('Connected')
+      end
+
+      it 'never asks the base class for a connection' do
+        capture_all_output { ConsoleKit::Connections::Dashboard.display }
+
+        expect(ApplicationRecord).not_to have_received(:connection)
+      end
     end
   end
 end

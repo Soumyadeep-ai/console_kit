@@ -6,6 +6,10 @@
 Rails.application.config.after_initialize do
   ConsoleKit.configure do |config|
     # TODO: Set your tenants source, example:
+    # `shard` and `partner_code` are required for every tenant; `mongo_db`, `redis_db` and
+    # `elasticsearch_prefix` are optional. Extra keys (like `environment` below) are fine -
+    # they're just not read by ConsoleKit - but `config.validate!` will warn about them in
+    # case they're actually a typo of one of the keys above.
     # {
     #   tenant_a: {
     #     constants: {

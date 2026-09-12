@@ -57,6 +57,25 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
       end
     end
 
+    # A configuration reload can drop a tenant while the state store still
+    # points at it. Reporting on that tenant must degrade, not raise.
+    context 'when the current tenant is no longer in the configuration' do
+      before do
+        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('ghost')
+        allow(ConsoleKit.configuration).to receive(:tenants).and_return('acme' => { constants: {} })
+      end
+
+      it 'still names the tenant it was asked about' do
+        helper.tenant_info
+        expect(ConsoleKit::Output).to have_received(:print_header).with('Tenant: ghost')
+      end
+
+      it 'prints no details rather than raising on the missing entry' do
+        helper.tenant_info
+        expect(ConsoleKit::Output).not_to have_received(:print_info)
+      end
+    end
+
     context 'when no tenant is configured' do
       before do
         allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
@@ -70,10 +89,25 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
   end
 
   describe '#dashboard' do
+    before { allow(ConsoleKit::Connections::Dashboard).to receive(:display) }
+
     it 'delegates to ConsoleKit::Connections::Dashboard.display' do
-      allow(ConsoleKit::Connections::Dashboard).to receive(:display)
       helper.dashboard
       expect(ConsoleKit::Connections::Dashboard).to have_received(:display)
+    end
+
+    it 'asks for the cheap basic level when called with no arguments' do
+      helper.dashboard
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display).with(level: :basic)
+    end
+
+    it 'passes an explicit level through' do
+      helper.dashboard(level: :full)
+      expect(ConsoleKit::Connections::Dashboard).to have_received(:display).with(level: :full)
+    end
+
+    it 'returns itself so the console prints nothing noisy' do
+      expect(helper.dashboard).to be(helper)
     end
   end
 
@@ -91,6 +125,14 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
 
     it 'returns the tenant names' do
       expect(helper.tenants).to eq(%w[acme globex])
+    end
+
+    context 'when nothing has been configured yet' do
+      before { allow(ConsoleKit.configuration).to receive(:tenants).and_return(nil) }
+
+      it 'returns an empty list rather than raising' do
+        expect(helper.tenants).to eq([])
+      end
     end
   end
 end

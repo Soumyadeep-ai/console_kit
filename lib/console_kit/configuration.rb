@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'configuration_validator'
+
 module ConsoleKit
   # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
@@ -34,6 +36,8 @@ module ConsoleKit
       raise Error, 'ConsoleKit: `tenants` is not configured.' if tenants.blank?
       raise Error, 'ConsoleKit: `tenants` must be a Hash.' unless tenants.is_a?(Hash)
       raise Error, 'ConsoleKit: `context_class` is not configured.' if @settings.context_class.blank?
+
+      ConfigurationValidator.new(self).validate!
     end
 
     private

@@ -18,9 +18,9 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
       expect(ctx.tenant_shard).to eq('shard_acme')
     end
 
-    it 'returns all change tuples' do
+    it 'returns a hash of the assigned values' do
       result = wrapper.assign(constants, mapping)
-      expect(result).to include([:tenant_shard, nil, 'shard_acme'])
+      expect(result).to eq(tenant_shard: 'shard_acme', partner_identifier: 'ACME')
     end
 
     context 'when previous value differs only in case' do
@@ -28,9 +28,10 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
 
       let(:constants) { { shard: 'shard_acme', partner_code: 'acme' } }
 
-      it 'includes the mismatch in returned tuples' do
-        result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'ACME', 'acme'])
+      it 'warns about the case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('ACME', 'acme'))
       end
 
       it 'still assigns the configured value' do
@@ -42,18 +43,25 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
     context 'when previous value matches exactly' do
       before { ctx.partner_identifier = 'ACME' }
 
-      it 'does not include it as a case mismatch tuple' do
-        result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'ACME', 'ACME'])
+      it 'does not warn about a case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
 
     context 'when values differ in more than case' do
       before { ctx.partner_identifier = 'OTHER' }
 
-      it 'includes the change tuple but not as a case-only mismatch' do
+      it 'assigns the new value' do
         result = wrapper.assign(constants, mapping)
-        expect(result).to include([:partner_identifier, 'OTHER', 'ACME'])
+        expect(result[:partner_identifier]).to eq('ACME')
+      end
+
+      it 'does not warn about a case mismatch' do
+        allow(ConsoleKit::Output).to receive(:print_warning)
+        wrapper.assign(constants, mapping)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
   end
@@ -113,6 +121,78 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
       it 'skips partner_identifier' do
         expect(described_class.for_context(ctx_class).attributes).not_to include(:partner_identifier)
       end
+    end
+  end
+
+  describe 'an attribute whose getter raises' do
+    let(:ctx) do
+      Class.new do
+        class << self
+          attr_accessor :tenant_shard
+          attr_writer :partner_identifier
+
+          def partner_identifier = raise(IOError, 'context store not initialized')
+        end
+      end
+    end
+
+    before do
+      allow(ConsoleKit::Output).to receive(:print_warning)
+      ctx.tenant_shard = 'shard_acme'
+      ctx.partner_identifier = 'ACME'
+    end
+
+    it 'records a sentinel rather than nil, so rollback cannot silently destroy the value' do
+      expect(wrapper.current_values[:partner_identifier]).to eq(described_class::UNREADABLE)
+    end
+
+    it 'still records the attributes it could read' do
+      expect(wrapper.current_values[:tenant_shard]).to eq('shard_acme')
+    end
+
+    it 'warns that the attribute will not be restorable' do
+      wrapper.current_values
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('partner_identifier'))
+    end
+
+    context 'when that snapshot is restored' do
+      let(:snapshot) { wrapper.current_values }
+
+      before do
+        snapshot
+        ctx.tenant_shard = 'shard_globex'
+        ctx.partner_identifier = 'GLOBEX'
+      end
+
+      it 'reports the failure instead of claiming a clean rollback' do
+        expect { wrapper.restore(snapshot) }.to raise_error(ConsoleKit::Error, /partner_identifier/)
+      end
+
+      it 'does not write the sentinel onto the context' do
+        wrapper.restore(snapshot)
+      rescue ConsoleKit::Error
+        expect(ctx.instance_variable_get(:@partner_identifier)).to eq('GLOBEX')
+      end
+
+      it 'still restores every attribute it could read' do
+        wrapper.restore(snapshot)
+      rescue ConsoleKit::Error
+        expect(ctx.tenant_shard).to eq('shard_acme')
+      end
+    end
+  end
+
+  # A rollback puts back the bundle it captured, and the handler that owned a
+  # slot can be gone by then - so a value is written back whether or not the
+  # wrapper lists its attribute.
+  describe '#restore for an attribute the wrapper does not list' do
+    before do
+      ctx.tenant_mongo_db = 'inner_db'
+      wrapper.restore(tenant_mongo_db: nil)
+    end
+
+    it 'writes the captured value back anyway' do
+      expect(ctx.tenant_mongo_db).to be_nil
     end
   end
 end

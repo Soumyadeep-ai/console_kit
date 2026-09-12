@@ -23,3 +23,7 @@ group :test do
   gem 'rspec_junit_formatter'
   gem 'simplecov', require: false
 end
+
+group :benchmark do
+  gem 'benchmark-ips', '~> 2.15', require: false
+end

@@ -1,127 +1,93 @@
 # frozen_string_literal: true
 
 require_relative 'output'
+require_relative 'errors'
+require_relative 'tenant_state'
 require_relative 'connections/connection_manager'
 require_relative 'connections/dashboard'
 require_relative 'tenant_configurator/context_wrapper'
+require_relative 'tenant_switch'
 
 module ConsoleKit
-  # For tenant configuration
+  # Console-facing tenant configuration: the non-raising API used by the console
+  # flow, which reports failures through Output and returns false.
   module TenantConfigurator
-    CONTEXT_MAPPING = {
-      partner_identifier: :partner_code,
-      tenant_shard: :shard,
-      tenant_mongo_db: :mongo_db,
-      tenant_redis_db: :redis_db,
-      tenant_elasticsearch_prefix: :elasticsearch_prefix
-    }.freeze
-
     class << self
-      def configuration_success = Thread.current[:console_kit_configuration_success]
-
-      def configuration_success=(val)
-        Thread.current[:console_kit_configuration_success] = val
+      # `partner_identifier` is not a backend, so it is the one fixed entry; the
+      # rest come off the registered handlers, so a new backend needs no update.
+      def context_mapping
+        { partner_identifier: :partner_code }.merge(backend_context_mapping)
       end
 
-      def current_tenant_key = Thread.current[:console_kit_current_tenant_key]
+      def configuration_success? = StateStore.configured?
+      alias configuration_success configuration_success?
 
+      # Compat shim: assigning a falsey value clears the current tenant state.
+      def configuration_success=(val)
+        StateStore.clear! unless val
+      end
+
+      def current_tenant_key = StateStore.tenant_key
+
+      # Compat shim: assigning nil clears the current tenant state, forcing the
+      # next `configure_tenant` call to re-apply from scratch.
       def current_tenant_key=(val)
-        Thread.current[:console_kit_current_tenant_key] = val
+        StateStore.clear! if val.nil?
       end
 
       def configure_tenant(key)
         return true if key == current_tenant_key && configuration_success
 
-        attempt_configuration(key)
-      rescue StandardError => e
-        handle_error?(e, key)
+        TenantSwitch.call(key)
+        Output.print_success("Tenant set to: #{key}")
+        true
+      rescue StandardError, NotImplementedError => e
+        report_failure(e, key)
+        false
       end
 
       def clear
         ctx = ConsoleKit.configuration.context_class
         return unless ctx
 
-        perform_clear(ContextWrapper.for_context(ctx))
+        perform_clear(ctx, ContextWrapper.for_context(ctx))
       end
 
       private
 
-      def attempt_configuration(key)
-        constants = ConsoleKit.configuration.tenants[key]&.[](:constants)
-        return missing_config_error?(key) unless constants
-
-        execute_configuration(key, constants)
-        configuration_success
+      def backend_context_mapping
+        Connections::BaseConnectionHandler.registry.to_h { |handler| [handler.context_attribute, handler.constants_key] }
       end
 
-      def perform_clear(wrapper)
+      def perform_clear(ctx, wrapper)
         return unless configuration_success || wrapper.any_set?
 
-        reset_tenant(wrapper)
+        TenantSwitch.clear(context: ctx)
         Output.print_info('Tenant context has been cleared.')
         true
       end
 
-      def reset_tenant(wrapper)
-        self.configuration_success = false
-        self.current_tenant_key = nil
-        wrapper.reset
-        setup_connections(wrapper.ctx)
+      def report_failure(error, key)
+        return print_missing_config(key) if tenant_missing?(error)
+
+        print_error_details(error, key)
       end
 
-      def validate_constants!(constants)
-        missing = %i[shard partner_code] - constants.keys
-        raise Error, "Tenant constants missing keys: #{missing.join(', ')}" unless missing.empty?
+      def tenant_missing?(error)
+        error.is_a?(TenantNotFoundError) ||
+          (error.is_a?(TenantSwitchError) && error.original_error.is_a?(TenantNotFoundError))
       end
 
-      def missing_config_error?(key)
-        self.configuration_success = false
+      def print_missing_config(key)
         Output.print_error("No configuration found for tenant: #{key}")
-        false
+        nil
       end
 
-      def execute_configuration(key, constants)
-        validate_constants!(constants)
-        apply_context(constants)
-        mark_success(key)
-      end
-
-      def apply_context(constant)
-        wrapper = ContextWrapper.for_context(ConsoleKit.configuration.context_class)
-        wrapper.assign(constant, CONTEXT_MAPPING).each do |attr, existing, configured|
-          warn_case_mismatch(attr, existing, configured) if case_mismatch?(existing, configured)
-        end
-        setup_connections(wrapper.ctx)
-      end
-
-      def case_mismatch?(existing, new_value)
-        existing.is_a?(String) && new_value.is_a?(String) &&
-          existing != new_value &&
-          existing.casecmp(new_value).zero?
-      end
-
-      def setup_connections(context)
-        Connections::ConnectionManager.available_handlers(context).each(&:connect)
-      end
-
-      def mark_success(key)
-        Output.print_success("Tenant set to: #{key}")
-        self.configuration_success = true
-        self.current_tenant_key = key
-      end
-
-      def warn_case_mismatch(attr, existing, configured)
-        Output.print_warning(
-          "#{attr} case mismatch: context had '#{existing}', config set '#{configured}'. " \
-          'Check your ConsoleKit tenant configuration.'
-        )
-      end
-
-      def handle_error?(error, key)
-        self.configuration_success = false
-        Output.print_error("Failed to configure tenant '#{key}': #{error.message}")
+      def print_error_details(error, key)
+        message = Connections::DiagnosticHelpers.scrub(error.message)
+        Output.print_error("Failed to configure tenant '#{key}': #{message}")
         Output.print_backtrace(error)
-        false
+        nil
       end
     end
   end

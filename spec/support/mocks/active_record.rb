@@ -1,8 +1,273 @@
 # frozen_string_literal: true
 
-# Mock for ApplicationRecord to support testing
-class ApplicationRecord
-  def self.establish_connection(*); end
-  def self.connection; end
-  def self.connection_pool; end
+# Stand-ins for the ActiveRecord APIs the SQL connection handler actually talks
+# to. Only those APIs are modelled, and they are modelled the way Rails 6.1-8.0
+# behaves: `connecting_to` pushes onto a fiber-local stack, `establish_connection`
+# replaces (and disconnects) the pool registered for the current owner/role/shard,
+# and pools expose a `db_config` carrying `env_name`, `name` and `adapter`.
+module ActiveRecordMock
+  # Raised when no pool is registered for the current owner/role/shard.
+  class ConnectionNotEstablished < StandardError; end
+
+  # Raised when a name cannot be found in `configurations`.
+  class AdapterNotSpecified < StandardError; end
+
+  DbConfig = Struct.new(:env_name, :name, :adapter, keyword_init: true)
+
+  # Rails 6.0 and earlier named this attribute `spec_name`; 6.1 renamed it to
+  # `name`. Only the reader differs, which is the difference SqlStrategy
+  # feature-detects.
+  LegacyDbConfig = Struct.new(:env_name, :spec_name, :adapter, keyword_init: true)
+
+  # Adapter connection stand-in. Records every statement it is asked to run so
+  # specs can prove that a code path performed no query.
+  class Connection
+    attr_reader :adapter_name, :statements
+
+    def initialize(adapter_name: 'PostgreSQL', version: 'PostgreSQL 16.1 on aarch64')
+      @adapter_name = adapter_name
+      @version = version
+      @statements = []
+    end
+
+    def execute(sql) = @statements << sql
+
+    def select_value(sql)
+      @statements << sql
+      @version
+    end
+  end
+
+  # Connection pool bound to a single database configuration.
+  class Pool
+    attr_reader :db_config, :size, :disconnects
+
+    def initialize(db_config, size: 5)
+      @db_config = db_config
+      @size = size
+      @disconnects = 0
+    end
+
+    def disconnect! = @disconnects += 1
+  end
+
+  # `database.yml` stand-in supporting the `configs_for(env_name:)` lookup.
+  class Configurations
+    def initialize(configs) = @configs = configs
+    def configs_for(env_name:) = @configs.select { |config| config.env_name == env_name }
+  end
+
+  # Pools keyed by [owner, role, shard], exactly as ActiveRecord keys them.
+  class ConnectionHandler
+    attr_reader :disconnects
+
+    def initialize
+      @pools = {}
+      @disconnects = 0
+    end
+
+    def retrieve_connection_pool(owner, role:, shard:) = @pools[[owner, role, shard]]
+
+    def register(owner, db_config, role:, shard:) = @pools[[owner, role, shard]] = Pool.new(db_config)
+
+    # Mirrors ActiveRecord: the pool is unregistered, so the owner is back to
+    # having none for that role/shard at all.
+    def remove_connection_pool(owner, role:, shard:)
+      @pools.delete([owner, role, shard])&.tap(&:disconnect!)
+    end
+
+    # Mirrors ActiveRecord: the replaced pool is removed and disconnected.
+    def establish_connection(owner, db_config, role:, shard:)
+      existing = @pools[[owner, role, shard]]
+      if existing
+        existing.disconnect!
+        @disconnects += 1
+      end
+      register(owner, db_config, role: role, shard: shard)
+    end
+  end
+
+  # Shard-aware base class, mirroring Rails 6.1+ `ActiveRecord::Base`.
+  class Base
+    class << self
+      attr_accessor :configurations, :connection_handler, :connection_specification_name, :env_name
+
+      def default_shard = :default
+      def default_role = :writing
+      def connected_to_stack = @connected_to_stack ||= []
+
+      def connecting_to(role: default_role, shard: default_shard, prevent_writes: false)
+        connected_to_stack << { role: role, shard: shard, prevent_writes: prevent_writes, klasses: [self] }
+      end
+
+      # Rails' block form. The frame is popped in an `ensure` BY POSITION, not
+      # by identity, so the block removes whatever frame happens to be on top
+      # when it exits - including one something else pushed inside it.
+      def connected_to(role: default_role, shard: default_shard, prevent_writes: false, &block)
+        raise ArgumentError, '`connected_to` requires a block' unless block
+
+        with_frame(role: role, shard: shard, prevent_writes: prevent_writes, &block)
+      end
+
+      def with_frame(role:, shard:, prevent_writes:)
+        connecting_to(role: role, shard: shard, prevent_writes: prevent_writes)
+        yield
+      ensure
+        connected_to_stack.pop
+      end
+
+      def current_shard = connected_to_stack.reverse_each.find { |entry| entry[:shard] }&.fetch(:shard) || default_shard
+      def current_role = connected_to_stack.reverse_each.find { |entry| entry[:role] }&.fetch(:role) || default_role
+
+      def connection_pool
+        pool = connection_handler.retrieve_connection_pool(
+          connection_specification_name, role: current_role, shard: current_shard
+        )
+        pool || raise(ConnectionNotEstablished, 'No connection pool for the current role/shard')
+      end
+
+      def establish_connection(config_name = nil)
+        connection_handler.establish_connection(connection_specification_name, resolve_config(config_name),
+                                                role: current_role, shard: current_shard)
+      end
+
+      def connection = @connection ||= Connection.new
+
+      def resolve_config(config_name)
+        env_configs = configurations.configs_for(env_name: env_name)
+        name = (config_name || env_configs.first&.name).to_s
+        env_configs.find { |config| config.name == name } ||
+          raise(AdapterNotSpecified, "No database configuration named #{name}")
+      end
+    end
+  end
+
+  # A base class exposing none of Rails' shard APIs, so only the
+  # `establish_connection` fallback is possible.
+  class PlainBase
+    class << self
+      attr_accessor :configurations, :env_name
+      attr_reader :connection_pool
+
+      def establish_connection(config_name = nil)
+        @connection_pool&.disconnect!
+        @connection_pool = Pool.new(resolve_config(config_name))
+      end
+
+      # Rails' `remove_connection`: the pool is disconnected and forgotten, so
+      # the class is back to having none at all.
+      def remove_connection
+        @connection_pool&.disconnect!
+        @connection_pool = nil
+      end
+
+      # Puts the pool back on the first configuration without going through
+      # `establish_connection`, which examples routinely stub.
+      def reset_connection! = @connection_pool = Pool.new(resolve_config(nil))
+
+      def connection = @connection ||= Connection.new
+
+      def resolve_config(config_name)
+        env_configs = configurations.configs_for(env_name: env_name)
+        name = (config_name || env_configs.first&.name).to_s
+        env_configs.find { |config| config.name == name } ||
+          raise(AdapterNotSpecified, "No database configuration named #{name}")
+      end
+    end
+  end
+
+  class << self
+    # Builds a fresh, fully isolated shard-aware base class.
+    #   configs: db_config names present in database.yml for `env`
+    #   shards:  subset of those names also registered via `connects_to shards:`
+    def sharded_base(configs:, shards: [], env: 'test', owner: 'ApplicationRecord')
+      klass = Class.new(Base)
+      prepare(klass, configs, env, owner)
+      register_pool(klass, configs.first, :default)
+      shards.each { |name| register_pool(klass, name, name.to_sym) }
+      klass
+    end
+
+    # Builds a shard-aware base class whose pools have never been registered.
+    # Rails connects lazily, so an application that has booted but not yet run a
+    # query has exactly this shape: `configurations` and `connection_handler`
+    # are set, and `connection_pool` raises ConnectionNotEstablished.
+    def unconnected_sharded_base(configs:, env: 'test', owner: 'ApplicationRecord')
+      klass = Class.new(Base)
+      prepare(klass, configs, env, owner)
+      klass
+    end
+
+    # Builds a base class whose database configuration predates the Rails 6.1
+    # `spec_name` -> `name` rename. The pool is registered directly, because
+    # `establish_connection` resolves configurations by the new name.
+    def legacy_config_base(spec_name:, env: 'test', owner: 'ApplicationRecord')
+      config = LegacyDbConfig.new(env_name: env, spec_name: spec_name, adapter: 'postgresql')
+      klass = Class.new(Base)
+      prepare(klass, [], env, owner)
+      klass.configurations = Configurations.new([config])
+      klass.connection_handler.register(owner, config, role: :writing, shard: :default)
+      klass
+    end
+
+    # The same, before anything has established its pool.
+    def unconnected_plain_base(configs:, env: 'test')
+      klass = Class.new(PlainBase)
+      klass.env_name = env
+      klass.configurations = configurations(configs, env)
+      klass
+    end
+
+    # Builds a fresh base class without any native shard API.
+    def plain_base(configs:, env: 'test')
+      klass = Class.new(PlainBase)
+      klass.env_name = env
+      klass.configurations = configurations(configs, env)
+      klass.establish_connection
+      klass
+    end
+
+    def configurations(names, env) = Configurations.new(names.map { |name| db_config(env, name) })
+    def db_config(env, name) = DbConfig.new(env_name: env, name: name.to_s, adapter: 'postgresql')
+
+    private
+
+    def prepare(klass, configs, env, owner)
+      klass.env_name = env
+      klass.configurations = configurations(configs, env)
+      klass.connection_handler = ConnectionHandler.new
+      klass.connection_specification_name = owner
+    end
+
+    def register_pool(klass, config_name, shard)
+      klass.connection_handler.register(klass.connection_specification_name, config_for(klass, config_name),
+                                        role: :writing, shard: shard)
+    end
+
+    def config_for(klass, name)
+      klass.configurations.configs_for(env_name: klass.env_name).find { |config| config.name == name.to_s }
+    end
+  end
+end
+
+# Default `ApplicationRecord` for the whole suite.
+#
+# SqlConnectionHandler#verify! proves a switch landed by comparing the shard it
+# asked for against the db_config name the live connection pool resolves to, so
+# the stand-in has to carry that identity honestly: `establish_connection(:x)`
+# really does move the pool onto the `x` configuration, and reading it back is
+# the only thing that makes #verify! pass. The declared configurations are the
+# suite's own `database.yml`.
+ApplicationRecord = ActiveRecordMock.plain_base(configs: %w[primary shard_acme shard_globex])
+
+module ActiveRecordMock
+  # Stable handle on the default base class, so its connection state can be
+  # reset between examples even while `stub_const` swaps the constant out.
+  DEFAULT_BASE = ApplicationRecord
+
+  class << self
+    # Deliberately bypasses `establish_connection`: examples stub it (sometimes
+    # to raise), and this runs while those stubs are still installed.
+    def reset_default_base! = DEFAULT_BASE.reset_connection!
+  end
 end

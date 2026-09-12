@@ -16,64 +16,8 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   let(:handler) { described_class.new(context) }
 
   before do
-    allow(Mongoid).to receive(:override_database)
-    allow(Mongoid).to receive(:override_client)
-    allow(Mongoid::Config).to receive(:clients).and_return({})
-  end
-
-  describe '#connect' do
-    it 'calls override_database when db is not a named client' do
-      handler.connect
-      expect(Mongoid).to have_received(:override_database).with('mongo_foo')
-    end
-
-    context 'when tenant_mongo_db matches a named Mongoid client' do
-      before { allow(Mongoid::Config).to receive(:clients).and_return({ 'mongo_foo' => {} }) }
-
-      it 'calls override_client with the client name' do
-        handler.connect
-        expect(Mongoid).to have_received(:override_client).with('mongo_foo')
-      end
-
-      it 'does not call override_database' do
-        handler.connect
-        expect(Mongoid).not_to have_received(:override_database)
-      end
-    end
-
-    context 'when tenant_mongo_db is empty' do
-      let(:context) { instance_double(DummyContext, tenant_mongo_db: '') }
-
-      it 'resets override_database to nil' do
-        handler.connect
-        expect(Mongoid).to have_received(:override_database).with(nil)
-      end
-
-      it 'resets override_client to nil' do
-        handler.connect
-        expect(Mongoid).to have_received(:override_client).with(nil)
-      end
-    end
-
-    it 'raises error on connection issues' do
-      allow(Mongoid).to receive(:override_database).and_raise('mongo error')
-      expect { handler.connect }.to raise_error('mongo error')
-    end
-
-    context 'when Mongoid does not support override methods' do
-      before do
-        mongo_class = Class.new
-        stub_const('Mongoid', mongo_class)
-      end
-
-      it 'prints a warning but does not raise error' do
-        allow(ConsoleKit::Output).to receive(:print_warning)
-
-        handler.connect
-
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(/override/)
-      end
-    end
+    allow(Mongoid).to receive(:override_database).and_call_original
+    allow(Mongoid).to receive(:override_client).and_call_original
   end
 
   describe '#available?' do
@@ -87,45 +31,272 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  describe '#diagnostics' do
-    context 'when MongoDB is available' do
-      let(:database) do
-        instance_double(
-          Mongoid::Database,
-          name: 'mongo_foo'
-        )
-      end
-      let(:client) { instance_double(Mongoid::Client, use: double(database: database), database: database) }
-      let(:build_info_result) { [{ 'version' => '6.0.0' }] }
+  describe '#connect! (regressions)' do
+    context 'when target names a configured Mongoid client (Mongoid Wrong Database Bug regression)' do
+      before { Mongoid::Config.clients = { 'mongo_foo' => {} } }
 
+      it 'calls override_client with the client name' do
+        handler.connect!('mongo_foo')
+        expect(Mongoid).to have_received(:override_client).with('mongo_foo')
+      end
+
+      it 'does not call override_database' do
+        handler.connect!('mongo_foo')
+        expect(Mongoid).not_to have_received(:override_database)
+      end
+    end
+
+    context 'when target is a plain database name' do
+      it 'calls override_database with the database name' do
+        handler.connect!('mongo_foo')
+        expect(Mongoid).to have_received(:override_database).with('mongo_foo')
+      end
+
+      it 'does not call override_client' do
+        handler.connect!('mongo_foo')
+        expect(Mongoid).not_to have_received(:override_client)
+      end
+    end
+
+    context 'when target is nil (reset)' do
+      it 'clears the client override' do
+        handler.connect!(nil)
+        expect(Mongoid).to have_received(:override_client).with(nil)
+      end
+
+      it 'clears the database override' do
+        handler.connect!(nil)
+        expect(Mongoid).to have_received(:override_database).with(nil)
+      end
+    end
+
+    it 'propagates a real failure instead of swallowing it into a warning' do
+      allow(Mongoid).to receive(:override_database).and_raise('mongo error')
+      expect { handler.connect!('mongo_foo') }.to raise_error('mongo error')
+    end
+  end
+
+  describe '#prepare' do
+    context 'when Mongoid does not support client overrides at all' do
+      before { stub_const('Mongoid', Class.new) }
+
+      it 'raises UnsupportedBackendError' do
+        expect { handler.prepare('mongo_foo') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+    end
+
+    context 'when Mongoid supports overrides' do
+      it 'does not call override_client' do
+        handler.prepare('mongo_foo')
+        expect(Mongoid).not_to have_received(:override_client)
+      end
+
+      it 'does not call override_database' do
+        handler.prepare('mongo_foo')
+        expect(Mongoid).not_to have_received(:override_database)
+      end
+    end
+  end
+
+  describe '#snapshot' do
+    before do
+      Mongoid::Threaded.client_override = 'client_a'
+      Mongoid::Threaded.database_override = 'db_a'
+    end
+
+    it 'captures both the current client and database overrides' do
+      expect(handler.snapshot).to eq(client: 'client_a', database: 'db_a')
+    end
+  end
+
+  describe '#restore' do
+    it 'restores overrides to their previous non-nil values' do
+      handler.connect!('mongo_bar')
+      handler.restore(client: 'client_a', database: 'db_a')
+      expect([Mongoid::Threaded.client_override, Mongoid::Threaded.database_override]).to eq(%w[client_a db_a])
+    end
+
+    it 'restores overrides back to nil when the snapshot was nil' do
+      handler.connect!('mongo_bar')
+      handler.restore(client: nil, database: nil)
+      expect([Mongoid::Threaded.client_override, Mongoid::Threaded.database_override]).to eq([nil, nil])
+    end
+
+    context 'when already switched to a named client' do
       before do
-        allow(database).to receive(:command).with(ping: 1)
-        allow(database).to receive(:command).with(buildInfo: 1).and_return(build_info_result)
-        allow(Mongoid).to receive(:default_client).and_return(client)
+        Mongoid::Config.clients = { 'client_a' => {} }
+        handler.connect!('client_a')
+      end
+
+      it 'round-trips: snapshot, connect elsewhere, restore returns to the previous identity' do
+        snap = handler.snapshot
+        handler.connect!('mongo_other')
+        handler.restore(snap)
+        expect([Mongoid::Threaded.client_override, Mongoid::Threaded.database_override]).to eq(['client_a', nil])
+      end
+    end
+  end
+
+  describe 'repeated switches' do
+    it 'end on the last target identity after A -> B -> A' do
+      handler.connect!('mongo_a')
+      handler.connect!('mongo_b')
+      handler.connect!('mongo_a')
+      expect { handler.verify!('mongo_a') }.not_to raise_error
+    end
+  end
+
+  describe '#verify!' do
+    context 'when target names a configured Mongoid client' do
+      before { Mongoid::Config.clients = { 'client_a' => {}, 'client_b' => {} } }
+
+      it 'succeeds when the effective client matches the target' do
+        handler.connect!('client_a')
+        expect { handler.verify!('client_a') }.not_to raise_error
+      end
+
+      it 'raises ConnectionVerificationError when the effective client differs from the target' do
+        handler.connect!('client_a')
+        expect { handler.verify!('client_b') }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+    end
+
+    context 'when target is a plain database name' do
+      it 'succeeds when the effective database matches the target' do
+        handler.connect!('mongo_foo')
+        expect { handler.verify!('mongo_foo') }.not_to raise_error
+      end
+
+      it 'raises ConnectionVerificationError when the effective database differs from the target' do
+        handler.connect!('mongo_foo')
+        expect { handler.verify!('mongo_bar') }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+    end
+  end
+
+  # Clearing the tenant has to be PROVABLE, not assumed: an override left
+  # behind means the console is still pointed at the previous tenant's data
+  # while reporting itself clean.
+  describe '#verify! after a reset that did not fully clear' do
+    it 'passes when both overrides really are gone' do
+      expect { handler.verify!(nil) }.not_to raise_error
+    end
+
+    context 'when a database override was left behind' do
+      before { Mongoid::Threaded.database_override = 'acme_db' }
+
+      it 'raises ConnectionVerificationError instead of reporting a clean reset' do
+        expect { handler.verify!(nil) }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+
+      it 'names the override that is still set' do
+        expect { handler.verify!(nil) }.to raise_error(/acme_db/)
+      end
+    end
+
+    context 'when a client override was left behind' do
+      before { Mongoid::Threaded.client_override = 'acme_client' }
+
+      it 'raises ConnectionVerificationError' do
+        expect { handler.verify!(nil) }.to raise_error(ConsoleKit::ConnectionVerificationError)
+      end
+
+      it 'names the client that is still set' do
+        expect { handler.verify!(nil) }.to raise_error(/acme_client/)
+      end
+    end
+  end
+
+  # Every Mongoid API this handler touches beyond `override_database` is
+  # feature-detected. A facade that offers nothing else can still be cleared and
+  # restored, but it cannot be read back - so a switch to a tenant on it is
+  # refused up front rather than applied and then found unverifiable.
+  describe 'a Mongoid that exposes only override_database' do
+    let(:legacy) { MongoidMocks::DatabaseOverrideOnly }
+
+    before { stub_const('Mongoid', legacy) }
+
+    it 'refuses a tenant target it would not be able to verify' do
+      expect { handler.prepare('mongo_foo') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'still clears through the database override alone' do
+      handler.connect!(nil)
+      expect(legacy.overrides).to eq([nil])
+    end
+
+    it 'restores through the database override alone' do
+      handler.restore(client: 'client_a', database: 'db_a')
+      expect(legacy.overrides).to eq(['db_a'])
+    end
+
+    it 'reports no client override, because there is no way to read one' do
+      expect(handler.snapshot[:client]).to be_nil
+    end
+
+    it 'reports no database override for the same reason' do
+      expect(handler.snapshot[:database]).to be_nil
+    end
+  end
+
+  describe '#diagnostics' do
+    context 'when MongoDB is available at level: :basic' do
+      let(:database) { instance_double(Mongoid::Database, name: 'mongo_foo') }
+      let(:client) { instance_double(Mongoid::Client, database: database) }
+
+      before { allow(Mongoid).to receive(:default_client).and_return(client) }
+
+      it 'performs no network command' do
+        allow(database).to receive(:command)
+        handler.diagnostics(level: :basic)
+        expect(database).not_to have_received(:command)
       end
 
       it 'returns name MongoDB' do
-        expect(handler.diagnostics[:name]).to eq('MongoDB')
+        expect(handler.diagnostics(level: :basic)[:name]).to eq('MongoDB')
       end
 
       it 'returns status :connected' do
-        expect(handler.diagnostics[:status]).to eq(:connected)
+        expect(handler.diagnostics(level: :basic)[:status]).to eq(:connected)
+      end
+
+      it 'returns nil latency_ms' do
+        expect(handler.diagnostics(level: :basic)[:latency_ms]).to be_nil
+      end
+
+      it 'includes the resolved database identity in details' do
+        expect(handler.diagnostics(level: :basic)[:details][:database]).to eq('mongo_foo')
+      end
+    end
+
+    context 'when MongoDB is available at level: :full' do
+      let(:database) { instance_double(Mongoid::Database, name: 'mongo_foo') }
+      let(:client) { instance_double(Mongoid::Client, database: database) }
+
+      before do
+        allow(Mongoid).to receive(:default_client).and_return(client)
+        allow(database).to receive(:command).with(ping: 1)
+        allow(database).to receive(:command).with(buildInfo: 1).and_return([{ 'version' => '6.0.0' }])
+      end
+
+      it 'returns name MongoDB' do
+        expect(handler.diagnostics(level: :full)[:name]).to eq('MongoDB')
+      end
+
+      it 'returns status :connected' do
+        expect(handler.diagnostics(level: :full)[:status]).to eq(:connected)
       end
 
       it 'returns a numeric latency_ms' do
-        expect(handler.diagnostics[:latency_ms]).to be_a(Numeric)
-      end
-
-      it 'returns details with database and version keys' do
-        expect(handler.diagnostics[:details]).to include(:database, :version)
+        expect(handler.diagnostics(level: :full)[:latency_ms]).to be_a(Numeric)
       end
 
       it 'includes the database name in details' do
-        expect(handler.diagnostics[:details][:database]).to eq('mongo_foo')
+        expect(handler.diagnostics(level: :full)[:details][:database]).to eq('mongo_foo')
       end
 
       it 'includes the server version in details' do
-        expect(handler.diagnostics[:details][:version]).to eq('6.0.0')
+        expect(handler.diagnostics(level: :full)[:details][:version]).to eq('6.0.0')
       end
     end
 
@@ -149,29 +320,37 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
     end
 
+    # A bug inside ConsoleKit must reach the operator as the bug it is. The
+    # handler's own rescue used to catch it first, so `Runner.failed_row` never
+    # got the chance to re-raise it and the row described a healthy backend as
+    # broken instead.
+    context 'when :full diagnostics hit a bug rather than an unreachable database' do
+      before { allow(Mongoid).to receive(:default_client).and_return(nil) }
+
+      it 'surfaces the bug instead of laundering it into an error row' do
+        expect { handler.diagnostics(level: :full) }.to raise_error(NoMethodError)
+      end
+    end
+
     context 'when the connection raises an error' do
       before do
-        stub_const('Mongoid', Class.new do
-          def self.override_database(*); end
-          def self.default_client; end
-        end)
         allow(Mongoid).to receive(:default_client).and_raise(StandardError, 'auth failed')
       end
 
       it 'returns status :error' do
-        expect(handler.diagnostics[:status]).to eq(:error)
+        expect(handler.diagnostics(level: :full)[:status]).to eq(:error)
       end
 
       it 'returns name MongoDB' do
-        expect(handler.diagnostics[:name]).to eq('MongoDB')
+        expect(handler.diagnostics(level: :full)[:name]).to eq('MongoDB')
       end
 
       it 'returns nil latency_ms' do
-        expect(handler.diagnostics[:latency_ms]).to be_nil
+        expect(handler.diagnostics(level: :full)[:latency_ms]).to be_nil
       end
 
       it 'includes the error message in details' do
-        expect(handler.diagnostics[:details][:error]).to include('auth failed')
+        expect(handler.diagnostics(level: :full)[:details][:error]).to include('auth failed')
       end
     end
   end
@@ -179,6 +358,97 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   describe 'context attribute access' do
     it 'reads tenant_mongo_db from context' do
       expect(handler.send(:context_attribute, :tenant_mongo_db)).to eq('mongo_foo')
+    end
+  end
+
+  describe 'the shared connection handler contract' do
+    include_context 'with the MongoDB handler contract'
+
+    it_behaves_like 'a connection handler'
+  end
+
+  describe 'a Mongoid whose state cannot be read back' do
+    # A Mongoid facade can expose override_database while exposing no
+    # ::Threaded or ::Config to read the override back from. ConsoleKit cannot
+    # prove a switch landed on such a client, and cannot snapshot it either - so
+    # it must refuse before it mutates anything, the way the Redis handler
+    # refuses a client it cannot select on.
+    subject(:handler) { described_class.new(nil) }
+
+    before { stub_const('Mongoid', MongoidMocks::DatabaseOverrideOnly) }
+
+    it 'refuses at prepare rather than failing later at verify' do
+      expect { handler.prepare('acme_db') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'names the backend in the refusal' do
+      expect { handler.prepare('acme_db') }.to raise_error(/MongoDB/)
+    end
+
+    context 'when it has already refused' do
+      before do
+        handler.prepare('acme_db')
+      rescue ConsoleKit::UnsupportedBackendError
+        nil
+      end
+
+      it 'mutated nothing' do
+        expect(MongoidMocks::DatabaseOverrideOnly.overrides).to be_empty
+      end
+    end
+
+    # A reset writes too, and its snapshot is just as empty: clearing an
+    # override that could not be read means a later backend failure restores
+    # nil over whatever the previous tenant left behind.
+    it 'refuses a reset, which would also write over an override it cannot read' do
+      expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+  end
+
+  # #connect! routes a target naming a configured client to `override_client`
+  # and everything else to `override_database`, so the setter the target will
+  # actually use is the one #prepare has to find. Checking `override_database`
+  # for every target let a client target through to a NoMethodError raised
+  # mid-transaction.
+  describe 'a Mongoid without the client override setter' do
+    before do
+      stub_const('Mongoid', MongoidMocks::WithoutClientOverride)
+      Mongoid::Config.clients = { 'client_a' => {} }
+    end
+
+    it 'refuses a target naming a configured client' do
+      expect { handler.prepare('client_a') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'names the backend in the refusal' do
+      expect { handler.prepare('client_a') }.to raise_error(/MongoDB/)
+    end
+
+    it 'still prepares a plain database target, which it can set' do
+      expect { handler.prepare('acme_db') }.not_to raise_error
+    end
+  end
+
+  # The client override is half of the snapshot. A Mongoid that can be written
+  # but not read there snapshots nil, so a rollback calls override_client(nil)
+  # and clears the override the console was running under instead of restoring
+  # it - whichever setter the target itself uses.
+  describe 'a Mongoid whose client override cannot be read back' do
+    before do
+      stub_const('Mongoid::Threaded', MongoidMocks::WriteOnlyClientOverride)
+      Mongoid::Config.clients = { 'client_a' => {} }
+    end
+
+    it 'refuses a target naming a configured client' do
+      expect { handler.prepare('client_a') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'refuses a plain database target, whose rollback writes the client override too' do
+      expect { handler.prepare('acme_db') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'refuses a reset for the same reason' do
+      expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
     end
   end
 end

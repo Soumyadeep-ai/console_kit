@@ -41,12 +41,24 @@ RSpec.configure do |config|
     mocks.verify_partial_doubles = true
   end
 
+  # Every piece of state ConsoleKit keeps outside a single example. Leaking any
+  # of it makes examples order-dependent.
+  #
+  # A handler class an example declares is removed from HandlerRegistry by that
+  # example itself: registration is explicit (a handler joins by calling
+  # `backend`), so a class the registry never heard of cannot poison a later
+  # example and nothing here has to wait for it to be collected.
   config.after do
     ConsoleKit.reset_configuration!
+    ConsoleKit::StateStore.clear!
+    ConsoleKit::Instrumentation.clear!
+    ConsoleKit::Connections::RedisConnectionHandler.isolation_warned = nil
+    ConsoleKit::Connections::ElasticsearchPrefixRegistry.record(nil)
+    ElasticsearchMocks.reset!
+    ActiveRecordMock.reset_default_base!
     Thread.current[:console_kit_silent] = nil
-    Thread.current[:console_kit_configuration_success] = nil
-    Thread.current[:console_kit_current_tenant_key] = nil
-    Thread.current[:console_kit_current_tenant] = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
+    Thread.current[:console_kit_elasticsearch_prefix_conflict] = nil
+    Thread.current[:console_kit_dropped_reported] = nil
   end
 end

@@ -6,6 +6,19 @@ gem 'activerecord', '~> 6.1.0'
 gem 'activesupport', '~> 6.1.0'
 gem 'railties', '~> 6.1.0'
 
+# Ruby 3.4 and 4.0 moved these from default gems to bundled gems. Rails 7.1 and
+# later declare the ones they use; Rails 6.1 predates the change, so they have to
+# be asked for explicitly or ActiveSupport fails to load.
+if RUBY_VERSION >= '3.4'
+  gem 'base64'
+  gem 'benchmark'
+  gem 'bigdecimal'
+  gem 'drb'
+  gem 'logger'
+  gem 'mutex_m'
+  gem 'ostruct'
+end
+
 gemspec path: '..'
 
 gem 'irb'
