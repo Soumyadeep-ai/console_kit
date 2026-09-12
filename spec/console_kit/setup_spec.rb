@@ -369,12 +369,14 @@ RSpec.describe ConsoleKit::Setup do
     end
 
     context 'when a tenant is already set' do
+      let(:calls) { [] }
+
       before do
         described_class.current_tenant = 'acme'
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-        allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex')
+        allow(ConsoleKit::TenantConfigurator).to receive(:clear) { calls << :clear }
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant) { |key| calls << [:configure, key] }
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
@@ -389,13 +391,10 @@ RSpec.describe ConsoleKit::Setup do
         expect(described_class.current_tenant).to eq('globex')
       end
 
-      # rubocop:disable RSpec/MultipleExpectations, RSpec/MessageSpies
       it 'clears the old tenant configuration before setting the new one' do
-        expect(ConsoleKit::TenantConfigurator).to receive(:clear).ordered
-        expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex').ordered
         described_class.reset_current_tenant
+        expect(calls).to eq([:clear, [:configure, 'globex']])
       end
-      # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
     end
 
     context 'when user presses Ctrl+C during switch_tenant' do

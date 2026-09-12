@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require 'English'
+# ActiveSupport 6.1 reads Logger::Severity while defining its own logger and
+# does not require logger itself, so loading it first is what keeps 6.1 working.
+require 'logger'
 # The base must load before any core_ext: a leaf file such as
 # time/calculations pulls in active_support/duration, which reaches for
 # ActiveSupport.deprecator and only finds it once the base is loaded.
