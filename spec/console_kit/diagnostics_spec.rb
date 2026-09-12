@@ -8,13 +8,19 @@ require 'spec_helper'
 class DiagnosticsSpecHandler
   attr_reader :backend_key, :display_name
 
-  def initialize(backend_key, &block)
+  def initialize(backend_key, identity: nil, &block)
     @backend_key = backend_key
     @display_name = backend_key.to_s
+    @identity = identity
     @block = block
   end
 
   def diagnostics(level:) = @block.call(level)
+
+  # What a cached :full row's freshness is keyed on. A Proc is re-read on every
+  # call, so an example can move the backend - or break the read - between two
+  # renders.
+  def diagnostic_identity = @identity.is_a?(Proc) ? @identity.call : @identity
 
   def safe_diagnostics(level:, timeout: ConsoleKit::Diagnostics::DEFAULT_TIMEOUT)
     ConsoleKit::Diagnostics::Runner.call(self, timeout: timeout, level: level)
@@ -53,7 +59,7 @@ RSpec.describe ConsoleKit::Diagnostics do
   # without relying on instance variables. Only :full is cached, so that is the
   # level every cache example uses unless it is about :basic specifically.
   def counting_fetch(backend_key, counter, row_proc = -> { connected_row }, level: :full)
-    described_class::Cache.fetch_row(backend_key, level) do
+    described_class::Cache.fetch_row(DiagnosticsSpecHandler.new(backend_key), level) do
       counter[0] += 1
       row_proc.call
     end
@@ -285,6 +291,22 @@ RSpec.describe ConsoleKit::Diagnostics do
         expect(row[:details][:error]).to eq('boom')
       end
     end
+
+    # Neither a StandardError nor a ScriptError, so the worker unwinds past the
+    # runner's rescue. It used to leave the job outcome nil, which the caller
+    # reads as "did not finish in time" - reporting a backend that blew up as a
+    # backend that was merely slow.
+    describe 'a handler that fails with something the runner does not rescue' do
+      let(:handler) { failing_handler(:unrescued_backend, Exception.new('worker died')) }
+
+      it 'does not report it as a timeout' do
+        expect(described_class::Runner.call(handler, level: :full)[:status]).not_to eq(:timeout)
+      end
+
+      it 'reports the failure it actually hit' do
+        expect(described_class::Runner.call(handler, level: :full)[:details][:error]).to eq('worker died')
+      end
+    end
   end
 
   describe 'the short-TTL cache' do
@@ -430,10 +452,79 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
+  # The same defect at the level that IS cached. Freshness keyed on this
+  # thread's TenantState cannot see a foreign thread move a process-global
+  # attribute, so the cached :full row went on reporting a prefix the process
+  # had already left - which is exactly why :basic stopped being cached.
+  describe 'a cached :full row whose process-global backend was moved by another thread' do
+    let(:handler) { ConsoleKit::Connections::ElasticsearchConnectionHandler.new(Class.new) }
+
+    before do
+      ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme')
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([handler])
+      Elasticsearch::Model.index_name_prefix = 'acme_es'
+      described_class.run(level: :full)
+      Thread.new { Elasticsearch::Model.index_name_prefix = 'globex_es' }.join
+    end
+
+    it 'reports the prefix the backend is actually on' do
+      expect(described_class.run(level: :full).first[:details][:prefix]).to eq('globex_es')
+    end
+  end
+
+  # Freshness reads identity out of memory, so re-reading it on every render
+  # must not turn into re-asking the backend: sparing the backends is the whole
+  # reason this cache exists.
+  describe 'a cached :full row whose backend has not moved' do
+    let(:handler) { ConsoleKit::Connections::ElasticsearchConnectionHandler.new(Class.new) }
+
+    before do
+      ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme')
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([handler])
+      Elasticsearch::Model.index_name_prefix = 'acme_es'
+      2.times { described_class.run(level: :full) }
+    end
+
+    it 'pings the cluster once rather than on every render' do
+      expect(Elasticsearch::Model.client.ping_calls).to eq(1)
+    end
+  end
+
+  # An identity ConsoleKit cannot read is not evidence that the row is still
+  # true, and the dashboard must not blow up over it either.
+  describe 'a backend whose identity cannot be read' do
+    let(:counter) { [0] }
+
+    def unreadable_fetch
+      handler = DiagnosticsSpecHandler.new(:unreadable_identity_backend, identity: -> { raise 'cannot read' })
+      described_class::Cache.fetch_row(handler, :full) do
+        counter[0] += 1
+        connected_row
+      end
+    end
+
+    before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme') }
+
+    it 'does not raise into the caller' do
+      expect { unreadable_fetch }.not_to raise_error
+    end
+
+    it 'refetches rather than serving a row it cannot prove is current' do
+      2.times { unreadable_fetch }
+      expect(counter.first).to eq(2)
+    end
+
+    it 'still surfaces a programming error in the identity read' do
+      handler = DiagnosticsSpecHandler.new(:buggy_identity_backend, identity: -> { raise NoMethodError })
+      expect { described_class::Cache.fetch_row(handler, :full) { connected_row } }.to raise_error(NoMethodError)
+    end
+  end
+
   describe 'thread isolation of the cache' do
     def fetch_isolated_row(tenant_key, name)
       ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: tenant_key)
-      described_class::Cache.fetch_row(:thread_iso_backend, :full) { connected_row(name) }
+      handler = DiagnosticsSpecHandler.new(:thread_iso_backend)
+      described_class::Cache.fetch_row(handler, :full) { connected_row(name) }
     end
 
     it "does not use another thread's cached row for this thread's tenant" do

@@ -86,6 +86,34 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
+    # A prefix is a name, not an arbitrary object. Coercing the value with
+    # `#to_s` before checking it let an Integer through as "5" and an Array as
+    # "[:acme]" - both legal index-name prefixes once stringified, and both
+    # written straight to `index_name_prefix`.
+    context 'with a target that is not a name at all' do
+      it 'rejects an Integer rather than coercing it' do
+        expect { handler.prepare(5) }.to raise_error(ConsoleKit::ConfigurationError)
+      end
+
+      it 'rejects an Array rather than coercing it' do
+        expect { handler.prepare([:acme]) }.to raise_error(ConsoleKit::ConfigurationError)
+      end
+
+      it 'rejects a Hash rather than coercing it' do
+        expect { handler.prepare({ prefix: 'acme' }) }.to raise_error(ConsoleKit::ConfigurationError)
+      end
+
+      # Configuration#validate! reports this reason without ever calling
+      # #prepare, so the rule has to be readable there too.
+      it 'says what it expected' do
+        expect(described_class.target_error(5)).to eq('expected a String or Symbol')
+      end
+
+      it 'still accepts a Symbol' do
+        expect(described_class.target_error(:acme)).to be_nil
+      end
+    end
+
     context 'when the prefix is valid' do
       before do
         allow(Elasticsearch::Model).to receive(:index_name_prefix=)

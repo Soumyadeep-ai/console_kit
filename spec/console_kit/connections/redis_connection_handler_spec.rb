@@ -95,6 +95,35 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
+  # The probe is the only thing in a switch that spawns a thread, and it used to
+  # be memoised per adapter - which is per handler instance, which is per switch.
+  # Every switch, and every Rails `reload!` through the Railtie's to_prepare,
+  # therefore paid for a fresh thread inside the transactional #connect!.
+  describe 'the isolation probe across repeated switches' do
+    let(:spawned) { [0] }
+
+    before do
+      allow(Thread).to receive(:new).and_wrap_original do |original, *args, &block|
+        spawned[0] += 1
+        original.call(*args, &block)
+      end
+    end
+
+    it 'spawns one probe thread however many switches run' do
+      5.times { |db| described_class.new(context).connect!(db + 1) }
+      expect(spawned.first).to eq(1)
+    end
+
+    # The verdict describes the client the application hands back, so it is only
+    # reusable while that is still the same object.
+    it 'probes again when the application hands back a different client' do
+      described_class.new(context).isolation_model
+      Redis.reset!
+      described_class.new(context).isolation_model
+      expect(spawned.first).to eq(2)
+    end
+  end
+
   # A bug inside ConsoleKit must never be laundered into an isolation VERDICT the
   # rest of the system then trusts, and a probe that could not run must not claim
   # :process_global. Genuine client failures stay :none, exactly as before.
@@ -108,6 +137,24 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
 
       it 'surfaces it from #prepare instead of rejecting the DB as unsupported' do
         expect { handler.prepare(2) }.to raise_error(NoMethodError)
+      end
+    end
+
+    # The bug is in the client the probe THREAD resolves, so it arrives back
+    # through Thread#value rather than from the calling thread's own resolve.
+    context 'when the probe thread hits a programming error' do
+      before do
+        resolves = [0]
+        allow(Redis).to receive(:current).and_wrap_original do |original|
+          resolves[0] += 1
+          raise NoMethodError, "undefined method 'db' for nil" if resolves.first > 2
+
+          original.call
+        end
+      end
+
+      it 'surfaces the programming error instead of answering :unknown' do
+        expect { handler.isolation_model }.to raise_error(NoMethodError)
       end
     end
 

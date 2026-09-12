@@ -41,19 +41,13 @@ RSpec.configure do |config|
     mocks.verify_partial_doubles = true
   end
 
-  # The connection handler registry is `BaseConnectionHandler.descendants`, so a
-  # handler class an example builds stays discoverable by every later example
-  # until it is collected. Dropping the reference is not enough, and an `after`
-  # hook is too early: constant stubs and `let` memos still hold the class while
-  # those run. Collecting once per group keeps the registry honest without
-  # paying for a full GC on every example.
-  config.after(:context) do
-    GC.start
-  end
-
   # Every piece of state ConsoleKit keeps outside a single example. Leaking any
-  # of it makes examples order-dependent, which is exactly how the anonymous
-  # connection handlers used to poison later examples.
+  # of it makes examples order-dependent.
+  #
+  # A handler class an example declares is removed from HandlerRegistry by that
+  # example itself: registration is explicit (a handler joins by calling
+  # `backend`), so a class the registry never heard of cannot poison a later
+  # example and nothing here has to wait for it to be collected.
   config.after do
     ConsoleKit.reset_configuration!
     ConsoleKit::StateStore.clear!
@@ -65,5 +59,6 @@ RSpec.configure do |config|
     Thread.current[:console_kit_silent] = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
     Thread.current[:console_kit_elasticsearch_prefix_conflict] = nil
+    Thread.current[:console_kit_dropped_reported] = nil
   end
 end

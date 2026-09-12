@@ -105,6 +105,16 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       end
     end
 
+    # The same backend key, half-implemented in a different way: a reload can
+    # leave a handler broken for a new reason, and that is news.
+    def broken_differently
+      Class.new do
+        def self.backend_key = :half_implemented
+        def initialize(context) = @context = context
+        def available? = raise NotImplementedError, 'HalfHandler must implement #snapshot'
+      end
+    end
+
     def not_loaded
       Class.new do
         def self.backend_key = :not_loaded
@@ -141,6 +151,26 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
         dropped = []
         described_class.available_handlers(context, dropped)
         expect(dropped).to eq([:half_implemented])
+      end
+
+      # The dashboard reads the same handler list, so an unchanged broken
+      # handler reprinted this on every single render and buried whatever the
+      # operator typed `dashboard` to look at.
+      it 'says it once rather than on every call' do
+        2.times { described_class.available_handlers(context) }
+        expect(ConsoleKit::Output).to have_received(:print_warning).once
+      end
+
+      it 'still counts every drop, so the metric keeps its rate' do
+        2.times { described_class.available_handlers(context) }
+        expect(ConsoleKit::Instrumentation.counts['console_kit.handler_dropped']).to eq(2)
+      end
+
+      it 'says it again when the reason itself changes' do
+        described_class.available_handlers(context)
+        allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([broken_differently])
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output).to have_received(:print_warning).twice
       end
     end
 

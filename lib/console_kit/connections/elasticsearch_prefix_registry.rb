@@ -48,8 +48,16 @@ module ConsoleKit
           model.index_name_prefix = prefix if settable?
         end
 
-        # The prefix this thread last asked ConsoleKit for.
-        def current = synchronize { entries[Thread.current] }
+        # The prefix this thread last asked ConsoleKit for. Prunes like every
+        # other entry point: a Thread key pins everything that thread's
+        # thread-locals hold, so a dead thread's note must not survive until
+        # some later thread happens to write.
+        def current
+          synchronize do
+            prune
+            entries[Thread.current]
+          end
+        end
 
         def record(prefix)
           synchronize do

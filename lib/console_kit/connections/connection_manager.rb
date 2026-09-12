@@ -14,6 +14,7 @@ module ConsoleKit
       DROPPED_WARNING = 'was skipped because it is only half-implemented (%<reason>s). That backend will NOT be ' \
                         'switched, verified or rolled back; it is recorded on the tenant state so the switch ' \
                         'cannot report itself as fully verified.'
+      REPORTED_KEY = :console_kit_dropped_reported
 
       class << self
         # `BaseConnectionHandler.registry` is explicit registration, not
@@ -46,9 +47,27 @@ module ConsoleKit
           nil
         end
 
+        # The counter records every drop, because an operator watching the
+        # metric needs the rate. The warning is printed once per backend per
+        # reason: the dashboard reads this same handler list, so an unchanged
+        # broken handler reprinted it on every render and buried the table the
+        # operator asked for. The durable record is the key on the committed
+        # tenant state, which every verification reports again.
         def report_dropped(klass, error)
           Instrumentation.increment('console_kit.handler_dropped')
+          return unless unreported?(klass.backend_key, error.message)
+
           Output.print_warning("#{klass} #{format(DROPPED_WARNING, reason: error.message)}")
+        end
+
+        # Per thread, like every other "say this once" note ConsoleKit keeps:
+        # one console reporting a drop must not silence another thread's.
+        def unreported?(key, reason)
+          reported = Thread.current[REPORTED_KEY] ||= {}
+          return false if reported[key] == reason
+
+          reported[key] = reason
+          true
         end
 
         def handler_classes = BaseConnectionHandler.registry

@@ -19,6 +19,23 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchPrefixRegistry do
     end
   end
 
+  # Entries were pruned only where the registry is WRITTEN, so a thread that
+  # recorded a prefix and then died stayed referenced - and a Thread reference
+  # pins everything that thread's thread-locals hold - until some other thread
+  # happened to record a prefix or ask for conflicts.
+  describe 'a thread that died after recording a prefix' do
+    let(:dead_thread) { Thread.new { described_class.record('ghost') }.tap(&:join) }
+
+    before do
+      dead_thread
+      described_class.current
+    end
+
+    it 'is dropped once the registry is read' do
+      expect(described_class.send(:entries)).not_to have_key(dead_thread)
+    end
+  end
+
   describe 'a library that cannot carry a process-wide prefix' do
     context 'when elasticsearch-model is not loaded at all' do
       before { hide_const('Elasticsearch::Model') }

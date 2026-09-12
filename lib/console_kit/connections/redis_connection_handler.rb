@@ -69,6 +69,11 @@ module ConsoleKit
       def isolation_model = adapter.isolation_model
       def thread_isolated? = isolation_model == :scoped
 
+      # Under the :process_global model SELECT is shared by every thread, so the
+      # live DB index - read from the client's own cached state, with no command
+      # issued - is what a cached diagnostic row has to stay true for.
+      def diagnostic_identity = adapter.current_db
+
       # Validate/resolve only, never mutates.
       def prepare(target)
         validate_target!(target)

@@ -40,6 +40,7 @@ module ConsoleKit
               detail_label: 'ES Prefix'
 
       UNSUPPORTED = 'Elasticsearch does not expose index_name_prefix= in this version.'
+      NOT_A_NAME = 'expected a String or Symbol'
 
       class << self
         def elasticsearch_available?
@@ -54,7 +55,16 @@ module ConsoleKit
         # The one rule: a blank prefix always means "use the default", and a
         # present prefix must be a legal Elasticsearch index-name prefix. The
         # registry owns what "legal" means, since it owns the prefix itself.
-        def target_error(value) = ElasticsearchPrefixRegistry.prefix_error(value.presence&.to_s)
+        #
+        # The type check comes first because a prefix is a NAME: coercing the
+        # value with `#to_s` before checking it accepted an Integer as "5" and
+        # an Array as "[:acme]", and #connect! then wrote that straight to
+        # `index_name_prefix`.
+        def target_error(value)
+          return NOT_A_NAME unless value.nil? || value.is_a?(String) || value.is_a?(Symbol)
+
+          ElasticsearchPrefixRegistry.prefix_error(value.presence&.to_s)
+        end
       end
 
       def available? = self.class.elasticsearch_available?
@@ -95,6 +105,11 @@ module ConsoleKit
       # The prefix Elasticsearch::Model will actually use. Falls back to
       # ConsoleKit's own record when the module exposes no reader.
       def effective_prefix = registry.readable? ? registry.global : registry.current
+
+      # `index_name_prefix` is a single process-wide attribute, so any thread
+      # can move it without this one noticing. Reading it back is what keeps a
+      # cached diagnostic row from reporting a prefix the process has left.
+      def diagnostic_identity = effective_prefix
 
       def diagnostics(level: :basic)
         return unavailable_diagnostics unless available?

@@ -83,6 +83,12 @@ module ConsoleKit
 
       def restore(state) = strategy.restore(state)
 
+      # The native shard path is per-thread, but the `establish_connection`
+      # fallback replaces the base class's pool for the whole process, so the
+      # resolved pool is what a cached diagnostic row has to stay true for.
+      # `pool_details` reads configuration only and issues no query.
+      def diagnostic_identity = strategy.pool_details
+
       def diagnostics(level: :basic)
         return unavailable_diagnostics unless available?
 

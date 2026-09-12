@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'English'
 require_relative 'errors'
 require_relative 'tenant_state'
 require_relative 'instrumentation'
@@ -56,23 +57,33 @@ module ConsoleKit
       end
 
       def cached(handler, level, timeout)
-        Cache.fetch_row(handler.backend_key, level) { handler.safe_diagnostics(timeout: timeout, level: level) }
+        Cache.fetch_row(handler, level) { handler.safe_diagnostics(timeout: timeout, level: level) }
       end
     end
 
     # Short-lived, per-thread memo of :full diagnostic rows.
     #
-    # Correctness before speed: the store is a thread-local, so one thread's
-    # tenant can never leak into another thread's dashboard, and an entry is
-    # only reused while the thread is still on the very TenantState object that
-    # produced it. TenantSwitch commits a brand new TenantState on every switch,
-    # so a switch invalidates every row immediately, TTL or not.
+    # Correctness before speed. An entry is reused only while all three of these
+    # still hold:
     #
-    # Only :full is cached. :basic rows are pure local reads, so caching them
-    # buys nothing and costs correctness: freshness can only observe THIS
-    # thread's TenantState, which does not change when another thread moves a
-    # process-global backend such as Elasticsearch or Redis. Sparing the
-    # backends a hammering - the reason this cache exists - is a :full concern.
+    #   * its TTL has not elapsed;
+    #   * this thread is still on the very TenantState object that produced it -
+    #     TenantSwitch commits a brand new TenantState on every switch, so a
+    #     switch invalidates every row immediately, TTL or not;
+    #   * the backend still reports the identity it reported when the row was
+    #     written.
+    #
+    # The last one is what a tenant key cannot do on its own: Elasticsearch and
+    # Redis are PROCESS-global, so a foreign thread can move the prefix or the
+    # DB without touching this thread's TenantState, and a row keyed on tenant
+    # alone would go on reporting a backend the process has already left. The
+    # identity is read out of memory (it is exactly what a :basic row reports),
+    # so checking it costs no round trip and the cache still does its job:
+    # sparing the backends a hammering when nothing has moved.
+    #
+    # The store is a thread-local, so one thread's tenant can never leak into
+    # another thread's dashboard. Only :full is cached; a :basic row is a local
+    # read already, so caching it would buy nothing.
     module Cache
       STORE_KEY = :console_kit_diagnostics_cache
       CACHED_LEVEL = :full
@@ -89,11 +100,12 @@ module ConsoleKit
       CAPACITY = 32
 
       class << self
-        def fetch_row(backend, level)
+        def fetch_row(handler, level)
           return yield unless level == CACHED_LEVEL
 
-          key = [StateStore.tenant_key, level, backend]
-          read(key) || write(key, yield)
+          key = [StateStore.tenant_key, level, handler.backend_key]
+          identity = identity_of(handler)
+          read(key, identity) || write(key, identity, yield)
         end
 
         def clear!
@@ -106,11 +118,11 @@ module ConsoleKit
 
         # A stale hit is evicted on the spot rather than merely ignored, so an
         # entry nobody rereads still cannot occupy a capacity slot forever.
-        def read(key)
+        def read(key, identity)
           entry = store[key]
           return nil unless entry
 
-          unless fresh?(entry)
+          unless current?(entry, identity)
             store.delete(key)
             return nil
           end
@@ -119,13 +131,27 @@ module ConsoleKit
           entry[:row]
         end
 
-        def write(key, row)
+        def write(key, identity, row)
           return row if UNCACHEABLE.include?(row[:status])
 
           purge_expired!
-          touch(key, row: row, expires_at: now + CACHE_TTL_SECONDS, state: state)
+          touch(key, row: row, expires_at: now + CACHE_TTL_SECONDS, state: state, identity: identity)
           evict_to_capacity!
           row
+        end
+
+        # The backend's own observed identity: the prefix Elasticsearch will
+        # index with, the DB the Redis client is on. Read out of memory, never
+        # over the wire, and never from this thread's tenant state - that is the
+        # point of it.
+        def identity_of(handler)
+          handler.diagnostic_identity
+        rescue StandardError => e
+          raise e if Diagnostics.programming_error?(e)
+
+          # Equal to nothing, including itself on the next read: an identity
+          # ConsoleKit could not read is not evidence that a row is still true.
+          Object.new
         end
 
         # Ruby Hashes preserve insertion order, so deleting and reinserting a
@@ -150,6 +176,9 @@ module ConsoleKit
         end
 
         def fresh?(entry) = entry[:expires_at] > now && entry[:state].equal?(state)
+
+        # Freshness plus "the backend has not moved underneath the row".
+        def current?(entry, identity) = fresh?(entry) && entry[:identity] == identity
 
         # The raw slot, not StateStore.current: `current` fabricates a fresh
         # TenantState.empty whenever nothing is set, which would make every
@@ -213,6 +242,7 @@ module ConsoleKit
         @mutex = Mutex.new
         @busy = false
         @stopping = false
+        @failed = false
         @thread = nil
       end
 
@@ -232,7 +262,15 @@ module ConsoleKit
         @queue << STOP
       end
 
-      def join(timeout) = @thread&.join(timeout)
+      # A worker unwinding on a failure the runner could not rescue has already
+      # published that failure to its own caller as a row. Thread#join re-raises
+      # it, so joining that thread would deliver the same failure a second time,
+      # into an unrelated shutdown.
+      def join(timeout)
+        return if @failed
+
+        @thread&.join(timeout)
+      end
 
       private
 
@@ -244,10 +282,24 @@ module ConsoleKit
         end
       end
 
-      def release = @mutex.synchronize { @busy = false }
+      # `error` is the failure this worker is about to unwind on, recorded so
+      # #join knows this thread's death was already reported.
+      def release(error = nil)
+        @mutex.synchronize do
+          @busy = false
+          @failed = true if error
+        end
+      end
 
+      # A replacement thread is not the one that died, so the note telling #join
+      # to leave it alone is cleared with it.
       def ensure_thread
-        @mutex.synchronize { @thread = start_thread unless @thread&.alive? }
+        @mutex.synchronize do
+          next if @thread&.alive?
+
+          @failed = false
+          @thread = start_thread
+        end
       end
 
       def start_thread
@@ -268,11 +320,17 @@ module ConsoleKit
 
       # Releases the worker before publishing, so a caller that gets its result
       # can immediately ask again without being told the worker is busy.
+      #
+      # `$ERROR_INFO` is the exception this method is unwinding on - the one
+      # way to see a failure that is neither a StandardError nor a ScriptError
+      # without rescuing Exception itself. Publishing it matters: an outcome of
+      # nil reads to the caller as "did not finish in time", so a worker that
+      # blew up was reported as a backend that was merely slow.
       def perform(job)
         outcome = Runner.execute(job.handler, job.level)
       ensure
-        release
-        job.set(outcome)
+        release($ERROR_INFO)
+        job.set(outcome || $ERROR_INFO)
       end
     end
 

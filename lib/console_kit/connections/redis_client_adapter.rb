@@ -32,6 +32,9 @@ module ConsoleKit
       # because this class owns what a client will accept; the handler's
       # target_error delegates, so there is exactly one rule.
       DIGITS = /\A\d+\z/
+      # Where this thread's isolation verdict is remembered, together with the
+      # client it was observed on.
+      MEMO_KEY = :console_kit_redis_isolation
 
       class << self
         def scrub(message) = message.to_s.gsub(CREDENTIAL_URL, '[redis-url]')
@@ -62,7 +65,7 @@ module ConsoleKit
 
       def selectable? = client.respond_to?(:select)
       def db_readable? = !current_db.nil?
-      def isolation_model = @isolation_model ||= probe_isolation
+      def isolation_model = @isolation_model ||= remembered_isolation
 
       # Reads cached connection state only; issues no command.
       def current_db
@@ -101,11 +104,38 @@ module ConsoleKit
         nil
       end
 
-      def probe_isolation
+      # The probe spawns a thread, and this adapter is built fresh for every
+      # handler instance - which is one per tenant switch, and one per Rails
+      # reload through the Railtie. The verdict describes the object the
+      # application hands back, so it is remembered per thread and reused only
+      # while that is still the very same object: a client swapped underneath
+      # us fails the identity guard and is probed again.
+      def remembered_isolation
         here = resolve
+        memo = Thread.current[MEMO_KEY]
+        return memo[:model] if memo && memo[:client].equal?(here)
+
+        remember(here, probe_isolation(here))
+      end
+
+      # :unknown is the absence of a verdict rather than one, so it is not
+      # remembered: a probe that could not run this time may well run next time.
+      def remember(client, model)
+        Thread.current[MEMO_KEY] = { client: client, model: model } unless model == :unknown
+        model
+      end
+
+      def probe_isolation(here)
         return :none if here.nil? || !resolve.equal?(here)
 
-        Thread.new { resolve }.value.equal?(here) ? :process_global : :scoped
+        # A probe that could not reach the client has observed nothing. Reading
+        # that as "the other thread got a different object, so the client must be
+        # per-thread" would turn a failed observation into an isolation claim -
+        # the strongest claim this class makes, on no evidence.
+        elsewhere = Thread.new { resolve }.value
+        return :unknown if elsewhere.nil?
+
+        elsewhere.equal?(here) ? :process_global : :scoped
       rescue StandardError => e
         raise e if programming_error?(e)
 

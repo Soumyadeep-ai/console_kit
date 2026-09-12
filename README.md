@@ -379,10 +379,15 @@ previous check is still running reports as busy rather than starting another one
 timeout because it never leaves the process.
 
 Only `:full` results are cached, for a couple of seconds; `:basic` is never cached, because it is a
-local read and caching it bought nothing while costing correctness. A tenant switch **on the calling
-thread** invalidates that cache immediately. It cannot detect another thread moving a process-global
-backend out from under you, so on a multi-threaded process a `:full` row can be up to the cache
-window out of date for Redis and Elasticsearch.
+local read and caching it bought nothing while costing correctness.
+
+A cached `:full` row is reused only while all three hold: the TTL has not elapsed, the calling thread
+is still on the same tenant state, and the backend still reports the same observed identity - the
+Elasticsearch prefix, the Redis logical DB, the SQL pool. So another thread moving a process-global
+backend drops the row on the next render rather than serving it stale. That identity check is a
+memory read, so a cached render still costs zero round trips. What can be up to a cache window old is
+only the *measured* part of a row - latency, cluster health, version, memory - never which tenant a
+backend is on.
 
 To auto-display the dashboard on every tenant switch, add to your initializer:
 

@@ -173,6 +173,15 @@ module ConsoleKit
       def connect = connect!(target)
       def diagnostics(level: :basic) = raise NotImplementedError, "#{self.class} must implement #diagnostics"
 
+      # What a cached diagnostic row stays true for: the backend's own observed
+      # identity, read out of memory rather than over the wire. nil means
+      # "nothing outside this thread can move this backend", which is what the
+      # diagnostics cache assumes by default - it already discards every row
+      # when this thread's TenantState changes. A handler whose backend is
+      # PROCESS-global must override it, or a foreign thread moving that backend
+      # leaves this thread reporting a tenant the process has already left.
+      def diagnostic_identity = nil
+
       # Bounded, leak-free diagnostics execution. Delegates to the shared runner.
       def safe_diagnostics(timeout: Diagnostics::DEFAULT_TIMEOUT, level: :basic)
         Diagnostics::Runner.call(self, timeout: timeout, level: level)
@@ -186,13 +195,16 @@ module ConsoleKit
 
       private
 
-      # `#prepare`'s half of the shared rule.
+      # `#prepare`'s half of the shared rule. The rejected value is scrubbed for
+      # the same reason ConfigurationValidator scrubs it on its half: a tenant
+      # constant can carry a whole connection URI, and this message is printed
+      # and may be forwarded to a log.
       def validate_target!(target)
         reason = self.class.target_error(target)
         return if reason.nil?
 
         raise ConfigurationError,
-              "ConsoleKit: #{self.class.constants_key} #{target.inspect} is invalid: #{reason}."
+              "ConsoleKit: #{self.class.constants_key} #{scrub(target.inspect)} is invalid: #{reason}."
       end
 
       def measure_latency

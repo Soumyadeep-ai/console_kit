@@ -182,6 +182,31 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  # The rejected value is printed and may be forwarded to a log, and a tenant
+  # constant routinely carries a whole connection URI. ConfigurationValidator
+  # already scrubs the same value through the same rule.
+  describe '#prepare rejecting a target that carries a credential' do
+    let(:handler_class) do
+      stub_const('CredentialTargetHandler', Class.new(described_class) do
+        def self.target_error(_value) = 'expected a shard name'
+
+        def prepare(target) = validate_target!(target)
+      end)
+    end
+
+    let(:secret_target) { 'mongodb://admin:s3cr3t@db.internal/acme' }
+
+    it 'redacts the credential out of the message' do
+      expect { handler_class.new(context).prepare(secret_target) }
+        .to raise_error(ConsoleKit::ConfigurationError, /\[redacted\]/)
+    end
+
+    it 'still says why the value was rejected' do
+      expect { handler_class.new(context).prepare(secret_target) }
+        .to raise_error(ConsoleKit::ConfigurationError, /expected a shard name/)
+    end
+  end
+
   describe '#available?' do
     it 'raises NotImplementedError by default' do
       expect { handler.available? }.to raise_error(NotImplementedError, /must implement #available?/)
