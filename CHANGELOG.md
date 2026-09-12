@@ -83,8 +83,8 @@ Not part of the documented public surface, but visible to anyone who reached for
 - New instrumentation counters: `console_kit.handler_dropped`, `console_kit.handler_collision`, `console_kit.incomplete_verification`, `console_kit.sql_frame_reasserted`.
 
 ### Compatibility
-- Tested against Rails 6.1, 7.0, 7.1, 7.2, 8.0 and 8.1 across Ruby 3.1 to 3.4. Rails 8.1 is what the default lockfile resolves to and is now covered by CI on two Ruby versions, since the prompt hook reaches into IRB, whose internals move between releases.
-- `required_ruby_version` remains `>= 3.1.0` and the Rails dependencies remain `>= 6.1`, both without an upper bound.
+- Tested against Rails 6.1, 7.0, 7.1, 7.2, 8.0 and 8.1 across Ruby 3.1 through 4.0. Rails 8.1 is what the default lockfile resolves to and is covered on Ruby 3.3, 3.4 and 4.0, since the prompt hook reaches into IRB, whose internals move between releases.
+- `required_ruby_version` remains `>= 3.1.0` and the Rails dependencies remain `>= 6.1`, both without an upper bound. Ruby 4.0 is permitted by that bound and by Rails 8.1's own `>= 3.2.0`; CI is what exercises it.
 
 ### Preserved
 - The 1.3.0 Mongoid named-client fixes - `override_client` for named clients, `override_database` for database names, and clearing both on reset - are intact and covered by explicit regression tests.

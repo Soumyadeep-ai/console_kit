@@ -56,6 +56,12 @@ jobs:
           - rails: "8.1"
             ruby: "3.4"
             gemfile: gemfiles/rails_8_1.gemfile
+          # Ruby 4.0 is current and Rails 8.1 declares `>= 3.2.0` with no upper
+          # bound, so this combination is supported by both. CI is the first
+          # thing to actually exercise it.
+          - rails: "8.1"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_8_1.gemfile
 
     name: Rails ${{ matrix.rails }} / Ruby ${{ matrix.ruby }}
 
