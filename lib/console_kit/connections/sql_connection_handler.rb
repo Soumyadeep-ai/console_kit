@@ -55,7 +55,7 @@ module ConsoleKit
         return if strategy.resolvable?(normalize(target))
 
         raise ConfigurationError,
-              "ConsoleKit: SQL shard #{target.inspect} is not a registered shard or database configuration."
+              "ConsoleKit: SQL shard #{scrub(target.inspect)} is not a registered shard or database configuration."
       end
 
       def snapshot = strategy.snapshot

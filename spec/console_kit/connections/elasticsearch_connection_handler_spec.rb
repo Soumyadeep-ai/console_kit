@@ -541,6 +541,27 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
+    # The ConnectionError carries the transport's own message, and an
+    # Elasticsearch transport names the cluster URL it could not reach - user
+    # and password included. Whoever rescues the error reads that message.
+    context 'when the transport error names the cluster URL' do
+      def ping_failure_message
+        transport_error = 'Could not connect to http://elastic:s3cr3t@es.internal:9200'
+        handler.send(:ping!, ElasticsearchMocks::Client.new(ping_error: transport_error))
+        nil
+      rescue ConsoleKit::ConnectionError => e
+        e.message
+      end
+
+      it 'redacts the URL out of the error' do
+        expect(ping_failure_message).to include('[redacted]')
+      end
+
+      it 'never leaks the password' do
+        expect(ping_failure_message).not_to include('s3cr3t')
+      end
+    end
+
     context 'when Elasticsearch::Model does not respond to client' do
       before { stub_const('Elasticsearch::Model', Module.new) }
 

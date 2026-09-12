@@ -6,7 +6,7 @@ module ConsoleKit
   module Connections
     # Handles MongoDB connections
     class MongoConnectionHandler < BaseConnectionHandler
-      UNSUPPORTED_OVERRIDE = 'client override API is not available in this Mongoid version.'
+      UNSUPPORTED_OVERRIDE = 'Mongoid.%<setter>s, which this target needs, is not available in this Mongoid version.'
       UNVERIFIABLE = 'state cannot be read back in this Mongoid version, so a switch could not be verified or ' \
                      'rolled back. Give each tenant its own Mongoid client instead.'
 
@@ -24,13 +24,9 @@ module ConsoleKit
 
       def prepare(target)
         validate_target!(target)
-        unless Mongoid.respond_to?(:override_database)
-          raise UnsupportedBackendError,
-                "#{display_name} #{UNSUPPORTED_OVERRIDE}"
-        end
-        return if target.nil? || readable?
-
-        raise UnsupportedBackendError, "#{display_name} #{UNVERIFIABLE}"
+        setter = setter_for(target)
+        raise UnsupportedBackendError, unsupported_message(setter) unless Mongoid.respond_to?(setter)
+        raise UnsupportedBackendError, "#{display_name} #{UNVERIFIABLE}" unless readable?
       end
 
       def snapshot
@@ -88,13 +84,26 @@ module ConsoleKit
         }
       end
 
+      # #connect! sends a configured client name to override_client and every
+      # other target, a reset included, to override_database, so the setter the
+      # target will actually reach is the one that has to exist.
+      def setter_for(target) = named_client?(target) ? :override_client : :override_database
+
+      def unsupported_message(setter) = "#{display_name} #{format(UNSUPPORTED_OVERRIDE, setter: setter)}"
+
       # A switch that cannot be read back cannot be snapshotted either, so
       # #prepare refuses one rather than failing at verify with the override
       # applied and an empty snapshot that would clear it instead of restoring.
-      def readable? = Mongoid.respond_to?(:default_client) && threaded_readable?
+      # A rollback writes both overrides, so both have to be readable - the
+      # client one only where this Mongoid can set a client override at all.
+      def readable?
+        return false unless Mongoid.respond_to?(:default_client) && threaded_readable?(:database_override)
 
-      def threaded_readable?
-        defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:database_override)
+        !Mongoid.respond_to?(:override_client) || threaded_readable?(:client_override)
+      end
+
+      def threaded_readable?(reader)
+        defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(reader)
       end
 
       def effective_client_name = Mongoid.default_client.name

@@ -44,7 +44,7 @@ module ConsoleKit
       def prepare(target)
         validate_target!(target)
         db = coerce_db(target)
-        return if db == DEFAULT_REDIS_DB || (adapter.selectable? && adapter.db_readable?)
+        return if target.nil? || (adapter.selectable? && adapter.db_readable?)
 
         raise UnsupportedBackendError, unsupported_message(db)
       end
@@ -53,15 +53,16 @@ module ConsoleKit
 
       def connect!(target)
         db = coerce_db(target)
-        return if adapter.current_db == db || !adapter.selectable?
+        return unless adapter.movable_to?(db)
 
         Output.print_info(switch_message(db))
         warn_process_global
         apply(db)
       end
 
-      # A client that cannot report its DB is only ever allowed to sit on the
-      # default DB, so a nil reading proves nothing and is accepted there.
+      # ConsoleKit never writes to a client that cannot report its DB, so a nil
+      # reading here is the DB the application chose rather than an unproved
+      # switch: only a target that asked for no DB at all can reach it.
       def verify!(target)
         expected = coerce_db(target)
         actual = adapter.current_db
@@ -134,7 +135,7 @@ module ConsoleKit
         return DEFAULT_REDIS_DB if target.nil?
 
         normalize(target) ||
-          raise(ConfigurationError, "ConsoleKit: Redis DB #{target.inspect} is not a non-negative integer.")
+          raise(ConfigurationError, "ConsoleKit: Redis DB #{scrub(target.inspect)} is not a non-negative integer.")
       end
 
       def normalize(target) = RedisClientAdapter.db_index(target)

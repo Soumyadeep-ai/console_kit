@@ -123,6 +123,27 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       nil
     end
 
+    # A tenant constant can hold a whole database URI, and #prepare runs before
+    # the transaction, so this rejection escapes switch_tenant unwrapped and
+    # reaches the logs with whatever the constant held.
+    context 'with an unresolved shard that carries a credential' do
+      let(:uri) { 'postgres://app:s3cr3t@db.internal:5432/acme' }
+      let(:message) do
+        handler.prepare(uri)
+        nil
+      rescue ConsoleKit::ConfigurationError => e
+        e.message
+      end
+
+      it 'redacts the value out of the rejection' do
+        expect(message).to include('[redacted]')
+      end
+
+      it 'never leaks the password' do
+        expect(message).not_to include('s3cr3t')
+      end
+    end
+
     context 'when the base class cannot switch connections at all' do
       let(:base_class) { Class.new }
 

@@ -397,8 +397,58 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
     end
 
-    it 'still allows a nil target, which asks for no override at all' do
-      expect { handler.prepare(nil) }.not_to raise_error
+    # A reset writes too, and its snapshot is just as empty: clearing an
+    # override that could not be read means a later backend failure restores
+    # nil over whatever the previous tenant left behind.
+    it 'refuses a reset, which would also write over an override it cannot read' do
+      expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+  end
+
+  # #connect! routes a target naming a configured client to `override_client`
+  # and everything else to `override_database`, so the setter the target will
+  # actually use is the one #prepare has to find. Checking `override_database`
+  # for every target let a client target through to a NoMethodError raised
+  # mid-transaction.
+  describe 'a Mongoid without the client override setter' do
+    before do
+      stub_const('Mongoid', MongoidMocks::WithoutClientOverride)
+      Mongoid::Config.clients = { 'client_a' => {} }
+    end
+
+    it 'refuses a target naming a configured client' do
+      expect { handler.prepare('client_a') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'names the backend in the refusal' do
+      expect { handler.prepare('client_a') }.to raise_error(/MongoDB/)
+    end
+
+    it 'still prepares a plain database target, which it can set' do
+      expect { handler.prepare('acme_db') }.not_to raise_error
+    end
+  end
+
+  # The client override is half of the snapshot. A Mongoid that can be written
+  # but not read there snapshots nil, so a rollback calls override_client(nil)
+  # and clears the override the console was running under instead of restoring
+  # it - whichever setter the target itself uses.
+  describe 'a Mongoid whose client override cannot be read back' do
+    before do
+      stub_const('Mongoid::Threaded', MongoidMocks::WriteOnlyClientOverride)
+      Mongoid::Config.clients = { 'client_a' => {} }
+    end
+
+    it 'refuses a target naming a configured client' do
+      expect { handler.prepare('client_a') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'refuses a plain database target, whose rollback writes the client override too' do
+      expect { handler.prepare('acme_db') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+    end
+
+    it 'refuses a reset for the same reason' do
+      expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
     end
   end
 end

@@ -70,6 +70,37 @@ end
 # `respond_to?`/`defined?` rather than by version, so the shapes below are the
 # ones those guards exist for.
 module MongoidMocks
+  MONGOID = ::Mongoid
+
+  # A Mongoid from before `override_client`: its override state reads back
+  # fine, but a target naming a configured client has no setter to reach, so
+  # #connect! takes the client path and raises with the transaction open.
+  module WithoutClientOverride
+    Config = ::Mongoid::Config
+    Threaded = ::Mongoid::Threaded
+
+    class << self
+      def override_database(name) = MONGOID.override_database(name)
+      def default_client = MONGOID.default_client
+    end
+  end
+
+  # Thread-local state whose client override can be written but never read
+  # back, which is what the handler's `respond_to?(:client_override)` guard
+  # exists for: a snapshot records no client, so a rollback clears one rather
+  # than restoring it.
+  module WriteOnlyClientOverride
+    class << self
+      attr_accessor :database_override
+      attr_writer :client_override
+
+      def reset!
+        self.client_override = nil
+        self.database_override = nil
+      end
+    end
+  end
+
   # A facade offering only the public override API. `override_client` arrived
   # with the Mongoid 5 session-to-client rename, and Mongoid's internals
   # (`Mongoid::Threaded`, `Mongoid::Config`) are not part of the facade at all,
@@ -97,4 +128,5 @@ RSpec.configure do |config|
   end
 
   config.after { MongoidMocks::DatabaseOverrideOnly.reset! }
+  config.after { MongoidMocks::WriteOnlyClientOverride.reset! }
 end

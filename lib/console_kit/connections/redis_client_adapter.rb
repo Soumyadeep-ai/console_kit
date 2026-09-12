@@ -52,6 +52,14 @@ module ConsoleKit
         raw.nil? ? nil : Integer(raw, exception: false)
       end
 
+      # SELECT is a write like any other: on a client that cannot say where it
+      # is, the switch cannot be verified and no snapshot can put it back, so
+      # nothing is written to one.
+      def movable_to?(db)
+        current = current_db
+        !current.nil? && current != db && selectable?
+      end
+
       def select(db)
         target = client
         target.select(db) if target.respond_to?(:select)

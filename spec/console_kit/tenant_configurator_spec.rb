@@ -213,7 +213,7 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       it 'reports the unsupported backend instead of skipping it' do
         configure
         expect(ConsoleKit::Output).to have_received(:print_error)
-          .with(a_string_including('client override API is not available'))
+          .with(a_string_including('Mongoid.override_database, which this target needs, is not available'))
       end
 
       it 'refuses to report success' do

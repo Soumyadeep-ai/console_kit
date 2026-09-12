@@ -128,7 +128,7 @@ module ConsoleKit
       def ping!(client)
         client.ping
       rescue StandardError => e
-        raise ConnectionError.new("#{display_name} cluster unreachable: #{e.message}",
+        raise ConnectionError.new("#{display_name} cluster unreachable: #{scrub(e.message)}",
                                   backend: display_name, operation: :diagnostics)
       end
 

@@ -251,6 +251,33 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       it 'names the isolation model it did detect' do
         expect { handler.prepare(2) }.to raise_error(/isolation model: process_global/)
       end
+
+      it 'refuses an explicitly requested default DB too, which SELECT 0 would also move' do
+        expect { handler.prepare(0) }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+
+      it 'still accepts a nil target, which asks for no DB at all' do
+        expect { handler.prepare(nil) }.not_to raise_error
+      end
+    end
+  end
+
+  # SELECT 0 is a write like any other: on a client that cannot say where it is,
+  # #snapshot records nil, #verify! reads the nil as proof of the default and
+  # #restore leaves the connection wherever the failed switch left it. So
+  # nothing is written to one - a requested DB is refused at #prepare, and a
+  # target that asked for no DB moves nothing.
+  describe 'a client that can SELECT but cannot report its DB' do
+    before { Redis.current = RedisFakes::Opaque.new(7) }
+
+    it 'issues no SELECT for a reset it could not undo' do
+      handler.connect!(nil)
+      expect(client.selects).to be_empty
+    end
+
+    it 'leaves the connection on the DB the application chose' do
+      handler.connect!(nil)
+      expect(client.db_index).to eq(7)
     end
   end
 
@@ -305,6 +332,26 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     it 'does not select at all when the target is already the current DB' do
       handler.connect!(0)
       expect(client.selects).to be_empty
+    end
+
+    # #prepare rejects this value through the scrubbed validator, but #connect!
+    # is reached without it on the diagnostics path, and a tenant constant that
+    # is not a DB index is exactly the one likely to hold a whole Redis URL.
+    context 'with an invalid index that carries a credential' do
+      let(:message) do
+        handler.connect!('rediss://app:s3cr3t@cache.internal:6379/2')
+        nil
+      rescue ConsoleKit::ConfigurationError => e
+        e.message
+      end
+
+      it 'redacts the value out of the rejection' do
+        expect(message).to include('[redacted]')
+      end
+
+      it 'never leaks the password' do
+        expect(message).not_to include('s3cr3t')
+      end
     end
 
     it 'raises ConfigurationError for an invalid index' do
