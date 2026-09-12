@@ -12,8 +12,12 @@ module ConsoleKit
                       'that was being unwound'
 
     class << self
+      # The context object the switch actually moved, not whatever the
+      # configuration points at now: a reload or a reconfigure between the switch
+      # and the unwind would otherwise write the captured values to a new object
+      # and leave the original on the inner tenant.
       def unwind(state, previous)
-        ctx = ConsoleKit.configuration.context_class
+        ctx = state.context_object || ConsoleKit.configuration.context_class
         wrapper = TenantConfigurator::ContextWrapper.for_context(ctx)
         live, missing = resolve_handlers(state, ctx)
         failures = new(state.undo, wrapper).call(live, missing)

@@ -45,7 +45,12 @@ module TenantBackends
     STACK_KEY = :tenant_backends_connected_to_stack
 
     class << self
-      def connected_to_stack = Thread.current[STACK_KEY] ||= []
+      # A THREAD variable, which is where Rails keeps `:ar_connected_to_stack`.
+      # `Thread.current[]` would be fiber-local and would fake away the scope
+      # ConsoleKit's own bookkeeping has to agree with.
+      def connected_to_stack
+        Thread.current.thread_variable_get(STACK_KEY) || Thread.current.thread_variable_set(STACK_KEY, [])
+      end
     end
   end
 
@@ -229,7 +234,7 @@ module TenantBackends
     # Every piece of per-thread state these fakes keep. Threads die with their
     # own copies; the thread running the example needs it cleared by hand.
     def reset!
-      Thread.current[ShardedBase::STACK_KEY] = nil
+      Thread.current.thread_variable_set(ShardedBase::STACK_KEY, nil)
       ThreadedMongoid.reset!
       ATTRIBUTES.each { |attr| Thread.current[:"tenant_backends_ctx_#{attr}"] = nil }
     end

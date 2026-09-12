@@ -234,6 +234,41 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
+  # One context attribute is one slot on the context object. Two handlers
+  # holding it write each other's constants there, so the context says one thing
+  # while the live connection says another - and the switch reports success.
+  describe 'a second handler claiming a context attribute already in use' do
+    def declare_shadow
+      Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :shadow, display_name: 'Shadow', context_attribute: :tenant_shard,
+                         constants_key: :shadow_key, detail_label: 'Shadow'
+      end
+    end
+
+    def declare_shadow_ignoring_refusal
+      declare_shadow
+    rescue ConsoleKit::ConfigurationError
+      nil
+    end
+
+    # Nothing should be left registered, but a regression here would leak the
+    # shadow into every later example.
+    after { described_class.all.each { |klass| described_class.remove(klass) if klass.backend_key == :shadow } }
+
+    it 'is refused at declaration' do
+      expect { declare_shadow }.to raise_error(ConsoleKit::ConfigurationError, /tenant_shard/)
+    end
+
+    it 'names the handler that already claims the attribute' do
+      expect { declare_shadow }.to raise_error(/SqlConnectionHandler/)
+    end
+
+    it 'does not join the registry' do
+      declare_shadow_ignoring_refusal
+      expect(described_class.all.map(&:backend_key)).not_to include(:shadow)
+    end
+  end
+
   # Every switch reads `.all` and iterates it. The answer is a frozen array, and
   # a different array on every call, so a caller cannot hold on to the one the
   # next switch will use nor change what that switch drives.

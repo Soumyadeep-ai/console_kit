@@ -30,5 +30,14 @@ RSpec.describe ConsoleKit::TenantState do
     it 'freezes the list of backends the switch could not drive' do
       expect(undo[:dropped]).to be_frozen
     end
+
+    it 'freezes every handler snapshot inside the map' do
+      expect(undo[:backends].values).to all(be_frozen)
+    end
+
+    it 'refuses a write into a published snapshot' do
+      expect { ConsoleKit::StateStore.current.snapshot_for(:sql)[:shard] = 'shard_globex' }
+        .to raise_error(FrozenError)
+    end
   end
 end

@@ -16,12 +16,17 @@ module ConsoleKit
     module HandlerRegistry
       COLLISION_WARNING = 'ConsoleKit: %<previous>s and %<current>s both claim the backend key %<key>p. Only ' \
                           '%<current>s will be switched, verified and rolled back.'
+      DUPLICATE_ATTRIBUTE = 'ConsoleKit: %<current>s claims the context attribute %<attribute>p, which %<previous>s ' \
+                            'already claims for the %<key>p backend. One attribute is one slot on the context ' \
+                            'object, so each backend would write the other values there and the context would ' \
+                            'disagree with the live connection. Give %<current>s a context attribute of its own.'
 
       class << self
         def all = entries.values.freeze
 
         def add(handler_class)
           key = handler_class.backend_key
+          reject_duplicate_attribute(handler_class, key)
           drop_other_keys(handler_class, key)
           previous = entries[key]
           report_collision(previous, handler_class) if previous
@@ -43,6 +48,22 @@ module ConsoleKit
         # second time must not stay registered under its old key as well.
         def drop_other_keys(handler_class, key)
           entries.delete_if { |existing, klass| existing != key && klass.equal?(handler_class) }
+        end
+
+        # Refused rather than warned: there is no resolution a switch could pick
+        # that leaves the context and the live connections agreeing. A reload
+        # generation re-declaring the same backend is not a duplicate.
+        def reject_duplicate_attribute(handler_class, key)
+          attribute = handler_class.context_attribute
+          previous = entries.find { |other, klass| other != key && klass.context_attribute == attribute }
+          return if previous.nil? || same_declaration?(previous.last, handler_class)
+
+          raise ConfigurationError, format(DUPLICATE_ATTRIBUTE, current: handler_class, previous: previous.last,
+                                                                attribute: attribute, key: previous.first)
+        end
+
+        def same_declaration?(previous, current)
+          previous.equal?(current) || (!previous.name.nil? && previous.name == current.name)
         end
 
         # A second class under the SAME name is an expected reload generation;
@@ -114,6 +135,10 @@ module ConsoleKit
       def snapshot = raise NotImplementedError, "#{self.class} must implement #snapshot"
       def connect!(_target) = raise NotImplementedError, "#{self.class} must implement #connect!"
       def restore(_snapshot) = raise NotImplementedError, "#{self.class} must implement #restore"
+
+      # Why `available?` said false, when that is a fault rather than an optional
+      # gem nobody installed: a reason is recorded as a dropped backend, nil stays silent.
+      def unavailable_reason = nil
 
       # Override to validate and resolve without mutating anything.
       def prepare(_target) = nil

@@ -90,7 +90,7 @@ module ConsoleKit
     def capture_undo(handlers)
       snapshots = handlers.to_h { |handler| [handler.backend_key, handler.snapshot] }
       TenantState.undo_bundle(context: context_wrapper.current_values, backends: snapshots,
-                              dropped: @dropped_backends)
+                              dropped: @dropped_backends, context_object: context)
     end
 
     def apply_context(constants)

@@ -79,23 +79,44 @@ RSpec.describe BackendDeclaration do
   end
 
   # `context_mapping` is a merged map keyed by context attribute, so a handler
-  # declaring another backend's context attribute silently repoints it. The
-  # handler already knows its own constants key; nothing else gets a vote.
+  # declaring another backend's context attribute used to silently repoint it:
+  # the context then held the shadow's constant while SQL connected to :shard,
+  # and the switch reported success. One attribute is one slot on the context
+  # object, so the second claim is refused where it is made.
   describe 'a handler that claims another backend context attribute' do
-    let(:shadow) do
+    def declare_shadow
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
         backend :shadow, display_name: 'Shadow', context_attribute: :tenant_shard,
                          constants_key: :shadow_key, detail_label: 'Shadow'
       end
     end
 
+    it 'is refused at declaration rather than repointing the attribute' do
+      expect { declare_shadow }.to raise_error(ConsoleKit::ConfigurationError, /tenant_shard/)
+    end
+
+    it 'names the backend that already owns the attribute' do
+      expect { declare_shadow }.to raise_error(/:sql backend/)
+    end
+  end
+
+  # The other half of the same ownership rule, which needs no collision to
+  # break: TenantPlan asks the handler for its own constants key rather than
+  # routing through a shared map that another handler could have edited.
+  describe 'a handler that claims another backend constants key' do
+    let(:shadow) do
+      Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :shadow, display_name: 'Shadow', context_attribute: :tenant_shadow_key,
+                         constants_key: :shard, detail_label: 'Shadow'
+      end
+    end
+
     let(:sql_handler) { ConsoleKit::Connections::SqlConnectionHandler.new(nil) }
-    let(:targets) { ConsoleKit::TenantPlan.new('acme').targets_for([sql_handler]) }
+    let(:targets) { ConsoleKit::TenantPlan.new('acme').targets_for([sql_handler, shadow.new(nil)]) }
 
     before do
       ConsoleKit.configure do |config|
-        config.tenants = { 'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME',
-                                                    shadow_key: 'hijacked' } } }
+        config.tenants = { 'acme' => { constants: { shard: 'shard_acme', partner_code: 'ACME' } } }
       end
       shadow
     end

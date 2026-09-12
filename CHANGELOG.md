@@ -27,6 +27,9 @@ completes fully or leaves the previous tenant exactly as it was.
 - **Strict configuration validation.** `ConsoleKit.configuration.validate!` reports every problem in one pass: tenant structure, identifiers, duplicates colliding by case or type, required constants, Redis DB numbers, Elasticsearch prefixes, shard and Mongoid client names. Unrecognised keys and a `context_class` missing writers are reported as warnings.
 - **Isolation reporting.** `RedisConnectionHandler#isolation_model` / `#thread_isolated?` and the Elasticsearch equivalents report at runtime whether a backend is genuinely per-thread or process-global.
 
+- **`BaseConnectionHandler#unavailable_reason`.** A handler that exists but cannot be driven returns a reason instead of merely answering `available? => false`, and is recorded as a dropped backend rather than skipped like an optional gem that is not installed.
+- **Uneven backend coverage is reported.** `validate!` warns when tenants disagree about which backend keys they name, stating that switching to a tenant which omits one resets that backend.
+
 ### Changed
 - **Connection pool churn removed.** The SQL handler uses the native `connecting_to(shard:)` path when the target is a registered shard, detected by capability check rather than Rails version, and keeps ConsoleKit to exactly one entry on the `connected_to` stack. The `establish_connection` fallback re-establishes only when the resolved configuration actually changes, and no longer disconnects a pool Rails is about to replace anyway. Switching to the shard already in use performs no pool work.
 - **`reapply`** no longer re-establishes a connection already on the target shard.
@@ -43,6 +46,14 @@ completes fully or leaves the previous tenant exactly as it was.
 - **Errors printed to the console were not scrubbed.** A tenant constant can carry a connection URI, so an authentication failure could put a plaintext password into the console and the logs.
 
 - **The tenant never appeared in the prompt on a console without Pry.** Rails starts IRB by calling `IRB.setup`, which resets `IRB.conf` and discards anything configured before it - including the prompt installed from the railtie's console hook, which runs earlier. Rails then installed its own prompt and selected it. Applications carrying `pry-rails` in development but not in production therefore saw the tenant locally and never in production, which is exactly where it matters most. The prompt is now re-applied when IRB builds the session, after every reset, and it decorates the active prompt rather than replacing it, so Rails' environment colouring is kept.
+
+- **Tenant state was fiber-local while the ActiveRecord shard frame was thread-local.** `Thread.current[]` is fiber-scoped in Ruby, so a second Fiber or an Enumerator on the same thread saw an empty `TenantState` while sharing that thread's SQL and context state, and the diagnostics cache could serve a `:full` row cached against a different tenant. Both now use the same thread-level primitive the shard frame uses.
+- **The undo bundle was only shallow-frozen**, so a caller could edit a handler snapshot after commit and make a later rollback restore altered state.
+- **Rollback resolved the context class when it ran** rather than retaining the object the switch moved, so replacing or reloading `context_class` inside an open `with_tenant` scope wrote the saved values to the new object and left the original on the inner tenant.
+- **A configured but unresolvable `sql_base_class` was indistinguishable from an optional gem that is not loaded.** SQL was dropped from the switch with no record, so the other backends committed while the SQL pool stayed on the previous tenant and `verify_tenant!` reported it fully verified.
+- **A fallback SQL rollback could not restore "there was no pool".** A base class with no pool before the switch was left holding the tenant pool the failed switch established.
+- **Two handlers could claim one context attribute**, so the context said one thing while the live connection said another. A collision now raises at declaration.
+- **A malformed tenant entry raised `NoMethodError` or `TypeError`** from outside the transactional error boundary instead of `ConfigurationError`.
 
 ### Security
 - **Credentials are scrubbed** from error messages, diagnostic rows and console output: connection URIs, `key=value` and `key => value` fragments, `Authorization: Bearer <token>` style auth headers, bare `password <value>` phrases and `for user <name>` principals. Hostnames and ports are deliberately kept - they are not secrets, and removing them would gut the diagnostic value of a connection error. Treat this as defence in depth, not a boundary: it is shape-matching over strings ConsoleKit did not produce.

@@ -70,12 +70,17 @@ module ConsoleKit
         end
 
         def clear!
-          Thread.current[STORE_KEY] = nil
+          Thread.current.thread_variable_set(STORE_KEY, nil)
         end
 
         private
 
-        def store = Thread.current[STORE_KEY] ||= {}
+        # A thread variable, not `Thread.current[]`: an entry is keyed on the
+        # thread's TenantState, so it has to be read back in that same scope.
+        def store
+          Thread.current.thread_variable_get(STORE_KEY) ||
+            Thread.current.thread_variable_set(STORE_KEY, {})
+        end
 
         def read(key, identity)
           entry = store[key]
@@ -128,9 +133,7 @@ module ConsoleKit
 
         def current?(entry, identity) = fresh?(entry) && entry[:identity] == identity
 
-        # The raw slot, not StateStore.current: `current` fabricates a fresh
-        # TenantState.empty when nothing is set, making every comparison a miss.
-        def state = Thread.current[StateStore::STATE_KEY]
+        def state = StateStore.stored
         def now = Connections::DiagnosticHelpers.clock_time
       end
     end

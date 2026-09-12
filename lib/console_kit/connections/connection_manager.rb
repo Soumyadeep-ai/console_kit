@@ -11,9 +11,10 @@ module ConsoleKit
   module Connections
     # Manages available connection handlers
     class ConnectionManager
-      DROPPED_WARNING = 'was skipped because it is only half-implemented (%<reason>s). That backend will NOT be ' \
-                        'switched, verified or rolled back; it is recorded on the tenant state so the switch ' \
-                        'cannot report itself as fully verified.'
+      DROPPED_WARNING = 'was skipped because %<reason>s. That backend will NOT be switched, verified or rolled ' \
+                        'back; it is recorded on the tenant state so the switch cannot report itself as fully ' \
+                        'verified.'
+      HALF_IMPLEMENTED = 'it is only half-implemented (%<message>s)'
       REPORTED_KEY = :console_kit_dropped_reported
 
       class << self
@@ -26,14 +27,23 @@ module ConsoleKit
 
         private
 
-        # #available? false is an optional gem that is not loaded. A
-        # NotImplementedError is a broken handler, and dropping it silently lets
-        # a switch claim success while that backend still serves another tenant.
+        # #available? false with no reason is an optional gem that is not loaded.
+        # A NotImplementedError is a broken handler, and a reason is a
+        # misconfigured one; dropping either silently lets a switch claim success
+        # while that backend still serves another tenant.
         def resolve(klass, context, dropped)
           handler = klass.new(context)
-          handler if handler.available?
+          return handler if handler.available?
+
+          drop(klass, dropped, handler.try(:unavailable_reason))
         rescue NotImplementedError => e
-          report_dropped(klass, e)
+          drop(klass, dropped, format(HALF_IMPLEMENTED, message: e.message))
+        end
+
+        def drop(klass, dropped, reason)
+          return nil if reason.nil?
+
+          report_dropped(klass, reason)
           dropped << klass.backend_key if dropped
           nil
         end
@@ -41,11 +51,11 @@ module ConsoleKit
         # Counted every time, warned once per backend per reason: the dashboard
         # reads this same handler list, so an unchanged broken handler would
         # reprint on every render and bury the table.
-        def report_dropped(klass, error)
+        def report_dropped(klass, reason)
           Instrumentation.increment('console_kit.handler_dropped')
-          return unless unreported?(klass.backend_key, error.message)
+          return unless unreported?(klass.backend_key, reason)
 
-          Output.print_warning("#{klass} #{format(DROPPED_WARNING, reason: error.message)}")
+          Output.print_warning("#{klass} #{format(DROPPED_WARNING, reason: reason)}")
         end
 
         # Per thread: one console reporting a drop must not silence another's.

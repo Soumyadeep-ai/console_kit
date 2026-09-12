@@ -98,6 +98,10 @@ ConsoleKit.configure do |config|
 end
 ```
 
+A constants key you omit is not left alone: switching to that tenant **resets** that backend to its
+default. That is deliberate - leaving Redis on the previous tenant while SQL moves would be exactly
+the mixed-tenant state this gem exists to prevent. Only `shard` and `partner_code` are required.
+
 ## Supported Connections
 
 ConsoleKit automatically detects and manages connections for:

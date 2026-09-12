@@ -541,6 +541,30 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
+  # Freshness is keyed on the thread's TenantState, so the cache has to be read
+  # and written in that same scope. A fiber reading a state of its own sees the
+  # empty one, which matches every other empty one - and a row cached under the
+  # tenant the thread has since left would go on being served.
+  describe 'the cache inside a fiber' do
+    let(:counter) { [0] }
+    let(:fiber) { Fiber.new { loop { Fiber.yield(counting_fetch(:fiber_cache_backend, counter)) } } }
+
+    before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme') }
+
+    it 'asks the backend again once its thread has switched tenant' do
+      fiber.resume
+      ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'globex')
+      fiber.resume
+      expect(counter.first).to eq(2)
+    end
+
+    it 'reuses the row its thread already cached' do
+      counting_fetch(:fiber_cache_backend, counter)
+      fiber.resume
+      expect(counter.first).to eq(1)
+    end
+  end
+
   describe 'instrumentation' do
     it 'emits the diagnostics event with the backend and level in the payload' do
       events = []

@@ -41,6 +41,49 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
       strategy.apply(:shard_one)
       expect(strategy.identity(:shard_one)).to eq(%w[shard_one shard_one])
     end
+
+    # "There was no pool" is a state a rollback has to be able to reach: leaving
+    # the pool the switch established keeps the failed tenant's database connected.
+    it 'removes the pool it established when the switch is rolled back' do
+      state = strategy.snapshot
+      strategy.apply(:shard_one)
+      strategy.restore(state)
+      expect { base_class.connection_pool }.to raise_error(ActiveRecordMock::ConnectionNotEstablished)
+    end
+  end
+
+  # A base class with no shard API at all: the only route back to "no pool" is
+  # removing the connection the fallback established.
+  describe 'a plain base class that has never been connected' do
+    let(:base_class) { ActiveRecordMock.unconnected_plain_base(configs: %w[primary shard_one]) }
+
+    it 'records that there was no pool to go back to' do
+      expect(strategy.snapshot[:pool_absent]).to be(true)
+    end
+
+    it 'removes the pool it established when the switch is rolled back' do
+      state = strategy.snapshot
+      strategy.apply(:shard_one)
+      strategy.restore(state)
+      expect(base_class.connection_pool).to be_nil
+    end
+  end
+
+  # The other half of the same rule: a base class that DID have a pool is put
+  # back onto its previous configuration, never left without one.
+  describe 'restoring a base class that was already connected' do
+    let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary shard_one]) }
+
+    it 'records that a pool was present' do
+      expect(strategy.snapshot[:pool_absent]).to be(false)
+    end
+
+    it 'puts the previous configuration back instead of removing the pool' do
+      state = strategy.snapshot
+      strategy.apply(:shard_one)
+      strategy.restore(state)
+      expect(base_class.connection_pool.db_config.name).to eq('primary')
+    end
   end
 
   # #pool_details is the resilience boundary of this file: a dead database must

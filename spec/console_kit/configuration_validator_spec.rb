@@ -264,13 +264,43 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
   end
 
   # A tenant that uses only some of the backends is an ordinary deployment, not
-  # a misconfiguration: an absent constants key means "leave that backend
-  # alone", and only :shard and :partner_code are ever required.
+  # a misconfiguration: only :shard and :partner_code are ever required. An
+  # omitted key does NOT mean "leave that backend alone" - a switch to this
+  # tenant resets that backend to its default.
   describe 'a tenant that configures only the backends it uses' do
     before { config.tenants = { acme: { constants: { shard: :shard1, partner_code: 'acme' } } } }
 
     it 'validates a SQL-only tenant without error' do
       expect { validate! }.not_to raise_error
+    end
+
+    it 'says nothing about resets, because no other tenant names more' do
+      validate!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/RESETS/)
+    end
+  end
+
+  # A map whose tenants disagree about which backends they name is where the
+  # reset rule bites: switching from the tenant that names Redis to the one that
+  # does not puts Redis back on its default rather than leaving it where it was.
+  describe 'a tenant map where only some tenants name a backend' do
+    before do
+      config.tenants = { acme: { constants: valid_constants },
+                         beta: { constants: { shard: :shard2, partner_code: 'beta' } } }
+    end
+
+    it 'does not raise, because naming fewer backends is legitimate' do
+      expect { validate! }.not_to raise_error
+    end
+
+    it 'warns that a switch to the shorter tenant resets what it omits' do
+      validate!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/RESETS/)
+    end
+
+    it 'names the backend keys it will reset' do
+      validate!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(/:redis_db/)
     end
   end
 

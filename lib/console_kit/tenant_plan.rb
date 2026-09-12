@@ -44,10 +44,23 @@ module ConsoleKit
 
     def lookup_constants
       tenants = ConsoleKit.configuration.tenants
-      tenants.is_a?(Hash) ? tenants.dig(tenant_key, :constants) : nil
+      return nil unless tenants.is_a?(Hash)
+
+      entry = tenants[tenant_key]
+      return nil if entry.nil?
+      raise ConfigurationError, "Tenant #{tenant_key.inspect} configuration must be a Hash, got #{entry.class}." \
+        unless entry.is_a?(Hash)
+
+      entry[:constants]
     end
 
+    # A direct `switch_tenant` need not have run `Configuration#validate!`, so the
+    # shape is checked here: a String `:constants` raised a bare NoMethodError.
     def validate!(constants)
+      unless constants.is_a?(Hash)
+        raise ConfigurationError, "Tenant #{tenant_key.inspect} `:constants` must be a Hash, got #{constants.class}."
+      end
+
       missing = REQUIRED_KEYS - constants.keys
       return if missing.empty?
 

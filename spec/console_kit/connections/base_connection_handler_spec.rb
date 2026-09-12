@@ -150,6 +150,14 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  # The default is what an optional gem that is not installed answers, and it is
+  # the answer that keeps a handler out of the dropped-backend record.
+  describe '#unavailable_reason' do
+    it 'is nil unless a handler says otherwise' do
+      expect(handler.unavailable_reason).to be_nil
+    end
+  end
+
   # A context attribute that is set but blank means "use the default", exactly
   # as an unset one does. Reading it as a value instead sends "" down the legacy
   # #connect path, where a blank Redis value reaches coerce_db("") and raises

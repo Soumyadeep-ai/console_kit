@@ -123,6 +123,17 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       end
     end
 
+    # Complete, loaded, and pointed at something that is not there: the operator
+    # asked for this backend, so its absence is news rather than a supported setup.
+    def misconfigured
+      Class.new do
+        def self.backend_key = :misconfigured
+        def initialize(context) = @context = context
+        def available? = false
+        def unavailable_reason = 'the configured vault_base_class "Nope" could not be resolved'
+      end
+    end
+
     context 'when the handler raises NotImplementedError' do
       before do
         allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([half_implemented])
@@ -171,6 +182,34 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
         allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([broken_differently])
         described_class.available_handlers(context)
         expect(ConsoleKit::Output).to have_received(:print_warning).twice
+      end
+    end
+
+    context 'when the handler answers false and says why' do
+      before do
+        allow(ConsoleKit::Connections::BaseConnectionHandler).to receive(:registry).and_return([misconfigured])
+      end
+
+      it 'drops it from the available handlers' do
+        expect(described_class.available_handlers(context)).to be_empty
+      end
+
+      it 'hands the backend key back as dropped, since it is not an absent gem' do
+        dropped = []
+        described_class.available_handlers(context, dropped)
+        expect(dropped).to eq([:misconfigured])
+      end
+
+      it 'warns with the reason the handler gave' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output)
+          .to have_received(:print_warning).with(a_string_including('could not be resolved'))
+      end
+
+      it 'warns that the backend will not be rolled back' do
+        described_class.available_handlers(context)
+        expect(ConsoleKit::Output)
+          .to have_received(:print_warning).with(a_string_including('NOT be switched, verified or rolled back'))
       end
     end
 

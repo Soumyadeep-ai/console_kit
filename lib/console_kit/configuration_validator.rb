@@ -5,6 +5,33 @@ require_relative 'output'
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
+  # An omitted backend key does not mean "leave that backend alone": a switch
+  # RESETS that backend to its default, which is what stops a tenant from ending
+  # up half on the tenant before it. Tenants that disagree with each other about
+  # which backends they name are where that bites, so only those are reported.
+  class BackendCoverage
+    WARNING = 'tenant %<tenant>p does not name %<omitted>s, which other tenants do. Switching to it RESETS those ' \
+              'backends to their defaults rather than leaving them on the tenant before it.'
+
+    def initialize(tenants)
+      @constants = tenants.select { |_key, entry| entry.is_a?(Hash) && entry[:constants].is_a?(Hash) }
+                          .transform_values { |entry| entry[:constants] }
+    end
+
+    def warnings = @constants.filter_map { |key, constants| warning_for(key, named - constants.keys) }
+
+    private
+
+    def named = @named ||= @constants.values.flat_map(&:keys).uniq & backend_keys
+    def backend_keys = Connections::BaseConnectionHandler.registry.map(&:constants_key)
+
+    def warning_for(key, omitted)
+      return nil if omitted.empty?
+
+      format(WARNING, tenant: key, omitted: omitted.map(&:inspect).join(', '))
+    end
+  end
+
   # Deep validation of a Configuration's tenant map and context class, run by
   # Configuration#validate! once the bare presence checks pass. Errors are
   # aggregated and raised together; warnings are printed via Output, never raised.
@@ -22,6 +49,7 @@ module ConsoleKit
     def validate!
       configuration.tenants.each { |key, entry| validate_tenant(key, entry) }
       check_duplicate_identifiers
+      check_uneven_backend_coverage
       check_context_writers
       emit_warnings
       raise ConfigurationError, errors.join("\n") if errors.any?
@@ -66,6 +94,10 @@ module ConsoleKit
                   'normalized (differ only by type or case). Tenant lookup uses an exact match, so only one ' \
                   'of these is ever reachable.'
       end
+    end
+
+    def check_uneven_backend_coverage
+      warnings.concat(BackendCoverage.new(configuration.tenants).warnings)
     end
 
     def check_required_keys(key, constants)

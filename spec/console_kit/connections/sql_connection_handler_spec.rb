@@ -43,40 +43,44 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
   end
 
   # A configured base class that does not resolve drops SQL out of the switch,
-  # the verify, the snapshot and the rollback, and the switch still reports
-  # itself verified. That is indistinguishable from "ActiveRecord is not loaded"
-  # unless it is said out loud.
-  describe '#available? with a base class that cannot be resolved' do
+  # the verify, the snapshot and the rollback. That is indistinguishable from
+  # "ActiveRecord is not loaded" unless the handler says which of the two it is,
+  # which is what the reason is for - the switch records it as a dropped backend.
+  describe '#unavailable_reason' do
     before { allow(ConsoleKit::Output).to receive(:print_warning) }
 
     context 'when the operator configured the class name explicitly' do
       before { ConsoleKit.configuration.sql_base_class = 'Legacy::NotARealRecord' }
 
       it 'names the class that could not be resolved' do
-        handler.available?
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('Legacy::NotARealRecord'))
-      end
-
-      it 'says SQL will not be switched' do
-        handler.available?
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('NOT be switched'))
+        expect(handler.unavailable_reason).to include('Legacy::NotARealRecord')
       end
 
       it 'still answers false rather than raising out of the switch' do
         expect(handler).not_to be_available
+      end
+
+      it 'prints nothing itself, so a repeated dashboard render cannot bury the table' do
+        handler.available?
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
       end
     end
 
     context 'when the application simply has no ActiveRecord' do
       before { hide_const('ApplicationRecord') }
 
-      it 'stays silent, because the default base class is allowed to be absent' do
-        handler.available?
-        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      it 'gives no reason, because the default base class is allowed to be absent' do
+        expect(handler.unavailable_reason).to be_nil
       end
 
       it 'answers false' do
         expect(handler).not_to be_available
+      end
+    end
+
+    context 'when the base class resolves' do
+      it 'gives no reason' do
+        expect(handler.unavailable_reason).to be_nil
       end
     end
   end

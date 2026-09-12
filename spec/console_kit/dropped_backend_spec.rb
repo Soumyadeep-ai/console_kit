@@ -163,6 +163,49 @@ RSpec.describe DroppedBackend do
     end
   end
 
+  # An explicitly configured `sql_base_class` that will not resolve is not an
+  # absent optional gem: the operator named a class, and ConsoleKit cannot drive
+  # the backend it names.
+  describe 'a sql_base_class that is configured but cannot be resolved' do
+    before do
+      ConsoleKit.configuration.sql_base_class = 'Legacy::NotARealRecord'
+      ConsoleKit.switch_tenant('acme')
+    end
+
+    it 'records SQL as a dropped backend' do
+      expect(state.dropped_backends).to eq([:sql])
+    end
+
+    it 'names the class that could not be resolved' do
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('Legacy::NotARealRecord'))
+    end
+
+    it 'says the tenant is only partly verified' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('verified only for'))
+    end
+
+    it 'still applies the backends it can drive' do
+      expect(identities[:redis]).to eq(2)
+    end
+  end
+
+  describe 'the default sql_base_class in an application that has no ActiveRecord' do
+    before do
+      hide_const('ApplicationRecord')
+      ConsoleKit.switch_tenant('acme')
+    end
+
+    it 'is not recorded as dropped, because the default is allowed to be absent' do
+      expect(state.dropped_backends).to be_empty
+    end
+
+    it 'is never named in a warning' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(a_string_including('ApplicationRecord'))
+    end
+  end
+
   describe 'a switch with every backend healthy' do
     before { ConsoleKit.switch_tenant('acme') }
 

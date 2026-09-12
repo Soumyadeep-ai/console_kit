@@ -16,9 +16,8 @@ module ConsoleKit
               detail_label: 'Shard'
 
       DEFAULT_BASE_CLASS = 'ApplicationRecord'
-      MISSING_BASE_CLASS = 'ConsoleKit: sql_base_class %<name>s could not be resolved, so SQL will NOT be switched, ' \
-                           'verified or rolled back and a switch will still report itself as verified. Check the ' \
-                           'class name and that the class is loaded.'
+      MISSING_BASE_CLASS = 'the configured sql_base_class %<name>s could not be resolved. Check the class name and ' \
+                           'that the class is loaded'
 
       class << self
         def target_error(value) = identifier_error(value)
@@ -34,16 +33,18 @@ module ConsoleKit
         def base_class_name = ConsoleKit.configuration.sql_base_class
       end
 
-      # An unresolvable DEFAULT base class only means the application has no
-      # ActiveRecord, so it stays silent; an explicitly configured one that will
-      # not resolve is reported. Neither raises: raising from here would escape
-      # every switch, every dashboard and the rollback's handler lookup.
-      def available?
-        name = self.class.base_class_name
-        return true if name.to_s.safe_constantize.present?
+      # Never raises: raising from here would escape every switch, every
+      # dashboard and the rollback's handler lookup.
+      def available? = resolved_base_class.present?
 
-        Output.print_warning(format(MISSING_BASE_CLASS, name: name.inspect)) unless name.to_s == DEFAULT_BASE_CLASS
-        false
+      # An unresolvable DEFAULT base class only means the application has no
+      # ActiveRecord, which is supported; a configured one that will not resolve
+      # is a fault, and the switch records it as a dropped backend.
+      def unavailable_reason
+        name = self.class.base_class_name
+        return nil if name.to_s == DEFAULT_BASE_CLASS || resolved_base_class.present?
+
+        format(MISSING_BASE_CLASS, name: name.inspect)
       end
 
       def prepare(target)
@@ -113,6 +114,10 @@ module ConsoleKit
 
       def strategy = @strategy ||= SqlStrategy.new(base_class)
       def normalize(target) = target.presence&.to_sym
+
+      # Deliberately not memoized: the configured name can be repointed, and a
+      # cached nil would answer for a class that has since loaded.
+      def resolved_base_class = self.class.base_class_name.to_s.safe_constantize
 
       def base_class
         @base_class ||= begin

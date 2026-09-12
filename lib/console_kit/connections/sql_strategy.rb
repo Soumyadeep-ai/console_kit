@@ -95,6 +95,46 @@ module ConsoleKit
       end
     end
 
+    # The base class's connection pool as a thing that can be ABSENT.
+    # `connection_pool` cannot say "there is none" without raising, so absence is
+    # read through the handler's own lookup wherever there is one.
+    class PoolSlot
+      attr_reader :base_class
+
+      def initialize(base_class) = @base_class = base_class
+
+      def absent? = lookup.nil?
+
+      # A pool established where there was none is removed, not re-pointed:
+      # re-pointing leaves the failed tenant's database connected.
+      def remove
+        return if absent?
+        return handler.remove_connection_pool(spec, role: role, shard: shard) if removable_handler?
+
+        base_class.remove_connection if base_class.respond_to?(:remove_connection)
+      end
+
+      private
+
+      def handler = base_class.try(:connection_handler)
+      def spec = base_class.try(:connection_specification_name)
+      def role = base_class.try(:current_role)
+      def shard = base_class.try(:current_shard)
+      def removable_handler? = handler.respond_to?(:remove_connection_pool) && spec
+
+      def lookup
+        return handler.retrieve_connection_pool(spec, role: role, shard: shard) if retrievable_handler?
+
+        base_class.try(:connection_pool)
+      rescue StandardError => e
+        raise e if ConsoleKit.programming_error?(e)
+
+        nil
+      end
+
+      def retrievable_handler? = handler.respond_to?(:retrieve_connection_pool) && spec
+    end
+
     # Rails-version-tolerant plumbing for pointing a SQL base class at a shard:
     # `connecting_to` for a shard registered through `connects_to shards:`,
     # `establish_connection` for a plain database.yml configuration name.
@@ -134,12 +174,18 @@ module ConsoleKit
 
       # A rollback has to put back the shard in ConsoleKit's OWN frame:
       # `current_shard` can be a host block's frame sitting above it.
+      # `db_config_name` is nil both for "no pool" and for "a pool that cannot
+      # name itself", so absence is recorded separately: only the first is undone
+      # by removing what the switch established. A pool that names itself is
+      # present by definition, so that is the only case that pays for the lookup.
       def snapshot
+        name = current_db_config_name
         {
           shard: frame.applied_shard || base_class.try(:current_shard),
           role: base_class.try(:current_role),
           stack_depth: connected_to_stack&.size,
-          db_config_name: current_db_config_name
+          db_config_name: name,
+          pool_absent: name.nil? && pool.absent?
         }
       end
 
@@ -150,7 +196,7 @@ module ConsoleKit
 
         unwind_stack(state[:stack_depth])
         restore_shard(state[:shard])
-        reestablish(state[:db_config_name])
+        state[:pool_absent] ? pool.remove : reestablish(state[:db_config_name])
       end
 
       # [expected, actual] identity of the live connection. Local reads, never a
@@ -181,6 +227,7 @@ module ConsoleKit
       def connected_to_stack = base_class.try(:connected_to_stack)
 
       def frame = @frame ||= ShardFrame.new(base_class)
+      def pool = @pool ||= PoolSlot.new(base_class)
       def apply_native(shard) = frame.apply(shard)
 
       # Unwinding to the recorded depth is not enough when one frame is reused:

@@ -70,6 +70,12 @@ module ActiveRecordMock
 
     def register(owner, db_config, role:, shard:) = @pools[[owner, role, shard]] = Pool.new(db_config)
 
+    # Mirrors ActiveRecord: the pool is unregistered, so the owner is back to
+    # having none for that role/shard at all.
+    def remove_connection_pool(owner, role:, shard:)
+      @pools.delete([owner, role, shard])&.tap(&:disconnect!)
+    end
+
     # Mirrors ActiveRecord: the replaced pool is removed and disconnected.
     def establish_connection(owner, db_config, role:, shard:)
       existing = @pools[[owner, role, shard]]
@@ -148,6 +154,13 @@ module ActiveRecordMock
         @connection_pool = Pool.new(resolve_config(config_name))
       end
 
+      # Rails' `remove_connection`: the pool is disconnected and forgotten, so
+      # the class is back to having none at all.
+      def remove_connection
+        @connection_pool&.disconnect!
+        @connection_pool = nil
+      end
+
       # Puts the pool back on the first configuration without going through
       # `establish_connection`, which examples routinely stub.
       def reset_connection! = @connection_pool = Pool.new(resolve_config(nil))
@@ -194,6 +207,14 @@ module ActiveRecordMock
       prepare(klass, [], env, owner)
       klass.configurations = Configurations.new([config])
       klass.connection_handler.register(owner, config, role: :writing, shard: :default)
+      klass
+    end
+
+    # The same, before anything has established its pool.
+    def unconnected_plain_base(configs:, env: 'test')
+      klass = Class.new(PlainBase)
+      klass.env_name = env
+      klass.configurations = configurations(configs, env)
       klass
     end
 
