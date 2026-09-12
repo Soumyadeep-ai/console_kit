@@ -31,39 +31,112 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Every Ruby x Rails combination the gemspec permits: railties declares
+        # >= 2.5 (6.1), >= 2.7 (7.0, 7.1), >= 3.1 (7.2) and >= 3.2 (8.0, 8.1),
+        # none of them declare an upper bound, and this gem requires >= 3.1.
+        #
+        # Cells marked experimental are ones Rails itself does not document as
+        # supported. They run and report, but do not gate the build - a red cell
+        # there is information about that combination, not a broken release.
         include:
           - rails: "6.1"
             ruby: "3.1"
             gemfile: gemfiles/rails_6_1.gemfile
+          - rails: "6.1"
+            ruby: "3.2"
+            gemfile: gemfiles/rails_6_1.gemfile
+            experimental: true
+          - rails: "6.1"
+            ruby: "3.3"
+            gemfile: gemfiles/rails_6_1.gemfile
+            experimental: true
+          - rails: "6.1"
+            ruby: "3.4"
+            gemfile: gemfiles/rails_6_1.gemfile
+            experimental: true
+          - rails: "6.1"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_6_1.gemfile
+            experimental: true
           - rails: "7.0"
             ruby: "3.1"
             gemfile: gemfiles/rails_7_0.gemfile
+          - rails: "7.0"
+            ruby: "3.2"
+            gemfile: gemfiles/rails_7_0.gemfile
+            experimental: true
+          - rails: "7.0"
+            ruby: "3.3"
+            gemfile: gemfiles/rails_7_0.gemfile
+            experimental: true
+          - rails: "7.0"
+            ruby: "3.4"
+            gemfile: gemfiles/rails_7_0.gemfile
+            experimental: true
+          - rails: "7.0"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_7_0.gemfile
+            experimental: true
+          - rails: "7.1"
+            ruby: "3.1"
+            gemfile: gemfiles/rails_7_1.gemfile
           - rails: "7.1"
             ruby: "3.2"
             gemfile: gemfiles/rails_7_1.gemfile
+          - rails: "7.1"
+            ruby: "3.3"
+            gemfile: gemfiles/rails_7_1.gemfile
+          - rails: "7.1"
+            ruby: "3.4"
+            gemfile: gemfiles/rails_7_1.gemfile
+            experimental: true
+          - rails: "7.1"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_7_1.gemfile
+            experimental: true
+          - rails: "7.2"
+            ruby: "3.1"
+            gemfile: gemfiles/rails_7_2.gemfile
+          - rails: "7.2"
+            ruby: "3.2"
+            gemfile: gemfiles/rails_7_2.gemfile
           - rails: "7.2"
             ruby: "3.3"
             gemfile: gemfiles/rails_7_2.gemfile
+          - rails: "7.2"
+            ruby: "3.4"
+            gemfile: gemfiles/rails_7_2.gemfile
+          - rails: "7.2"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_7_2.gemfile
+            experimental: true
+          - rails: "8.0"
+            ruby: "3.2"
+            gemfile: gemfiles/rails_8_0.gemfile
+          - rails: "8.0"
+            ruby: "3.3"
+            gemfile: gemfiles/rails_8_0.gemfile
           - rails: "8.0"
             ruby: "3.4"
             gemfile: gemfiles/rails_8_0.gemfile
-          # Rails 8.1 is what the default Gemfile.lock resolves to, so it is the
-          # combination most development happens against. Ruby 3.3 as well as 3.4
-          # because the prompt hook reaches into IRB, whose internals move.
+          - rails: "8.0"
+            ruby: "4.0"
+            gemfile: gemfiles/rails_8_0.gemfile
+            experimental: true
+          - rails: "8.1"
+            ruby: "3.2"
+            gemfile: gemfiles/rails_8_1.gemfile
           - rails: "8.1"
             ruby: "3.3"
             gemfile: gemfiles/rails_8_1.gemfile
           - rails: "8.1"
             ruby: "3.4"
             gemfile: gemfiles/rails_8_1.gemfile
-          # Ruby 4.0 is current and Rails 8.1 declares `>= 3.2.0` with no upper
-          # bound, so this combination is supported by both. CI is the first
-          # thing to actually exercise it.
           - rails: "8.1"
             ruby: "4.0"
             gemfile: gemfiles/rails_8_1.gemfile
-
-    name: Rails ${{ matrix.rails }} / Ruby ${{ matrix.ruby }}
+    name: Rails ${{ matrix.rails }} / Ruby ${{ matrix.ruby }}${{ matrix.experimental && ' (experimental)' || '' }}
+    continue-on-error: ${{ matrix.experimental || false }}
 
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/${{ matrix.gemfile }}
