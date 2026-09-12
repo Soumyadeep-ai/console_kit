@@ -47,6 +47,15 @@ jobs:
           - rails: "8.0"
             ruby: "3.4"
             gemfile: gemfiles/rails_8_0.gemfile
+          # Rails 8.1 is what the default Gemfile.lock resolves to, so it is the
+          # combination most development happens against. Ruby 3.3 as well as 3.4
+          # because the prompt hook reaches into IRB, whose internals move.
+          - rails: "8.1"
+            ruby: "3.3"
+            gemfile: gemfiles/rails_8_1.gemfile
+          - rails: "8.1"
+            ruby: "3.4"
+            gemfile: gemfiles/rails_8_1.gemfile
 
     name: Rails ${{ matrix.rails }} / Ruby ${{ matrix.ruby }}
 

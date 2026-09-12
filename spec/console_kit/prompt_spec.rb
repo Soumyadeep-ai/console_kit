@@ -142,4 +142,58 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
   end
+
+  # Rails starts IRB by calling IRB.setup, which resets IRB.conf and throws away
+  # anything configured before it - including a prompt installed from the
+  # railtie's console hook. Rails then installs its own prompt and selects it.
+  # This is the real sequence, for every Rails version from 6.1 to 8.0.
+  describe 'surviving the way Rails boots IRB' do
+    let(:irb_conf) { { PROMPT: {}, PROMPT_MODE: nil } }
+    let(:rails_prompt) do
+      { PROMPT_I: '%N(prod)> ', PROMPT_S: '%N(prod)%l ', PROMPT_C: '%N(prod)* ', RETURN: "=> %s\n" }
+    end
+
+    def live_prompt = irb_conf[:PROMPT][irb_conf[:PROMPT_MODE]]
+
+    before do
+      irb_module = Module.new do
+        def self.conf; end
+      end
+      stub_const('IRB', irb_module)
+      stub_const('IRB::Irb', Class.new { def initialize(*, **); end })
+      allow(IRB).to receive(:conf).and_return(irb_conf)
+
+      described_class.apply
+
+      # IRB.setup: resets the whole config.
+      irb_conf[:PROMPT] = { DEFAULT: { PROMPT_I: '%N> ' } }
+      irb_conf[:PROMPT_MODE] = :DEFAULT
+      # Rails then installs and selects its own prompt.
+      irb_conf[:PROMPT][:RAILS_PROMPT] = rails_prompt
+      irb_conf[:PROMPT_MODE] = :RAILS_PROMPT
+      # Rails constructs the session last.
+      IRB::Irb.new
+    end
+
+    it 'still shows the tenant once the session is built' do
+      expect(live_prompt[:PROMPT_I]).to include('[acme]')
+    end
+
+    it 'keeps what Rails put in the prompt rather than replacing it' do
+      expect(live_prompt[:PROMPT_I]).to include('(prod)')
+    end
+
+    it 'shows the tenant on the continuation prompt too' do
+      expect(live_prompt[:PROMPT_C]).to include('[acme]')
+    end
+
+    it 'preserves the return format Rails configured' do
+      expect(live_prompt[:RETURN]).to eq("=> %s\n")
+    end
+
+    it 'does not decorate an already decorated prompt twice' do
+      IRB::Irb.new
+      expect(live_prompt[:PROMPT_I].scan('[acme]').size).to eq(1)
+    end
+  end
 end

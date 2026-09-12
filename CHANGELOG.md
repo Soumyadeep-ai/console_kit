@@ -42,6 +42,8 @@ completes fully or leaves the previous tenant exactly as it was.
 - **The gem did not require the ActiveSupport core extensions it uses.** `Object#try` and `Time.current` are called on ordinary paths but were only available if the host application had already loaded more of Rails.
 - **Errors printed to the console were not scrubbed.** A tenant constant can carry a connection URI, so an authentication failure could put a plaintext password into the console and the logs.
 
+- **The tenant never appeared in the prompt on a console without Pry.** Rails starts IRB by calling `IRB.setup`, which resets `IRB.conf` and discards anything configured before it - including the prompt installed from the railtie's console hook, which runs earlier. Rails then installed its own prompt and selected it. Applications carrying `pry-rails` in development but not in production therefore saw the tenant locally and never in production, which is exactly where it matters most. The prompt is now re-applied when IRB builds the session, after every reset, and it decorates the active prompt rather than replacing it, so Rails' environment colouring is kept.
+
 ### Security
 - **Credentials are scrubbed** from error messages, diagnostic rows and console output: connection URIs, `key=value` and `key => value` fragments, `Authorization: Bearer <token>` style auth headers, bare `password <value>` phrases and `for user <name>` principals. Hostnames and ports are deliberately kept - they are not secrets, and removing them would gut the diagnostic value of a connection error. Treat this as defence in depth, not a boundary: it is shape-matching over strings ConsoleKit did not produce.
 - **Elasticsearch cross-thread prefix conflicts are detected.** `Elasticsearch::Model.index_name_prefix` is process-wide; when live threads hold different prefixes ConsoleKit warns once, naming both, instead of silently letting one thread read another tenant's indices.
@@ -79,6 +81,10 @@ Not part of the documented public surface, but visible to anyone who reached for
 - `ConnectionManager.available_handlers` takes an optional collector for backends it had to drop, and returns handlers in declaration order.
 - `RedisConnectionHandler#isolation_model` can return `:unknown` when the probe could not observe the client.
 - New instrumentation counters: `console_kit.handler_dropped`, `console_kit.handler_collision`, `console_kit.incomplete_verification`, `console_kit.sql_frame_reasserted`.
+
+### Compatibility
+- Tested against Rails 6.1, 7.0, 7.1, 7.2, 8.0 and 8.1 across Ruby 3.1 to 3.4. Rails 8.1 is what the default lockfile resolves to and is now covered by CI on two Ruby versions, since the prompt hook reaches into IRB, whose internals move between releases.
+- `required_ruby_version` remains `>= 3.1.0` and the Rails dependencies remain `>= 6.1`, both without an upper bound.
 
 ### Preserved
 - The 1.3.0 Mongoid named-client fixes - `override_client` for named clients, `override_database` for database names, and clearing both on reset - are intact and covered by explicit regression tests.
