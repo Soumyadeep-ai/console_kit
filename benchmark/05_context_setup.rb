@@ -17,7 +17,7 @@ ConsoleKitBenchmark::Setup.configure_native!
 
 ctx = ConsoleKitBenchmark::Setup.context_class
 constants = ConsoleKitBenchmark::Setup::TENANTS.fetch('acme')[:constants]
-mapping = ConsoleKit::TenantConfigurator::CONTEXT_MAPPING
+mapping = ConsoleKit::TenantConfigurator.context_mapping
 
 ConsoleKit::Output.silence do
   Benchmark.ips do |x|

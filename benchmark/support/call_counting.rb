@@ -51,7 +51,7 @@ module ConsoleKitBenchmark
     end
 
     AVAILABLE_HANDLERS_CALL = Module.new do
-      def available_handlers(context)
+      def available_handlers(context, dropped = nil)
         Counters.increment(:available_handlers_call)
         super
       end

@@ -30,9 +30,10 @@ module ConsoleKit
                           '%<current>s will be switched, verified and rolled back.'
 
       class << self
-        # A frozen view. Callers iterate it every switch; handing out the live
-        # collection would let any of them reorder or empty the registry that
-        # decides what a switch touches.
+        # A frozen snapshot. `Hash#values` already copies, so the registry itself
+        # was never reachable through this - the freeze is about the copy: it
+        # stops a caller mutating what it was handed and then reasoning about it
+        # as though it still described the registry.
         def all = entries.values.freeze
 
         def add(handler_class)
