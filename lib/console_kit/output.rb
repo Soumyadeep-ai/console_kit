@@ -8,8 +8,8 @@ module ConsoleKit
       error: { symbol: '[✗]', color: '1;31' },
       success: { symbol: '[✓]', color: '1;32' },
       warning: { symbol: '[!]', color: '1;33' },
-      prompt: { symbol: nil,   color: '1;36' },
-      header: { symbol: nil,   color: '1;34' },
+      prompt: { symbol: nil, color: '1;36' },
+      header: { symbol: nil, color: '1;34' },
       trace: { symbol: nil, color: '0;90' },
       info: { symbol: nil, color: nil }
     }.freeze

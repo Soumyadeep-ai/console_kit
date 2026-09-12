@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 require 'English'
+# The base must load before any core_ext: a leaf file such as
+# time/calculations pulls in active_support/duration, which reaches for
+# ActiveSupport.deprecator and only finds it once the base is loaded.
+require 'active_support'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/inclusion'
 require 'active_support/core_ext/object/try'
