@@ -15,8 +15,6 @@ module ConsoleKit
               constants_key: :shard,
               detail_label: 'Shard'
 
-      # Configuration's own default. An application with no ActiveRecord never
-      # resolves it, and that is a supported setup rather than a mistake.
       DEFAULT_BASE_CLASS = 'ApplicationRecord'
       MISSING_BASE_CLASS = 'ConsoleKit: sql_base_class %<name>s could not be resolved, so SQL will NOT be switched, ' \
                            'verified or rolled back and a switch will still report itself as verified. Check the ' \
@@ -37,11 +35,9 @@ module ConsoleKit
       end
 
       # An unresolvable DEFAULT base class only means the application has no
-      # ActiveRecord, so it stays silent. A base class the operator configured
-      # explicitly and that does not resolve is a configuration error: the
-      # handler still answers false, because raising from here would escape
-      # every switch, every dashboard and the rollback's handler lookup, but it
-      # says so rather than looking like an optional gem that is not loaded.
+      # ActiveRecord, so it stays silent; an explicitly configured one that will
+      # not resolve is reported. Neither raises: raising from here would escape
+      # every switch, every dashboard and the rollback's handler lookup.
       def available?
         name = self.class.base_class_name
         return true if name.to_s.safe_constantize.present?
@@ -50,7 +46,6 @@ module ConsoleKit
         false
       end
 
-      # Validate/resolve only, never mutates.
       def prepare(target)
         validate_target!(target)
         unless strategy.switchable?
@@ -70,10 +65,6 @@ module ConsoleKit
         strategy.apply(shard)
       end
 
-      # Compares the shard we asked for against the shard the live connection
-      # actually resolves to. Every supported Rails version (6.1+) exposes one
-      # of `current_shard` or `connection_pool.db_config.name`, so there is no
-      # version here that degrades to an unchecked `true`.
       def verify!(target)
         expected, actual = strategy.identity(normalize(target))
         return true if expected.to_s == actual.to_s
@@ -83,10 +74,9 @@ module ConsoleKit
 
       def restore(state) = strategy.restore(state)
 
-      # The native shard path is per-thread, but the `establish_connection`
-      # fallback replaces the base class's pool for the whole process, so the
-      # resolved pool is what a cached diagnostic row has to stay true for.
-      # `pool_details` reads configuration only and issues no query.
+      # The `establish_connection` fallback replaces the base class's pool for
+      # the whole process, so the resolved pool is what a cached diagnostic row
+      # has to stay true for.
       def diagnostic_identity = strategy.pool_details
 
       def diagnostics(level: :basic)
@@ -101,7 +91,7 @@ module ConsoleKit
 
       private
 
-      # Availability plus resolved identity. Performs no query.
+      # No query.
       def basic_diagnostics
         details = strategy.pool_details
         { name: display_name, status: details.empty? ? :unknown : :connected, latency_ms: nil, details: details }

@@ -7,33 +7,18 @@ require_relative 'instrumentation'
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
-  # On-demand connection diagnostics.
-  #
-  # Diagnostics are decoupled from tenant switching: TenantSwitch never asks a
-  # handler for diagnostics, and `config.show_dashboard` stays the only thing
-  # that renders a dashboard when a tenant is applied.
-  #
-  # Levels
-  #   :basic  resolved identity read out of memory. No network call, so it
-  #           cannot block: it runs inline on the calling thread, with no
-  #           worker and no timeout machinery at all.
-  #   :full   may ping, read versions or health-check. Bounded by Runner.
+  # On-demand connection diagnostics. A :basic row is resolved identity read out
+  # of memory and runs inline; a :full row may hit the network and is bounded by Runner.
   module Diagnostics
     LEVELS = %i[basic full].freeze
     DEFAULT_TIMEOUT = 2
-    # Long enough that repeatedly typing `dashboard` cannot hammer a backend,
-    # short enough that an operator who just restarted one sees it recover on
-    # the next look. Deliberately equal to DEFAULT_TIMEOUT, so a cached row is
-    # never older than the window a fresh check was allowed to take anyway.
+    # Deliberately equal to DEFAULT_TIMEOUT: a cached row is then never older than
+    # the window a fresh check was allowed to take anyway.
     CACHE_TTL_SECONDS = 2.0
     EVENT = 'console_kit.diagnostics'
     TIMEOUT_COUNTER = 'console_kit.diagnostics_timeout'
-    # A bug in ConsoleKit itself must never be laundered into an :error row that
-    # hides it. A dependency being unreachable is a legitimate :error row.
 
     class << self
-      # Diagnostic rows for every available handler. :full rows are memoised for
-      # CACHE_TTL_SECONDS; :basic rows are read live on every call.
       def run(level: :basic, timeout: DEFAULT_TIMEOUT)
         validate_level!(level)
         available_handlers.map { |handler| cached(handler, level, timeout) }
@@ -61,42 +46,18 @@ module ConsoleKit
       end
     end
 
-    # Short-lived, per-thread memo of :full diagnostic rows.
-    #
-    # Correctness before speed. An entry is reused only while all three of these
-    # still hold:
-    #
-    #   * its TTL has not elapsed;
-    #   * this thread is still on the very TenantState object that produced it -
-    #     TenantSwitch commits a brand new TenantState on every switch, so a
-    #     switch invalidates every row immediately, TTL or not;
-    #   * the backend still reports the identity it reported when the row was
-    #     written.
-    #
-    # The last one is what a tenant key cannot do on its own: Elasticsearch and
-    # Redis are PROCESS-global, so a foreign thread can move the prefix or the
-    # DB without touching this thread's TenantState, and a row keyed on tenant
-    # alone would go on reporting a backend the process has already left. The
-    # identity is read out of memory (it is exactly what a :basic row reports),
-    # so checking it costs no round trip and the cache still does its job:
-    # sparing the backends a hammering when nothing has moved.
-    #
-    # The store is a thread-local, so one thread's tenant can never leak into
-    # another thread's dashboard. Only :full is cached; a :basic row is a local
-    # read already, so caching it would buy nothing.
+    # Short-lived, per-thread memo of :full rows; a :basic row is a local read
+    # already and is never cached. An entry survives only while its TTL holds, this
+    # thread is still on the very TenantState that produced it, and the backend
+    # still reports the identity it had when the row was written - Elasticsearch and
+    # Redis are PROCESS-global, so another thread can move one without touching this
+    # thread's TenantState.
     module Cache
       STORE_KEY = :console_kit_diagnostics_cache
       CACHED_LEVEL = :full
-      # A backend that just failed is re-asked on the next call. Holding a
-      # failure for the full TTL would hide a backend that has since recovered,
-      # and re-asking is cheap: while a timed-out check is still running the
-      # runner answers :busy immediately instead of starting another one.
       UNCACHEABLE = %i[error timeout].freeze
-      # Only :full is ever cached, so a key is really (tenant, backend). Four
-      # backends today, and a console operator rarely keeps more than a handful
-      # of tenants "warm" in one session - 32 gives comfortable headroom (8
-      # tenants x 4 backends) while keeping a long-lived console from
-      # accumulating one entry per distinct tenant ever visited.
+      # 8 tenants x 4 backends: headroom without letting a long-lived console
+      # accumulate one entry per tenant ever visited.
       CAPACITY = 32
 
       class << self
@@ -116,8 +77,6 @@ module ConsoleKit
 
         def store = Thread.current[STORE_KEY] ||= {}
 
-        # A stale hit is evicted on the spot rather than merely ignored, so an
-        # entry nobody rereads still cannot occupy a capacity slot forever.
         def read(key, identity)
           entry = store[key]
           return nil unless entry
@@ -140,33 +99,23 @@ module ConsoleKit
           row
         end
 
-        # The backend's own observed identity: the prefix Elasticsearch will
-        # index with, the DB the Redis client is on. Read out of memory, never
-        # over the wire, and never from this thread's tenant state - that is the
-        # point of it.
         def identity_of(handler)
           handler.diagnostic_identity
         rescue StandardError => e
           raise e if Diagnostics.programming_error?(e)
 
-          # Equal to nothing, including itself on the next read: an identity
-          # ConsoleKit could not read is not evidence that a row is still true.
+          # Equal to nothing, including itself: an identity ConsoleKit could not
+          # read is not evidence that a row is still true.
           Object.new
         end
 
-        # Ruby Hashes preserve insertion order, so deleting and reinserting a
-        # key moves it to the end. That makes `each_key.first` the
-        # least-recently-used key, with no extra bookkeeping needed.
+        # Ruby Hashes preserve insertion order, so delete-then-reinsert moves a key
+        # to the end and makes `each_key.first` the least-recently-used key.
         def touch(key, entry)
           store.delete(key)
           store[key] = entry
         end
 
-        # Nothing that already failed freshness will ever pass it again (TTL only
-        # moves forward, a TenantState identity never changes back), so a stale
-        # entry is dead weight - dropping it here means it stops costing a
-        # capacity slot the moment it goes stale, not merely when eviction
-        # eventually reaches it.
         def purge_expired!
           store.delete_if { |_, entry| !fresh?(entry) }
         end
@@ -177,12 +126,10 @@ module ConsoleKit
 
         def fresh?(entry) = entry[:expires_at] > now && entry[:state].equal?(state)
 
-        # Freshness plus "the backend has not moved underneath the row".
         def current?(entry, identity) = fresh?(entry) && entry[:identity] == identity
 
         # The raw slot, not StateStore.current: `current` fabricates a fresh
-        # TenantState.empty whenever nothing is set, which would make every
-        # identity comparison a miss for a console with no tenant selected.
+        # TenantState.empty when nothing is set, making every comparison a miss.
         def state = Thread.current[StateStore::STATE_KEY]
         def now = Connections::DiagnosticHelpers.clock_time
       end
@@ -209,8 +156,8 @@ module ConsoleKit
         end
       end
 
-      # Blocks for at most `timeout` seconds. Returns nil when the worker has
-      # not finished by then; the worker keeps going and stays owned.
+      # Returns nil when the worker has not finished within `timeout`; the worker
+      # keeps going and stays owned.
       def wait(timeout)
         deadline = Connections::DiagnosticHelpers.clock_time + timeout
         @mutex.synchronize do
@@ -225,13 +172,9 @@ module ConsoleKit
       end
     end
 
-    # One long-lived thread per backend, idle-blocked on a queue.
-    #
-    # A worker runs exactly one job at a time. A request that arrives while the
-    # worker is still occupied - which is what a previous timeout leaves behind -
-    # is answered :busy instead of starting another thread, so ConsoleKit can
-    # never hold more diagnostic threads than it has backends. Threads are never
-    # killed: 1.3.0 removed Thread.kill because killing a thread mid-operation
+    # One long-lived thread per backend, idle-blocked on a queue. One job at a time:
+    # a request arriving while the worker is occupied is answered :busy rather than
+    # starting another thread. Threads are never killed - killing one mid-operation
     # can corrupt a database connection.
     class Worker
       STOP = :__console_kit_stop__
@@ -262,10 +205,8 @@ module ConsoleKit
         @queue << STOP
       end
 
-      # A worker unwinding on a failure the runner could not rescue has already
-      # published that failure to its own caller as a row. Thread#join re-raises
-      # it, so joining that thread would deliver the same failure a second time,
-      # into an unrelated shutdown.
+      # Thread#join re-raises the failure the thread died on, and that failure was
+      # already published to its caller as a row - do not deliver it twice.
       def join(timeout)
         return if @failed
 
@@ -282,8 +223,6 @@ module ConsoleKit
         end
       end
 
-      # `error` is the failure this worker is about to unwind on, recorded so
-      # #join knows this thread's death was already reported.
       def release(error = nil)
         @mutex.synchronize do
           @busy = false
@@ -291,8 +230,8 @@ module ConsoleKit
         end
       end
 
-      # A replacement thread is not the one that died, so the note telling #join
-      # to leave it alone is cleared with it.
+      # A replacement thread is not the one that died, so the note telling #join to
+      # leave it alone is cleared with it.
       def ensure_thread
         @mutex.synchronize do
           next if @thread&.alive?
@@ -318,14 +257,9 @@ module ConsoleKit
         end
       end
 
-      # Releases the worker before publishing, so a caller that gets its result
-      # can immediately ask again without being told the worker is busy.
-      #
-      # `$ERROR_INFO` is the exception this method is unwinding on - the one
-      # way to see a failure that is neither a StandardError nor a ScriptError
-      # without rescuing Exception itself. Publishing it matters: an outcome of
-      # nil reads to the caller as "did not finish in time", so a worker that
-      # blew up was reported as a backend that was merely slow.
+      # Released before publishing, so a caller that gets its result can ask again
+      # at once. `$ERROR_INFO` is the exception this method is unwinding on, and
+      # publishing it stops a worker that blew up reading as one that was merely slow.
       def perform(job)
         outcome = Runner.execute(job.handler, job.level)
       ensure
@@ -342,7 +276,6 @@ module ConsoleKit
           resolve(handler, dispatch(handler, timeout, level), timeout)
         end
 
-        # Runs the handler and returns its row, or the exception it raised.
         # Never raises: a worker thread must not blow up on its caller's behalf.
         def execute(handler, level)
           Instrumentation.instrument(EVENT, backend: handler.backend_key, level: level) do
@@ -359,9 +292,8 @@ module ConsoleKit
           end
         end
 
-        # Retires every worker and reports how many threads are still alive. A
-        # worker stuck in a hung diagnostic is asked to stop, never killed, so a
-        # non-zero answer means a backend has not returned yet.
+        # A stuck worker is asked to stop, never killed, so a non-zero answer means
+        # a backend has not returned yet.
         def shutdown!(timeout: DEFAULT_TIMEOUT)
           stopping = mutex.synchronize { workers.values.tap { workers.clear } }
           stopping.each(&:stop)
@@ -372,7 +304,6 @@ module ConsoleKit
 
         private
 
-        # :basic reads memory only, so it cannot block and needs no worker.
         def dispatch(handler, timeout, level)
           return execute(handler, level) if level == :basic
 

@@ -6,42 +6,28 @@ module ConsoleKit
   module Connections
     # Shared helper methods for connection diagnostics
     module DiagnosticHelpers
-      # A diagnostic row is printed and may be forwarded to a log, so nothing
-      # that could carry a host, user, password, token or API key is allowed
-      # through verbatim. Client error messages routinely embed the whole
-      # connection URL they failed on.
       CREDENTIAL_URL = %r{\b[a-z][a-z0-9+.-]*://\S*}i
       SECRET_KEY = /password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth(?:orization)?/i
-      # key=value, key: value, key => value and "key"=>"value". The `:(?!:)`
-      # keeps `Mongo::Auth::Unauthorized` from being read as an assignment.
-      # An auth scheme puts the word and the secret in separate tokens
+      # An auth scheme spans the space between label and secret
       # (`Authorization: Bearer <jwt>`), so stopping at the first space would
-      # redact the label and leave the credential - the useless half.
+      # redact the label and leave the credential. In CREDENTIAL_ASSIGNMENT,
+      # `:(?!:)` keeps `Mongo::Auth::Unauthorized` from reading as an assignment.
       AUTH_SCHEME = /(?:Bearer|Basic|Token|Digest|ApiKey)\s+/i
       CREDENTIAL_ASSIGNMENT = /["']?\b#{SECRET_KEY}\b["']?\s*(?:=>|=|:(?!:))\s*["']?#{AUTH_SCHEME}?\S+/
-      # `password hunter2` with no separator at all. The negative lookahead stops
-      # `password authentication failed` from being mangled into nonsense.
-      # Ordinary English that happens to follow a secret-ish word. Without this
-      # `token limit exceeded` and `auth type not supported` are redacted into
-      # uselessness, and an error an operator cannot read is its own failure.
+      # Ordinary English following a secret-ish word: without the lookahead this
+      # excludes, `token limit exceeded` is redacted into uselessness.
       SECRET_NOISE = /
         authentication|auth|is|was|for|error|required|mismatch|incorrect|invalid|failed|missing|expired|
         limit|type|count|name|header|value|must|cannot|not|and|or|in|of|to|exceeded|denied|unsupported|
         supported|rejected|refused|revoked|length|format|scheme|provider|store|file|path|key
       /xi
       CREDENTIAL_PHRASE = /\b#{SECRET_KEY}\s+(?!#{SECRET_NOISE}\b)["']?\S+/i
-      # `for user "svc_admin"`, `username admin` - a principal is not a password,
-      # but it is half of one and routinely appears in auth failures.
       CREDENTIAL_PRINCIPAL = /\b(?:for user|username|user name)\b\s+["']?\S+/i
-      # `User svc_admin@admin is not authorized` - the @ is what distinguishes a
-      # principal from the ordinary English word "user".
+      # The @ is what distinguishes a principal from the English word "user".
       CREDENTIAL_PRINCIPAL_AT = /\buser\s+["']?\S+@\S+/i
       # One alternation, one scan: gsub only ever looks at the ORIGINAL message,
-      # so a shape can never match text that an earlier redaction in the same
-      # call inserted (the multi-pass chain this replaced could - a later
-      # pass would re-scan the previous pass's own `[redacted]` markers). Order
-      # in the list only breaks ties when two shapes could start at the same
-      # character.
+      # so no shape can match text an earlier redaction inserted. Chaining
+      # separate gsubs would re-scan the previous pass's `[redacted]` markers.
       CREDENTIAL_PATTERN = Regexp.union(CREDENTIAL_URL, CREDENTIAL_ASSIGNMENT, CREDENTIAL_PHRASE,
                                         CREDENTIAL_PRINCIPAL, CREDENTIAL_PRINCIPAL_AT).freeze
       REDACTED = '[redacted]'
@@ -53,12 +39,10 @@ module ConsoleKit
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
-      # Hostnames are deliberately NOT scrubbed: they are not secrets in the same
-      # class as a password, and removing them would gut the diagnostic value of
-      # a connection error. Everything that is half of a credential is removed.
-      # `String#scrub` first: this runs inside TenantSwitchError's constructor, so
-      # an invalid byte sequence in a driver's message would otherwise raise from
-      # the constructor, replace the root cause, and escape switch_tenant.
+      # Hostnames are deliberately NOT scrubbed: removing them would gut the
+      # diagnostic value of a connection error. `String#scrub` first because this
+      # runs inside TenantSwitchError's constructor, where an invalid byte
+      # sequence would raise, replace the root cause and escape switch_tenant.
       def scrub(message)
         message.to_s.scrub.gsub(CREDENTIAL_PATTERN, REDACTED)
       end
@@ -71,9 +55,8 @@ module ConsoleKit
         expired_diagnostics(name, "Timed out after #{timeout}s")
       end
 
-      # A check that could not even be started because the backend's worker is
-      # still occupied by a previous, timed-out check. Reported as :timeout so
-      # the dashboard renders it as a failure rather than an unknown state.
+      # Reported as :timeout so the dashboard renders a worker still busy with a
+      # previous, timed-out check as a failure rather than an unknown state.
       def busy_diagnostics(name)
         expired_diagnostics(name, BUSY_REASON)
       end

@@ -8,14 +8,9 @@ require_relative 'tenant_plan'
 require_relative 'connections/connection_manager'
 
 module ConsoleKit
-  # Transactional tenant switch coordinator.
-  #
-  #   validate -> snapshot -> prepare -> apply context -> connect -> verify -> commit
-  #
-  # Any failure after the snapshot rolls every touched component back to the
-  # captured state and raises TenantSwitchError, which preserves both the root
-  # cause and any rollback failures. Until #commit runs, the previous tenant is
-  # still the observable current tenant.
+  # Transactional tenant switch coordinator. Any failure after the snapshot rolls
+  # every touched component back to the captured state and raises TenantSwitchError.
+  # Until #commit runs, the previous tenant is still the observable current tenant.
   class TenantSwitch
     EVENT = 'console_kit.tenant_switch'
 
@@ -25,15 +20,8 @@ module ConsoleKit
       def clear(context: nil) = new(nil, context: context).call
 
       # Re-verify that every available backend still matches the current tenant.
-      # Raises ConnectionVerificationError on the first mismatch. The returned
-      # state also names the backends the switch never reached, which no amount
-      # of verifying the ones it did reach can discover.
-      #
-      # `dropped` is an optional collector for the backends THIS verification
-      # could not drive. A handler that was healthy at switch time and has
-      # broken since is dropped here and nowhere else: the committed state
-      # cannot know about it, so a caller that reports only `state
-      # .dropped_backends` calls such a tenant fully verified.
+      # `dropped` collects the backends THIS verification could not drive: one that
+      # was healthy at switch time and has broken since appears nowhere else.
       def verify_current!(dropped = nil)
         state = StateStore.current
         raise ConfigurationError, 'No tenant is currently configured.' unless state.configured?
@@ -42,7 +30,6 @@ module ConsoleKit
         state
       end
 
-      # Undo a committed state, returning the store to `previous`.
       def unwind(state, previous) = TenantRollback.unwind(state, previous)
     end
 
@@ -69,21 +56,16 @@ module ConsoleKit
       transact(handlers, targets, plan.constants)
     end
 
-    # --- prepare (no mutation) -----------------------------------------
-
     def prepare_all(handlers, targets)
       handlers.each { |handler| handler.prepare(targets[handler.backend_key]) }
     end
-
-    # --- apply / verify / commit ---------------------------------------
 
     def transact(handlers, targets, constants)
       run_transaction(handlers, targets, constants, snapshot_state(handlers))
     end
 
-    # Snapshotting runs before anything has been applied, so a failure here needs
-    # no rollback - but it must still surface as a TenantSwitchError carrying its
-    # cause rather than escaping raw.
+    # Nothing has been applied yet, so a failure here needs no rollback - but it
+    # must still surface as a TenantSwitchError carrying its cause.
     def snapshot_state(handlers)
       capture_undo(handlers)
     rescue StandardError, NotImplementedError => e
@@ -131,24 +113,20 @@ module ConsoleKit
       end
     end
 
-    # Remembers which handler is being applied, so a raw backend error - one the
-    # handler did not wrap in a ConnectionError of its own - can still be
-    # attributed to the backend that raised it.
+    # Remembers the handler in flight, so a raw backend error - one the handler did
+    # not wrap - can still be attributed to the backend that raised it.
     def instrument_backend(event, handler, &)
       @failing_handler = handler
       Instrumentation.instrument(event, backend: handler.backend_key, tenant: tenant_key, &)
     end
 
-    # A clear is a completed switch too, but it commits no tenant: reporting it
-    # as configured left `StateStore.configured?` true with no tenant key, so
-    # the compat `configuration_success?` answered yes after a clear and
-    # `verify_tenant!` cheerfully "verified" the default state.
+    # A clear is a completed switch that commits no tenant: reporting it as
+    # configured left `configured?` true with no tenant key, so `verify_tenant!`
+    # cheerfully "verified" the default state.
     def commit(constants, context_values, undo)
       StateStore.current = TenantState.new(tenant_key: tenant_key, constants: constants, undo: undo,
                                            context_values: context_values, configured: !tenant_key.nil?)
     end
-
-    # --- rollback -------------------------------------------------------
 
     def rollback(undo, handlers)
       TenantRollback.new(undo, context_wrapper).call(handlers)

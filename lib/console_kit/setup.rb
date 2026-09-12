@@ -14,8 +14,8 @@ module ConsoleKit
     class << self
       def current_tenant = StateStore.tenant_key
 
-      # Declares the current tenant key without touching connections. Assigning a
-      # key that is already current preserves the fully-configured state.
+      # Declares the current tenant key without touching connections. Re-assigning
+      # the key that is already current preserves the fully-configured state.
       def current_tenant=(val)
         return if StateStore.tenant_key == val
 

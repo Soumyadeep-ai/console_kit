@@ -3,19 +3,15 @@
 require_relative 'instrumentation'
 
 module ConsoleKit
-  # Restores a captured undo bundle after a failed tenant switch.
-  #
-  # Every component is attempted even when an earlier one fails, so a single
-  # broken backend cannot strand the rest of the process on the new tenant. Each
-  # failure is collected and reported rather than swallowed or allowed to replace
-  # the original root-cause exception.
+  # Restores a captured undo bundle after a failed tenant switch. Every component
+  # is attempted even when an earlier one fails, and each failure is collected
+  # rather than allowed to replace the original root-cause exception.
   class TenantRollback
     EVENT = 'console_kit.rollback'
     MISSING_HANDLER = 'no connection handler is available to restore it, so it may still be serving the tenant ' \
                       'that was being unwound'
 
     class << self
-      # Undo a committed state, returning the store to `previous`.
       def unwind(state, previous)
         ctx = ConsoleKit.configuration.context_class
         wrapper = TenantConfigurator::ContextWrapper.for_context(ctx)
@@ -29,9 +25,8 @@ module ConsoleKit
 
       private
 
-      # The snapshot is the authority on what has to be put back, never live
-      # availability: a backend whose handler has disappeared since the switch
-      # is still on the inner tenant, so it is reported rather than dropped.
+      # The snapshot, not live availability, is the authority on what has to be put
+      # back: a backend whose handler has disappeared is still on the inner tenant.
       def resolve_handlers(state, ctx)
         live = Connections::ConnectionManager.available_handlers(ctx)
                                              .to_h { |handler| [handler.backend_key, handler] }
@@ -45,9 +40,8 @@ module ConsoleKit
       @context_wrapper = context_wrapper
     end
 
-    # Returns an array of { backend:, error: } for every component that could not
-    # be restored. An empty array means the previous state is fully back.
-    # `unrestorable` names the snapshotted backends that have no handler left.
+    # Returns { backend:, error: } for every component that could not be restored;
+    # an empty array means the previous state is fully back.
     def call(handlers, unrestorable = [])
       return [] if undo.nil?
 

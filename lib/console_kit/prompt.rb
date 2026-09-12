@@ -12,18 +12,9 @@ module ConsoleKit
       RETURN: "=> %s\n"
     }.freeze
 
-    # Rails starts IRB by calling IRB.setup, which resets IRB.conf and discards
-    # whatever was configured before it - including a prompt installed from the
-    # railtie's console hook, which runs earlier. Rails then installs its own
-    # prompt and selects it, so the tenant label never reached the session.
-    #
-    # Every Rails version from 6.1 to 8.x ends up constructing IRB::Irb after
-    # that reset, whether through IRB.start or through Rails' own IRBConsole, so
-    # the prompt is re-applied there. It decorates whatever prompt is active by
-    # then rather than replacing it, which keeps Rails' environment colouring.
-    #
-    # Pry reads its prompt when the session starts, so it needs no such hook -
-    # which is why this only ever showed up in environments without pry-rails.
+    # IRB.setup resets IRB.conf after the railtie's console hook has run, discarding
+    # the prompt installed there, so it is re-applied when IRB::Irb is constructed
+    # (every Rails 6.1-8.x path reaches that). Pry reads its prompt at session start.
     module IrbBoot
       def initialize(*args, **kwargs, &)
         ConsoleKit::Prompt.reapply_irb_prompt
@@ -37,8 +28,7 @@ module ConsoleKit
         apply_pry_prompt if defined?(Pry)
       end
 
-      # A cosmetic prompt must never take the console down with it, so a failure
-      # here is reported and the session keeps whatever prompt Rails configured.
+      # A cosmetic prompt must never take the console down with it.
       def reapply_irb_prompt
         install_irb_prompt if defined?(IRB) && IRB.respond_to?(:conf)
       rescue StandardError => e
@@ -73,8 +63,8 @@ module ConsoleKit
         conf[:PROMPT_MODE] = IRB_MODE
       end
 
-      # The prompt to decorate. Re-reading our own decorated prompt would stack
-      # a second label on every call, so the undecorated source is remembered.
+      # Re-reading our own decorated prompt would stack a second label on every
+      # call, so the undecorated source is remembered.
       def capture_source(conf, prompts)
         mode = conf[:PROMPT_MODE]
         return @irb_source if mode == IRB_MODE && @irb_source

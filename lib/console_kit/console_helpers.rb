@@ -16,8 +16,6 @@ module ConsoleKit
       nil
     end
 
-    # `dashboard` is cheap by default: :basic asks no backend anything.
-    # `dashboard(level: :full)` pings, and is bounded per backend.
     def dashboard(level: :basic)
       ConsoleKit::Connections::Dashboard.display(level: level)
       self
@@ -59,9 +57,6 @@ module ConsoleKit
 
       private
 
-      # 'Partner' and 'Environment' are not backends; every entry in between
-      # comes straight off the registered handlers, so a new backend needs no
-      # update here.
       def detail_labels
         backend_labels = ConsoleKit::Connections::BaseConnectionHandler.registry.to_h do |handler|
           [handler.detail_label, handler.constants_key]

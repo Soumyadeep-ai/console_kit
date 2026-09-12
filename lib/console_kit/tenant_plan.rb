@@ -3,19 +3,15 @@
 require_relative 'errors'
 
 module ConsoleKit
-  # Resolves and validates what a tenant switch should do, without touching anything.
-  #
-  # This is the "validate" stage of a switch: it turns a tenant key into the
-  # tenant constants and a per-backend target value. A nil tenant key describes a
-  # reset to the default (no tenant) state.
+  # Resolves and validates what a tenant switch should do, without touching
+  # anything. A nil tenant key describes a reset to the default (no tenant) state.
   class TenantPlan
     REQUIRED_KEYS = %i[shard partner_code].freeze
 
     attr_reader :tenant_key
 
-    # `constants` may be supplied by a caller that already froze them - a
-    # committed TenantState - so verification does not have to re-resolve them
-    # through a configuration that may have been replaced since the switch.
+    # `constants` may come pre-frozen from a committed TenantState, so verification
+    # need not re-resolve through a configuration that may have changed since.
     def initialize(tenant_key, constants: nil)
       @tenant_key = tenant_key
       @constants = constants
@@ -30,12 +26,10 @@ module ConsoleKit
 
     private
 
-    # A handler owns its constants key, so it is asked for it directly. Routing
-    # through the merged context mapping let any handler that declared another
-    # backend's context attribute repoint that backend at its own key, and
-    # stripping a blank value to nil here meant the switch judged a different
-    # value than Configuration#validate! did - the one drift `.target_error`
-    # exists to make impossible.
+    # The handler owns its constants key and is asked for it directly: routing
+    # through the merged context mapping let one handler repoint another backend,
+    # and normalising the value here made the switch judge it differently from
+    # Configuration#validate!.
     def target_for(handler, constants) = constants[handler.class.constants_key]
 
     def resolve_constants

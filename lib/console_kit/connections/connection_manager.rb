@@ -17,27 +17,18 @@ module ConsoleKit
       REPORTED_KEY = :console_kit_dropped_reported
 
       class << self
-        # `BaseConnectionHandler.registry` is explicit registration, not
-        # `descendants`, so it is already declaration-ordered and can never hold
-        # two live generations of the same backend key - HandlerRegistry sorts
-        # that out (and warns) at registration time. Nothing here has to
-        # de-duplicate or re-order it.
-        #
-        # `dropped` is an optional collector. A caller that is about to commit
-        # tenant state passes one in, because a dropped backend is left on
-        # whatever tenant it was already serving and nothing downstream can
-        # discover that from the returned handler list alone.
+        # `dropped` is an optional collector: a dropped backend is left on
+        # whatever tenant it was already serving, and the returned handler list
+        # alone cannot show that.
         def available_handlers(context, dropped = nil)
           handler_classes.filter_map { |klass| resolve(klass, context, dropped) }
         end
 
         private
 
-        # A handler whose #available? answers false is an optional gem that is
-        # simply not loaded, and there is nothing to report. A handler that
-        # raises NotImplementedError is broken rather than absent, and dropping
-        # it silently is what lets a switch claim success while that backend
-        # still serves another tenant, so it is reported before it is dropped.
+        # #available? false is an optional gem that is not loaded. A
+        # NotImplementedError is a broken handler, and dropping it silently lets
+        # a switch claim success while that backend still serves another tenant.
         def resolve(klass, context, dropped)
           handler = klass.new(context)
           handler if handler.available?
@@ -47,12 +38,9 @@ module ConsoleKit
           nil
         end
 
-        # The counter records every drop, because an operator watching the
-        # metric needs the rate. The warning is printed once per backend per
-        # reason: the dashboard reads this same handler list, so an unchanged
-        # broken handler reprinted it on every render and buried the table the
-        # operator asked for. The durable record is the key on the committed
-        # tenant state, which every verification reports again.
+        # Counted every time, warned once per backend per reason: the dashboard
+        # reads this same handler list, so an unchanged broken handler would
+        # reprint on every render and bury the table.
         def report_dropped(klass, error)
           Instrumentation.increment('console_kit.handler_dropped')
           return unless unreported?(klass.backend_key, error.message)
@@ -60,8 +48,7 @@ module ConsoleKit
           Output.print_warning("#{klass} #{format(DROPPED_WARNING, reason: error.message)}")
         end
 
-        # Per thread, like every other "say this once" note ConsoleKit keeps:
-        # one console reporting a drop must not silence another thread's.
+        # Per thread: one console reporting a drop must not silence another's.
         def unreported?(key, reason)
           reported = Thread.current[REPORTED_KEY] ||= {}
           return false if reported[key] == reason

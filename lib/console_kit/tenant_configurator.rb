@@ -9,16 +9,12 @@ require_relative 'tenant_configurator/context_wrapper'
 require_relative 'tenant_switch'
 
 module ConsoleKit
-  # Console-facing tenant configuration.
-  #
-  # Since 1.5.0 the actual work is done by the transactional TenantSwitch
-  # coordinator; this module keeps the pre-1.5 non-raising API used by the
-  # console flow (it reports failures through Output and returns false).
+  # Console-facing tenant configuration: the non-raising API used by the console
+  # flow, which reports failures through Output and returns false.
   module TenantConfigurator
     class << self
-      # Context attribute -> tenant constants key. `partner_identifier` is not a
-      # backend, so it is the one fixed entry; every other entry comes straight
-      # off the registered handlers, so a new backend needs no update here.
+      # `partner_identifier` is not a backend, so it is the one fixed entry; the
+      # rest come off the registered handlers, so a new backend needs no update.
       def context_mapping
         { partner_identifier: :partner_code }.merge(backend_context_mapping)
       end

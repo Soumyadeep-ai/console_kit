@@ -5,44 +5,23 @@ require_relative 'sql_strategy'
 
 module ConsoleKit
   module Connections
-    # Resolves the Redis client ConsoleKit is able to act on, reports which
-    # logical DB that client currently points at without any network round trip,
-    # and classifies how isolated a SELECT on it really is.
-    #
-    # The isolation model is decided empirically rather than by version
-    # sniffing, because what matters is the object the application hands back,
-    # not the gem version that built it. The resolver is called twice on this
-    # thread and once on a fresh thread:
-    #
-    #   * the same object every time            -> :process_global
-    #   * a different object on the other thread -> :scoped
-    #   * nothing resolvable, or a new object on
-    #     every call in one thread               -> :none
-    #   * the probe itself could not run          -> :unknown
-    #
-    # :unknown is never an isolation claim: it says the model was not observed,
-    # so nothing may assume isolation from it. A programming error inside the
-    # probe is re-raised instead, because a bug in ConsoleKit must never be
-    # laundered into a verdict the rest of the system trusts.
+    # Resolves the Redis client ConsoleKit can act on, reports which logical DB
+    # it points at without a network round trip, and classifies isolation by
+    # probing the object the application hands back rather than by sniffing gem
+    # versions: the same object on another thread -> :process_global, a
+    # different one -> :scoped, nothing resolvable -> :none, a probe that could
+    # not run -> :unknown, which is the absence of a verdict and never an
+    # isolation claim.
     class RedisClientAdapter
-      # Matches anything that could carry a host, ACL username or password out
-      # of a client error message.
       CREDENTIAL_URL = %r{\b(?:rediss?|unix)://\S*}i
-      # A logical Redis DB index. This lives here rather than on the handler
-      # because this class owns what a client will accept; the handler's
-      # target_error delegates, so there is exactly one rule.
       DIGITS = /\A\d+\z/
-      # Where this thread's isolation verdict is remembered, together with the
-      # client it was observed on.
       MEMO_KEY = :console_kit_redis_isolation
 
       class << self
         def scrub(message) = message.to_s.gsub(CREDENTIAL_URL, '[redis-url]')
 
-        # The Integer a client would accept for this value, or nil if the value
-        # is not a usable DB index. Redis' own `databases` setting is
-        # configurable, so no upper bound is imposed here; an index above it is
-        # rejected by the server and surfaces from #connect! as a ConnectionError.
+        # Redis' own `databases` setting is configurable, so no upper bound is
+        # imposed here; the server rejects an index above it.
         def db_index(value)
           return value if value.is_a?(Integer) && !value.negative?
           return nil unless value.is_a?(String) && value.match?(DIGITS)
@@ -59,8 +38,8 @@ module ConsoleKit
         end
       end
 
-      # The client for the CURRENT thread. Never memoized: under the :scoped
-      # model each thread must get its own object.
+      # Never memoized: under the :scoped model each thread must get its own
+      # client object.
       def client = resolve
 
       def selectable? = client.respond_to?(:select)
@@ -81,9 +60,8 @@ module ConsoleKit
       private
 
       # Feature detection across the clients seen in the wild: redis-rb 5's
-      # `Redis::Client#db`, the redis-client gem's `config.db`, and redis-rb
-      # 4's `Redis#connection` hash. A client answering none of these cannot
-      # report its DB at all, and the handler refuses non-default DBs for it.
+      # `Redis::Client#db`, the redis-client gem's `config.db`, redis-rb 4's
+      # `Redis#connection` hash.
       def read_db(target)
         return target.db if target.respond_to?(:db)
         return target.config.db if target.respond_to?(:config) && target.config.respond_to?(:db)
@@ -104,12 +82,8 @@ module ConsoleKit
         nil
       end
 
-      # The probe spawns a thread, and this adapter is built fresh for every
-      # handler instance - which is one per tenant switch, and one per Rails
-      # reload through the Railtie. The verdict describes the object the
-      # application hands back, so it is remembered per thread and reused only
-      # while that is still the very same object: a client swapped underneath
-      # us fails the identity guard and is probed again.
+      # The probe spawns a thread, so the verdict is remembered per thread - but
+      # only while the application still hands back the very same client object.
       def remembered_isolation
         here = resolve
         memo = Thread.current[MEMO_KEY]
@@ -118,8 +92,8 @@ module ConsoleKit
         remember(here, probe_isolation(here))
       end
 
-      # :unknown is the absence of a verdict rather than one, so it is not
-      # remembered: a probe that could not run this time may well run next time.
+      # :unknown is not remembered: a probe that could not run this time may
+      # well run next time.
       def remember(client, model)
         Thread.current[MEMO_KEY] = { client: client, model: model } unless model == :unknown
         model
@@ -128,10 +102,9 @@ module ConsoleKit
       def probe_isolation(here)
         return :none if here.nil? || !resolve.equal?(here)
 
-        # A probe that could not reach the client has observed nothing. Reading
-        # that as "the other thread got a different object, so the client must be
-        # per-thread" would turn a failed observation into an isolation claim -
-        # the strongest claim this class makes, on no evidence.
+        # A probe that could not reach the client observed nothing; reading that
+        # as "a different object, so per-thread" would turn a failed observation
+        # into the strongest claim this class makes.
         elsewhere = Thread.new { resolve }.value
         return :unknown if elsewhere.nil?
 

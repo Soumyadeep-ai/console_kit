@@ -3,11 +3,8 @@
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
-  # Minimal internal instrumentation hook.
-  #
-  # ConsoleKit emits named events with a duration and a payload. Applications can
-  # subscribe to forward them to their own logging/metrics stack. No external
-  # dependency is introduced and no event is emitted with credentials in it.
+  # Minimal internal instrumentation hook: named events with a duration and a
+  # payload, for applications to forward to their own logging/metrics stack.
   module Instrumentation
     class << self
       def subscribe(&block)

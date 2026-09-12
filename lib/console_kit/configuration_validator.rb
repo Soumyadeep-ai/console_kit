@@ -6,30 +6,11 @@ require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
   # Deep validation of a Configuration's tenant map and context class, run by
-  # Configuration#validate! once the bare presence checks pass.
-  #
-  # Errors describe configurations that CANNOT work: every one found is
-  # aggregated and raised together as a single ConfigurationError, so an
-  # operator can fix everything in one pass instead of discovering problems
-  # one tenant switch at a time. Warnings describe configurations that
-  # probably do not do what the author intended (a typo'd constants key, a
-  # context class missing a writer) and are printed via Output but never
-  # raise, since they may be intentional.
-  #
-  # Per-backend value rules are never re-invented here: each registered
-  # handler's own `.target_error` is called directly, so validation here and
-  # the handler's own `#prepare` share one rule and cannot silently drift
-  # apart. Required tenant keys are read from TenantPlan::REQUIRED_KEYS for
-  # the same reason. None of these classes are `require_relative`d here: by
-  # the time `validate!` is ever called the whole gem is loaded (see
-  # TenantPlan, which references TenantConfigurator the same way), and
-  # requiring them here would pull the entire connections stack into
-  # Configuration's load path for no benefit.
+  # Configuration#validate! once the bare presence checks pass. Errors are
+  # aggregated and raised together; warnings are printed via Output, never raised.
   class ConfigurationValidator
     # Constants keys ConsoleKit reads without routing them through a backend
-    # handler, so `context_mapping` does not know about them. `:environment` is
-    # documented by the generator template, read by SetupUI to decide whether to
-    # warn about production, and displayed by the console detail table.
+    # handler, so `context_mapping` does not know about them.
     EXTRA_CONSTANTS_KEYS = [:environment].freeze
 
     def initialize(configuration)
@@ -96,9 +77,8 @@ module ConsoleKit
                 "(expected: #{required.join(', ')})."
     end
 
-    # Each registered handler owns exactly one constants key. Calling its own
-    # `.target_error` here, rather than re-deriving the rule, is what keeps
-    # this check and the handler's own `#prepare` from silently drifting apart.
+    # Calling each handler's own `.target_error`, rather than re-deriving the rule,
+    # is what keeps this check and the handler's `#prepare` from drifting apart.
     def check_constants_values(key, constants)
       Connections::BaseConnectionHandler.registry.each do |handler_class|
         field = handler_class.constants_key
@@ -115,10 +95,6 @@ module ConsoleKit
       errors << "ConsoleKit: tenant #{key.inspect} #{field} #{scrub_value(value)} is invalid: #{reason}"
     end
 
-    # Shared by the tenant-entry (`subject: 'top-level'`) and the constants
-    # (`subject: 'constants'`) unknown-key checks: both report an unexpected
-    # key as a warning, not an error, since applications may carry extra
-    # metadata alongside what ConsoleKit reads.
     def warn_unknown_keys(key, subject, actual, recognised)
       extra = actual - recognised
       return if extra.empty?
@@ -139,11 +115,9 @@ module ConsoleKit
                   'never configure that backend during a tenant switch.'
     end
 
-    # The context object ConsoleKit writes to is the class itself, and
-    # ContextWrapper detects what it can write with `ctx.public_methods` - which
-    # sees a `class << self; attr_accessor` writer. Asking only
-    # `method_defined?` looked for instance writers nobody ever calls, and
-    # warned that ConsoleKit would never configure a backend it configures.
+    # The context object is the class itself, and a `class << self; attr_accessor`
+    # writer answers `respond_to?` but not `method_defined?`. Checking only the
+    # latter warned that ConsoleKit would never configure a backend it configures.
     def writer?(klass, writer) = klass.respond_to?(writer) || klass.method_defined?(writer)
 
     def resolve_context_class

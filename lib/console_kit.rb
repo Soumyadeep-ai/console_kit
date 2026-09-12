@@ -59,13 +59,9 @@ module ConsoleKit
     def current_tenant = StateStore.tenant_key
     def reset_current_tenant = Setup.reset_current_tenant
 
-    # Programmatic, raising tenant switch. Atomic: on failure the previous
-    # tenant state is restored and TenantSwitchError is raised.
+    # Atomic: on failure the previous tenant state is restored and the error raised.
     def switch_tenant(key) = TenantSwitch.call(key)
 
-    # Re-verify that every available backend still points at the current tenant.
-    # A backend the switch never reached cannot be verified at all, so it is
-    # reported here rather than being quietly counted as clean.
     def verify_tenant!
       dropped_now = []
       state = TenantSwitch.verify_current!(dropped_now)
@@ -73,7 +69,9 @@ module ConsoleKit
       state
     end
 
-    # Nested, exception-safe tenant scope. Restores the enclosing tenant on exit.
+    # Nested, exception-safe tenant scope. Completion is tracked with an explicit
+    # flag rather than read from `$ERROR_INFO` (`$!`), which is thread-global and
+    # non-nil whenever with_tenant is called from inside another `rescue`.
     def with_tenant(key)
       previous = StateStore.current
       state = TenantSwitch.call(key)
@@ -92,15 +90,8 @@ module ConsoleKit
 
     private
 
-    # Raising here instead would be defensible, but it would fire on EVERY
-    # verify_tenant! in an application that legitimately ships one broken
-    # third-party handler, leaving it no way to verify anything at all - and it
-    # would say "a live connection is on the wrong tenant" when the truth is
-    # "a backend was never driven". The state carries the list either way.
     # The union of both chances a backend has to be dropped: the switch that
-    # committed this state, and the verification that just ran. A handler that
-    # was healthy at switch time and has broken since appears only in the
-    # second, so reporting only the first called such a tenant fully verified.
+    # committed this state, and the verification that just ran.
     def report_dropped_backends(state, dropped_now)
       dropped = state.dropped_backends | dropped_now
       return if dropped.empty?
@@ -110,9 +101,8 @@ module ConsoleKit
     end
 
     # A rollback failure raised from an `ensure` would replace the exception the
-    # block was already raising, and that exception is the root cause the
-    # operator needs. While one is in flight the rollback failure is reported
-    # through Output instead; with no block exception it still surfaces.
+    # block was already raising, and that exception is the root cause the operator
+    # needs; while one is in flight the rollback failure goes to Output instead.
     def unwind_scope(state, previous, in_flight)
       TenantSwitch.unwind(state, previous)
     rescue RollbackError => e

@@ -4,10 +4,9 @@ require_relative 'connections/diagnostic_helpers'
 
 # Main module for ConsoleKit
 module ConsoleKit
-  # Errors that mean ConsoleKit itself is broken rather than that a dependency
-  # is unavailable. They must never be rescued into a normal "unavailable"
-  # result, because that is exactly how a real bug hides. Defined once, here,
-  # so every rescue site classifies identically.
+  # Errors that mean ConsoleKit itself is broken rather than that a dependency is
+  # unavailable. Never rescue one into an "unavailable" result: that is how a real
+  # bug hides.
   PROGRAMMING_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError].freeze
 
   class << self
@@ -86,8 +85,7 @@ module ConsoleKit
       [headline, scrub(original_error.message), rollback_summary].compact.join("\n")
     end
 
-    # Tenant constants can carry connection URIs. A root-cause message reaches
-    # logs and consoles, so it is scrubbed the same way diagnostics rows are.
+    # Tenant constants can carry connection URIs, and this message reaches logs.
     def scrub(message) = Connections::DiagnosticHelpers.scrub(message)
 
     def headline

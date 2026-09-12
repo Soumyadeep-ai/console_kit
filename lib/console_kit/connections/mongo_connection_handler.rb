@@ -22,9 +22,6 @@ module ConsoleKit
 
       def available? = !!defined?(Mongoid)
 
-      # Validate/resolve only, never mutates. Raises when the database name is
-      # unusable, or when this Mongoid version cannot support client/database
-      # overrides at all.
       def prepare(target)
         validate_target!(target)
         unless Mongoid.respond_to?(:override_database)
@@ -91,10 +88,9 @@ module ConsoleKit
         }
       end
 
-      # A switch ConsoleKit cannot read back is a switch it cannot prove, and a
-      # state it cannot snapshot - so #prepare refuses one rather than letting it
-      # fail at verify with the override already applied and an empty snapshot
-      # that would clear it instead of restoring it.
+      # A switch that cannot be read back cannot be snapshotted either, so
+      # #prepare refuses one rather than failing at verify with the override
+      # applied and an empty snapshot that would clear it instead of restoring.
       def readable? = Mongoid.respond_to?(:default_client) && threaded_readable?
 
       def threaded_readable?

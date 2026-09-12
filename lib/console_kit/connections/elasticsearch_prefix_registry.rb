@@ -2,27 +2,16 @@
 
 module ConsoleKit
   module Connections
-    # Everywhere the Elasticsearch index-name prefix lives.
-    #
-    # Two storage locations, deliberately kept apart:
-    #
-    #   * `.global` / `.global=` wrap `Elasticsearch::Model.index_name_prefix`,
-    #     the single PROCESS-WIDE attribute the library actually indexes with;
-    #   * `.current` / `.record` are a mutex-protected note of the prefix each
-    #     live thread asked ConsoleKit for.
-    #
-    # The per-thread note provides no isolation whatsoever - the last writer to
-    # `.global=` wins for every thread. It exists so the handler can *detect*
-    # and report threads that disagree instead of letting them silently share
-    # indices. `Thread.current[:console_kit_elasticsearch_prefix]` is kept in
-    # sync purely as a backward-compatible read path for pre-1.5 callers.
+    # Everywhere the Elasticsearch index-name prefix lives: `.global` wraps the
+    # PROCESS-WIDE `Elasticsearch::Model.index_name_prefix`, while `.current` /
+    # `.record` note what each live thread asked for. The note provides no
+    # isolation - it exists so disagreeing threads can be detected and reported.
+    # `Thread.current[:console_kit_elasticsearch_prefix]` is kept in sync purely
+    # as a backward-compatible read path.
     class ElasticsearchPrefixRegistry
       THREAD_KEY = :console_kit_elasticsearch_prefix
       REPORTED_KEY = :console_kit_elasticsearch_prefix_conflict
 
-      # What makes an index-name prefix legal. Lives here rather than on the
-      # handler because this class owns the prefix; the handler's target_error
-      # delegates so there is exactly one rule.
       UPPERCASE = /[[:upper:]]/
       LEADING = /\A[_\-+]/
       WHITESPACE = /\s/
@@ -48,10 +37,8 @@ module ConsoleKit
           model.index_name_prefix = prefix if settable?
         end
 
-        # The prefix this thread last asked ConsoleKit for. Prunes like every
-        # other entry point: a Thread key pins everything that thread's
-        # thread-locals hold, so a dead thread's note must not survive until
-        # some later thread happens to write.
+        # Prunes like every other entry point: a Thread key pins that thread's
+        # thread-locals, so a dead thread's note must not survive.
         def current
           synchronize do
             prune
@@ -67,7 +54,6 @@ module ConsoleKit
           end
         end
 
-        # Distinct prefixes held by other live threads that differ from `prefix`.
         def conflicts(prefix)
           synchronize do
             prune
@@ -75,8 +61,7 @@ module ConsoleKit
           end
         end
 
-        # Conflicts this thread has not been told about yet, so repeated switches
-        # against an unchanged set of threads report once rather than every time.
+        # So repeated switches against an unchanged set of threads report once.
         def unreported_conflicts(prefix)
           others = conflicts(prefix)
           signature = [prefix, others]

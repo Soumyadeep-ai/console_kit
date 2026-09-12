@@ -7,40 +7,11 @@ module ConsoleKit
   module Connections
     # Handles Redis connections.
     #
-    # ISOLATION MODEL - read this before relying on per-tenant Redis DBs.
-    #
-    # Redis has no per-thread notion of a "current database": SELECT is a
-    # property of a connection. ConsoleKit cannot invent isolation it does not
-    # own, so it probes the client the application actually installed and
-    # reports the truth through #isolation_model / #thread_isolated?:
-    #
-    #   :scoped         the application hands out one client per thread or
-    #                   fiber (for example `Redis.current` backed by a
-    #                   Thread-local). SELECT then affects only the switching
-    #                   thread and Redis really is tenant-isolated.
-    #   :process_global `Redis.current` is the redis-rb 4.x memoized singleton,
-    #                   shared by every thread in the process. SELECT is still
-    #                   applied, for backward compatibility, but two threads on
-    #                   different tenants WILL share one logical DB. A single
-    #                   warning per process says so, and #thread_isolated? is
-    #                   false. snapshot/restore capture and put back the
-    #                   previous DB index so a failed switch cannot leave Redis
-    #                   pointing at the wrong tenant.
-    #   :none           no client handle is reachable. redis-rb 5.0 removed
-    #                   `Redis.current`, and the redis-client gem (RedisClient)
-    #                   never had a process-wide registry, so there is nothing
-    #                   to SELECT on. #prepare then rejects any non-default DB
-    #                   with UnsupportedBackendError instead of pretending the
-    #                   switch worked; give each tenant its own Redis URL
-    #                   (redis://host:6379/<db>) instead.
-    #   :unknown        the probe itself failed against a reachable client, so
-    #                   ConsoleKit does not know. It reports :unknown rather
-    #                   than guessing :process_global, because an isolation
-    #                   claim the rest of the system trusts must not be a
-    #                   consolation prize for a failed probe. #thread_isolated?
-    #                   is false, and whether a DB can be selected is still
-    #                   decided by the client's own capabilities, not by this
-    #                   verdict.
+    # SELECT is a property of a connection, not of a thread, so isolation is
+    # probed rather than assumed: #isolation_model reports :scoped,
+    # :process_global, :none or :unknown, and only :scoped is really
+    # tenant-isolated (see the README for what each state means). #prepare
+    # rejects a non-default DB when no selectable, readable client is reachable.
     class RedisConnectionHandler < BaseConnectionHandler
       backend :redis,
               display_name: 'Redis',
@@ -49,8 +20,6 @@ module ConsoleKit
               detail_label: 'Redis DB'
 
       DEFAULT_REDIS_DB = 0
-      # A digit-only String is accepted; anything else - including a float or a
-      # negative number - is not.
 
       PROCESS_GLOBAL_WARNING = 'Redis DB selection is process-wide with this client, so it is NOT isolated per ' \
                                'thread. Threads on different tenants share one logical DB.'
@@ -59,8 +28,6 @@ module ConsoleKit
         # Reset to re-arm the one-time process-global isolation warning.
         attr_accessor :isolation_warned
 
-        # The adapter owns what a client will accept as a logical DB, so the
-        # rule lives there and this delegates - one rule, one definition.
         def target_error(value) = RedisClientAdapter.db_index_error(value)
       end
 
@@ -69,12 +36,11 @@ module ConsoleKit
       def isolation_model = adapter.isolation_model
       def thread_isolated? = isolation_model == :scoped
 
-      # Under the :process_global model SELECT is shared by every thread, so the
-      # live DB index - read from the client's own cached state, with no command
-      # issued - is what a cached diagnostic row has to stay true for.
+      # Under :process_global the DB index is shared by every thread, so a cached
+      # diagnostic row has to stay true for it. Reads cached state, issues no
+      # command.
       def diagnostic_identity = adapter.current_db
 
-      # Validate/resolve only, never mutates.
       def prepare(target)
         validate_target!(target)
         db = coerce_db(target)
@@ -94,10 +60,8 @@ module ConsoleKit
         apply(db)
       end
 
-      # Compares the DB index we asked for against the one the live client
-      # already knows it is on. A client that cannot report its DB is only ever
-      # allowed to sit on the default DB (#prepare rejects everything else), so
-      # there is nothing left to prove in that case.
+      # A client that cannot report its DB is only ever allowed to sit on the
+      # default DB, so a nil reading proves nothing and is accepted there.
       def verify!(target)
         expected = coerce_db(target)
         actual = adapter.current_db
@@ -125,7 +89,7 @@ module ConsoleKit
 
       private
 
-      # Availability, resolved DB identity and isolation model. No network call.
+      # No network call.
       def basic_diagnostics
         {
           name: display_name, status: adapter.selectable? ? :connected : :unknown, latency_ms: nil,

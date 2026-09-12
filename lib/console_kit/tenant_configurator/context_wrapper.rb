@@ -2,15 +2,13 @@
 
 module ConsoleKit
   module TenantConfigurator
-    # Encapsulates the tenant context object and the attributes ConsoleKit owns on it.
-    #
-    # All context mutation goes through here so it can be snapshotted and put back
-    # verbatim when a tenant switch fails.
+    # Encapsulates the tenant context object and the attributes ConsoleKit owns on
+    # it. All context mutation goes through here so it can be snapshotted and put
+    # back verbatim when a tenant switch fails.
     class ContextWrapper
-      # Recorded by #current_values when a context getter raises. Writing nil over
-      # a value we could not read would silently destroy it, and reporting the
-      # rollback as successful would be a lie - so the attribute is skipped on
-      # restore and reported as a rollback failure instead.
+      # Recorded when a context getter raises: writing nil over a value we could not
+      # read would silently destroy it, so the attribute is skipped on restore and
+      # reported as a rollback failure instead.
       UNREADABLE = :'#<console_kit unreadable>'
 
       attr_reader :ctx, :attributes
@@ -57,17 +55,14 @@ module ConsoleKit
         attributes.any? { |attr| ctx.public_send(attr).present? }
       end
 
-      # Snapshot of every ConsoleKit-owned context attribute.
       def current_values = attributes.to_h { |attr| [attr, safe_read(attr)] }
 
       def reset
         restore(attributes.to_h { |attr| [attr, nil] })
       end
 
-      # Write values back verbatim. Used for rollback, so it must not warn or
-      # transform anything. Every attribute is attempted even when an earlier one
-      # raises, so one broken writer cannot strand the rest of the context on the
-      # tenant the switch failed to reach.
+      # Verbatim write-back for rollback, so it must not warn or transform. Every
+      # attribute is attempted even when an earlier one raises.
       def restore(values)
         unreadable, writable = values.partition { |_attr, value| value == UNREADABLE }
         failures = write_back(writable) + unreadable.map { |attr, _| [attr, unreadable_error(attr)] }
@@ -76,8 +71,6 @@ module ConsoleKit
         values
       end
 
-      # Apply tenant constants, warning about values that differ from the
-      # existing context value only by case.
       def assign(constant, mapping)
         attributes.to_h do |attr|
           existing = safe_read(attr)
