@@ -20,6 +20,7 @@ class RollbackProbeHandler
 
   class << self
     def context_attribute = nil
+    def constants_key = nil
   end
 
   attr_reader :backend_key, :display_name, :identity

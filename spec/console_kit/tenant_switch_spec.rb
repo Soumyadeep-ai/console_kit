@@ -6,7 +6,7 @@ RSpec.describe ConsoleKit::TenantSwitch do
   let(:handler_class) do
     Class.new do
       class << self
-        attr_accessor :context_attribute
+        attr_accessor :constants_key
       end
 
       attr_reader :identity, :restored, :backend_key
@@ -45,12 +45,12 @@ RSpec.describe ConsoleKit::TenantSwitch do
     end
   end
 
-  let(:healthy) { build_handler(:sql, :tenant_shard) }
-  let(:broken) { build_handler(:mongo, :tenant_mongo_db, failure: NotImplementedError.new('no connect!')) }
+  let(:healthy) { build_handler(:sql, :shard) }
+  let(:broken) { build_handler(:mongo, :mongo_db, failure: NotImplementedError.new('no connect!')) }
 
-  def build_handler(key, attribute, failure: nil)
+  def build_handler(key, constants_key, failure: nil)
     klass = Class.new(handler_class)
-    klass.context_attribute = attribute
+    klass.constants_key = constants_key
     klass.new(key, failure: failure)
   end
 
@@ -263,6 +263,30 @@ RSpec.describe ConsoleKit::TenantSwitch do
   describe '.verify_current! before any tenant has been configured' do
     it 'raises ConfigurationError rather than verifying nothing' do
       expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
+    end
+  end
+
+  # A clear is a completed switch, but it leaves no tenant. Committing it as
+  # "configured" made `StateStore.configured?` true with a nil tenant key, so
+  # the pre-1.5 `configuration_success?` answered yes after a clear and
+  # `verify_tenant!` verified the default state as though a tenant were live.
+  describe '.clear' do
+    before do
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
+      ConsoleKit::Output.silence { described_class.call(:acme) }
+      ConsoleKit::Output.silence { described_class.clear(context: context_class) }
+    end
+
+    it 'leaves no tenant configured' do
+      expect(ConsoleKit::StateStore).not_to be_configured
+    end
+
+    it 'leaves nothing for verify_tenant! to verify' do
+      expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
+    end
+
+    it 'still forgets the tenant it cleared' do
+      expect(ConsoleKit.current_tenant).to be_nil
     end
   end
 

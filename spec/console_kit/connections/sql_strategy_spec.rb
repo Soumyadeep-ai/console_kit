@@ -94,6 +94,27 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
+  # The native path is chosen by feature detection, never by Rails version, and
+  # it needs EVERY method it is about to call. A base class carrying only part
+  # of the shard API - a version check would happily call this one "6.1+" - has
+  # to fall back instead of calling a method that is not there.
+  describe 'a base class that carries only part of the native shard API' do
+    let(:base_class) do
+      ActiveRecordMock.sharded_base(configs: %w[primary shard_one], shards: %w[shard_one]).tap do |klass|
+        klass.singleton_class.send(:undef_method, :connecting_to)
+      end
+    end
+
+    it 'does not claim the shard is natively reachable' do
+      expect(strategy).not_to be_native(:shard_one)
+    end
+
+    it 'falls back to establish_connection rather than calling the method it lacks' do
+      strategy.apply(:shard_one)
+      expect(base_class.connection_pool.db_config.name).to eq('shard_one')
+    end
+  end
+
   # `sql_base_class` can be pointed at a class that resolves but is not an
   # ActiveRecord base, in which case there is nothing to describe.
   describe 'a base class that is not ActiveRecord at all' do

@@ -36,9 +36,11 @@ module ConsoleKit
         def all = entries.values.freeze
 
         def add(handler_class)
-          previous = entries[handler_class.backend_key]
+          key = handler_class.backend_key
+          drop_other_keys(handler_class, key)
+          previous = entries[key]
           report_collision(previous, handler_class) if previous
-          entries[handler_class.backend_key] = handler_class
+          entries[key] = handler_class
         end
 
         # Keyed removal, guarded by identity: unregistering a handler that has
@@ -52,6 +54,15 @@ module ConsoleKit
         private
 
         def entries = @entries ||= {}
+
+        # One class owns one backend key. A class that declares `backend` a
+        # second time - a reopened class body, or a reload generation that
+        # renamed its key - used to stay registered under the old key as well,
+        # so a single handler was switched, verified and rolled back twice and
+        # `remove` could only ever take half of it out again.
+        def drop_other_keys(handler_class, key)
+          entries.delete_if { |existing, klass| existing != key && klass.equal?(handler_class) }
+        end
 
         # A second class under the SAME name is a reload generation of the same
         # handler and is expected. Two differently named classes claiming one
@@ -91,7 +102,19 @@ module ConsoleKit
       include DiagnosticHelpers
 
       class << self
-        attr_reader :backend_key, :display_name, :context_attribute, :constants_key, :detail_label
+        # Class-level instance variables are NOT inherited, so a subclass that
+        # adds behaviour without re-declaring `backend` has none of these of its
+        # own. It is a specialisation of its parent's backend, so it reads its
+        # parent's declaration: answering nil instead made it a handler for no
+        # backend at all, whose `#connect` reset its parent's backend to the
+        # default without a word. Registration still happens only on an explicit
+        # `backend` call, so an undeclared subclass joins no registry and cannot
+        # displace the parent it borrows from.
+        def backend_key = @backend_key || superclass.try(:backend_key)
+        def display_name = @display_name || superclass.try(:display_name)
+        def context_attribute = @context_attribute || superclass.try(:context_attribute)
+        def constants_key = @constants_key || superclass.try(:constants_key)
+        def detail_label = @detail_label || superclass.try(:detail_label)
 
         # Declares a backend and registers the handler for it.
         def backend(key, display_name:, context_attribute:, constants_key:, detail_label:)

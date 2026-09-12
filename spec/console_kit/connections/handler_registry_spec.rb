@@ -234,6 +234,19 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
+  # Every switch reads `.all` and iterates it. The answer is a frozen array, and
+  # a different array on every call, so a caller cannot hold on to the one the
+  # next switch will use nor change what that switch drives.
+  describe '.all' do
+    it 'hands back a frozen array' do
+      expect(described_class.all).to be_frozen
+    end
+
+    it 'hands back a new array on every call, never one shared alias' do
+      expect(described_class.all).not_to equal(described_class.all)
+    end
+  end
+
   describe 'registry hygiene' do
     it 'removes the fictional backend again, so it cannot leak into other examples' do
       ConsoleKit::Connections::BaseConnectionHandler.unregister(vault_handler)

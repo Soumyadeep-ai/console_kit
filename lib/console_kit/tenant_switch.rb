@@ -28,11 +28,17 @@ module ConsoleKit
       # Raises ConnectionVerificationError on the first mismatch. The returned
       # state also names the backends the switch never reached, which no amount
       # of verifying the ones it did reach can discover.
-      def verify_current!
+      #
+      # `dropped` is an optional collector for the backends THIS verification
+      # could not drive. A handler that was healthy at switch time and has
+      # broken since is dropped here and nowhere else: the committed state
+      # cannot know about it, so a caller that reports only `state
+      # .dropped_backends` calls such a tenant fully verified.
+      def verify_current!(dropped = nil)
         state = StateStore.current
         raise ConfigurationError, 'No tenant is currently configured.' unless state.configured?
 
-        new(state.tenant_key).send(:verify_committed, state)
+        new(state.tenant_key).send(:verify_committed, state, dropped)
         state
       end
 
@@ -133,10 +139,13 @@ module ConsoleKit
       Instrumentation.instrument(event, backend: handler.backend_key, tenant: tenant_key, &)
     end
 
+    # A clear is a completed switch too, but it commits no tenant: reporting it
+    # as configured left `StateStore.configured?` true with no tenant key, so
+    # the compat `configuration_success?` answered yes after a clear and
+    # `verify_tenant!` cheerfully "verified" the default state.
     def commit(constants, context_values, undo)
-      StateStore.current = TenantState.new(
-        tenant_key: tenant_key, constants: constants, context_values: context_values, undo: undo, configured: true
-      )
+      StateStore.current = TenantState.new(tenant_key: tenant_key, constants: constants, undo: undo,
+                                           context_values: context_values, configured: !tenant_key.nil?)
     end
 
     # --- rollback -------------------------------------------------------
@@ -152,8 +161,8 @@ module ConsoleKit
       )
     end
 
-    def verify_committed(state)
-      handlers = Connections::ConnectionManager.available_handlers(context)
+    def verify_committed(state, dropped = nil)
+      handlers = Connections::ConnectionManager.available_handlers(context, dropped)
       verify_all(handlers, TenantPlan.new(state.tenant_key, constants: state.constants).targets_for(handlers))
       nil
     end

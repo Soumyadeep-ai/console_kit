@@ -94,6 +94,22 @@ module ActiveRecordMock
         connected_to_stack << { role: role, shard: shard, prevent_writes: prevent_writes, klasses: [self] }
       end
 
+      # Rails' block form. The frame is popped in an `ensure` BY POSITION, not
+      # by identity, so the block removes whatever frame happens to be on top
+      # when it exits - including one something else pushed inside it.
+      def connected_to(role: default_role, shard: default_shard, prevent_writes: false, &block)
+        raise ArgumentError, '`connected_to` requires a block' unless block
+
+        with_frame(role: role, shard: shard, prevent_writes: prevent_writes, &block)
+      end
+
+      def with_frame(role:, shard:, prevent_writes:)
+        connecting_to(role: role, shard: shard, prevent_writes: prevent_writes)
+        yield
+      ensure
+        connected_to_stack.pop
+      end
+
       def current_shard = connected_to_stack.reverse_each.find { |entry| entry[:shard] }&.fetch(:shard) || default_shard
       def current_role = connected_to_stack.reverse_each.find { |entry| entry[:role] }&.fetch(:role) || default_role
 

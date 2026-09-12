@@ -599,11 +599,14 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       end
     end
 
+    # The handler's own rescue used to catch this first, so `Runner.failed_row`
+    # never got the chance to re-raise it and a bug inside ConsoleKit came back
+    # as an ordinary :error row describing a backend that is perfectly healthy.
     context 'when the failure is a bug rather than a database refusal' do
       before { allow(conn).to receive(:select_value).and_raise(NameError, 'undefined local variable sql') }
 
-      it 'surfaces it as an error instead of an empty version' do
-        expect(result[:status]).to eq(:error)
+      it 'surfaces the bug instead of laundering it into an error row' do
+        expect { result }.to raise_error(NameError)
       end
     end
   end

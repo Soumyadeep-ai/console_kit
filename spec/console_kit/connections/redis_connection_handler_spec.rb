@@ -535,6 +535,18 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     # `available?` only asks whether a Redis library is loaded. A loaded library
     # with no reachable client handle has nothing to ping, so a :full check has
     # to degrade to the basic answer instead of claiming it pinged.
+    # A bug inside ConsoleKit must reach the operator as the bug it is. The
+    # handler's own rescue used to catch it first, so `Runner.failed_row` never
+    # got the chance to re-raise it and the row described a healthy backend as
+    # broken instead.
+    context 'when :full diagnostics hit a bug rather than an unreachable server' do
+      before { allow(client).to receive(:info).and_return(nil) }
+
+      it 'surfaces the bug instead of laundering it into an error row' do
+        expect { handler.diagnostics(level: :full) }.to raise_error(NoMethodError)
+      end
+    end
+
     context 'when level is :full and no client is reachable' do
       before { stub_const('Redis', RedisFakes::V5) }
 

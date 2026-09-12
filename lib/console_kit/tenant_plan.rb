@@ -30,12 +30,13 @@ module ConsoleKit
 
     private
 
-    def target_for(handler, constants)
-      attr_name = handler.class.context_attribute
-      return nil unless attr_name
-
-      constants[TenantConfigurator.context_mapping[attr_name]].presence
-    end
+    # A handler owns its constants key, so it is asked for it directly. Routing
+    # through the merged context mapping let any handler that declared another
+    # backend's context attribute repoint that backend at its own key, and
+    # stripping a blank value to nil here meant the switch judged a different
+    # value than Configuration#validate! did - the one drift `.target_error`
+    # exists to make impossible.
+    def target_for(handler, constants) = constants[handler.class.constants_key]
 
     def resolve_constants
       return {} if tenant_key.nil?

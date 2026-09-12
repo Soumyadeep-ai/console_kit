@@ -207,6 +207,40 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
       validate!
       expect(ConsoleKit::Output).to have_received(:print_warning).with(/top-level has unrecognised keys: :label/)
     end
+
+    # The generator template documents it, SetupUI reads it to decide whether to
+    # print a production warning, and the console detail table displays it.
+    it 'does not call the :environment constants key a possible typo' do
+      config.tenants = { acme: { constants: valid_constants.merge(environment: 'production') } }
+      validate!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/unrecognised keys: :environment/)
+    end
+  end
+
+  # ContextWrapper detects the attributes it can write with `ctx.public_methods`,
+  # which sees singleton writers. Checking only instance methods told the
+  # operator ConsoleKit would silently never configure a backend it configures
+  # perfectly well - about the very context shape the README recommends.
+  describe 'a context class whose writers live on the singleton' do
+    let(:singleton_context) do
+      Class.new do
+        class << self
+          attr_accessor :partner_identifier, :tenant_shard, :tenant_mongo_db,
+                        :tenant_redis_db, :tenant_elasticsearch_prefix
+        end
+      end
+    end
+
+    before do
+      stub_const('SingletonContext', singleton_context)
+      config.context_class = 'SingletonContext'
+      config.tenants = valid_tenants
+    end
+
+    it 'does not warn that a backend will never be configured' do
+      validate!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/no writer for/)
+    end
   end
 
   describe 'a context class that can carry every backend' do

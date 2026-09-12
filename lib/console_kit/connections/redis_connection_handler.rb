@@ -113,6 +113,8 @@ module ConsoleKit
 
         level == :full ? full_diagnostics : basic_diagnostics
       rescue StandardError => e
+        raise e if ConsoleKit.programming_error?(e)
+
         error_diagnostics(display_name, sanitized(e))
       end
 

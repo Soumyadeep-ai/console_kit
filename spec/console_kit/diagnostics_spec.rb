@@ -132,6 +132,66 @@ RSpec.describe ConsoleKit::Diagnostics do
       end
     end
 
+    # The busy answer carries its own counter site, separate from the one a
+    # timed-out check emits, and an operator watching diagnostics_timeout has to
+    # see a permanently occupied backend just as clearly. The counters are
+    # cleared after the first call, so only the busy answer is being counted.
+    describe 'the counter a busy answer emits' do
+      let(:release) { Queue.new }
+      let(:handler) { blocking_handler(:busy_counter_backend, release) }
+
+      before do
+        described_class::Runner.call(handler, timeout: 0.01, level: :full)
+        ConsoleKit::Instrumentation.clear!
+      end
+
+      after { release.push(:release) }
+
+      it 'counts the busy answer under the diagnostics timeout counter' do
+        described_class::Runner.call(handler, timeout: 0.01, level: :full)
+        expect(ConsoleKit::Instrumentation.counts[described_class::TIMEOUT_COUNTER]).to eq(1)
+      end
+    end
+
+    # A worker is released BEFORE its outcome is published, so a caller that has
+    # just been handed its result can ask again without being told the worker is
+    # busy. Holding the worker's own lock is what makes the order observable: it
+    # pins the release, and nothing may be published ahead of it.
+    describe 'the order a finished job is released and published in' do
+      let(:release) { Queue.new }
+      let(:handler) { blocking_handler(:ordering_backend, release) }
+      let(:worker) { described_class::Worker.new(:ordering_backend) }
+      let(:job) { described_class::Job.new(handler, :full) }
+
+      before do
+        worker.call(job, 0.01)
+        worker.instance_variable_get(:@mutex).lock
+        release.push(:release)
+      end
+
+      after do
+        worker.instance_variable_get(:@mutex).unlock
+        worker.stop
+        worker.join(1)
+      end
+
+      it 'publishes nothing while the release is still pending' do
+        expect(job.wait(0.2)).to be_nil
+      end
+    end
+
+    # The caller-facing half of that guarantee, driven through the public entry
+    # point: a completed check leaves the worker free straight away.
+    describe 'a second request made the moment the first one has answered' do
+      let(:handler) { fast_handler(:reask_backend) }
+
+      before { described_class::Runner.call(handler, level: :full) }
+
+      it 'gets a real row rather than being told the worker is busy' do
+        expect(described_class::Runner.call(handler, level: :full)[:status]).to eq(:connected)
+      end
+    end
+
     describe 'a straggler that finishes after the caller has already timed out' do
       let(:release) { Queue.new }
       let(:handler) { blocking_handler(:straggler_backend, release) }

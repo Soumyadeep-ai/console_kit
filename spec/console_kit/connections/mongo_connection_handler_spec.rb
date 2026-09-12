@@ -320,6 +320,18 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
     end
 
+    # A bug inside ConsoleKit must reach the operator as the bug it is. The
+    # handler's own rescue used to catch it first, so `Runner.failed_row` never
+    # got the chance to re-raise it and the row described a healthy backend as
+    # broken instead.
+    context 'when :full diagnostics hit a bug rather than an unreachable database' do
+      before { allow(Mongoid).to receive(:default_client).and_return(nil) }
+
+      it 'surfaces the bug instead of laundering it into an error row' do
+        expect { handler.diagnostics(level: :full) }.to raise_error(NoMethodError)
+      end
+    end
+
     context 'when the connection raises an error' do
       before do
         allow(Mongoid).to receive(:default_client).and_raise(StandardError, 'auth failed')

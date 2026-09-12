@@ -26,6 +26,12 @@ module ConsoleKit
   # requiring them here would pull the entire connections stack into
   # Configuration's load path for no benefit.
   class ConfigurationValidator
+    # Constants keys ConsoleKit reads without routing them through a backend
+    # handler, so `context_mapping` does not know about them. `:environment` is
+    # documented by the generator template, read by SetupUI to decide whether to
+    # warn about production, and displayed by the console detail table.
+    EXTRA_CONSTANTS_KEYS = [:environment].freeze
+
     def initialize(configuration)
       @configuration = configuration
       @errors = []
@@ -61,7 +67,8 @@ module ConsoleKit
 
       check_required_keys(key, constants)
       check_constants_values(key, constants)
-      warn_unknown_keys(key, 'constants', constants.keys, TenantConfigurator.context_mapping.values)
+      warn_unknown_keys(key, 'constants', constants.keys,
+                        TenantConfigurator.context_mapping.values + EXTRA_CONSTANTS_KEYS)
     end
 
     def check_identifier(key)
@@ -125,12 +132,19 @@ module ConsoleKit
       return unless klass
 
       attributes = TenantConfigurator.context_mapping.keys
-      missing = attributes.reject { |attr| klass.method_defined?(:"#{attr}=") }
+      missing = attributes.reject { |attr| writer?(klass, :"#{attr}=") }
       return if missing.empty?
 
       warnings << "context_class #{klass} has no writer for: #{missing.join(', ')}. ConsoleKit will silently " \
                   'never configure that backend during a tenant switch.'
     end
+
+    # The context object ConsoleKit writes to is the class itself, and
+    # ContextWrapper detects what it can write with `ctx.public_methods` - which
+    # sees a `class << self; attr_accessor` writer. Asking only
+    # `method_defined?` looked for instance writers nobody ever calls, and
+    # warned that ConsoleKit would never configure a backend it configures.
+    def writer?(klass, writer) = klass.respond_to?(writer) || klass.method_defined?(writer)
 
     def resolve_context_class
       configuration.context_class

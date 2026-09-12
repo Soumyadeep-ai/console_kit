@@ -3,7 +3,9 @@
 require 'English'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/inclusion'
+require 'active_support/core_ext/object/try'
 require 'active_support/core_ext/string/inflections'
+require 'active_support/core_ext/time/calculations'
 
 require_relative 'console_kit/version'
 require_relative 'console_kit/errors'
@@ -65,8 +67,9 @@ module ConsoleKit
     # A backend the switch never reached cannot be verified at all, so it is
     # reported here rather than being quietly counted as clean.
     def verify_tenant!
-      state = TenantSwitch.verify_current!
-      report_dropped_backends(state)
+      dropped_now = []
+      state = TenantSwitch.verify_current!(dropped_now)
+      report_dropped_backends(state, dropped_now)
       state
     end
 
@@ -94,8 +97,12 @@ module ConsoleKit
     # third-party handler, leaving it no way to verify anything at all - and it
     # would say "a live connection is on the wrong tenant" when the truth is
     # "a backend was never driven". The state carries the list either way.
-    def report_dropped_backends(state)
-      dropped = state.dropped_backends
+    # The union of both chances a backend has to be dropped: the switch that
+    # committed this state, and the verification that just ran. A handler that
+    # was healthy at switch time and has broken since appears only in the
+    # second, so reporting only the first called such a tenant fully verified.
+    def report_dropped_backends(state, dropped_now)
+      dropped = state.dropped_backends | dropped_now
       return if dropped.empty?
 
       Instrumentation.increment('console_kit.incomplete_verification')

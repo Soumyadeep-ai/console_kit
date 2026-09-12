@@ -150,6 +150,38 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  # A context attribute that is set but blank means "use the default", exactly
+  # as an unset one does. Reading it as a value instead sends "" down the legacy
+  # #connect path, where a blank Redis value reaches coerce_db("") and raises
+  # ConfigurationError rather than selecting the default database.
+  describe '#target when the context attribute is blank' do
+    let(:handler_class) do
+      stub_const('BlankTargetHandler', Class.new(described_class) do
+        backend :blank_target, display_name: 'Blank', context_attribute: :tenant_blank,
+                               constants_key: :blank, detail_label: 'Blank'
+      end)
+    end
+    let(:blank_context) { Struct.new(:tenant_blank).new(value) }
+
+    after { ConsoleKit::Connections::HandlerRegistry.remove(handler_class) }
+
+    context 'with an empty string' do
+      let(:value) { '' }
+
+      it 'reads as no target at all' do
+        expect(handler_class.new(blank_context).target).to be_nil
+      end
+    end
+
+    context 'with whitespace only' do
+      let(:value) { '   ' }
+
+      it 'reads as no target at all' do
+        expect(handler_class.new(blank_context).target).to be_nil
+      end
+    end
+  end
+
   describe '#available?' do
     it 'raises NotImplementedError by default' do
       expect { handler.available? }.to raise_error(NotImplementedError, /must implement #available?/)

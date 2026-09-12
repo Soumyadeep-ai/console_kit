@@ -107,6 +107,62 @@ RSpec.describe DroppedBackend do
     end
   end
 
+  # A handler can be healthy when the switch runs and broken by the time anyone
+  # verifies - a reload that half-loaded it, a client library unloaded
+  # underneath it. It is dropped at VERIFY time, which the committed state
+  # cannot possibly know about, so a verification that reads only that state
+  # reports a clean tenant while the backend is still serving another one.
+  describe 'a backend that breaks after a clean switch' do
+    let(:fragile_handler) do
+      Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :fragile, display_name: 'Fragile', context_attribute: :tenant_fragile_key,
+                          constants_key: :fragile_key, detail_label: 'Fragile Key'
+
+        class << self
+          attr_accessor :broken
+        end
+
+        def available?
+          raise NotImplementedError, 'Fragile#available? is half-implemented' if self.class.broken
+
+          true
+        end
+
+        def snapshot = {}
+        def connect!(_target) = nil
+        def verify!(_target) = nil
+        def restore(_snapshot) = nil
+      end
+    end
+
+    before do
+      fragile_handler
+      ConsoleKit.switch_tenant('acme')
+      fragile_handler.broken = true
+    end
+
+    after { ConsoleKit::Connections::BaseConnectionHandler.unregister(fragile_handler) }
+
+    it 'was not dropped at switch time' do
+      expect(state.dropped_backends).to be_empty
+    end
+
+    it 'names the backend it could not verify' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('fragile'))
+    end
+
+    it 'says the tenant is only partly verified' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('verified only for'))
+    end
+
+    it 'counts the incomplete verification' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Instrumentation.counts['console_kit.incomplete_verification']).to eq(1)
+    end
+  end
+
   describe 'a switch with every backend healthy' do
     before { ConsoleKit.switch_tenant('acme') }
 
