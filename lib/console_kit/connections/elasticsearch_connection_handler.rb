@@ -20,6 +20,9 @@ module ConsoleKit
               detail_label: 'ES Prefix'
 
       UNSUPPORTED = 'Elasticsearch does not expose index_name_prefix= in this version.'
+      UNVERIFIABLE = 'Elasticsearch exposes no index_name_prefix reader in this version, so the process-wide prefix ' \
+                     'cannot be read back and a switch could not be verified or rolled back. Give each tenant its ' \
+                     'own index naming instead.'
       NOT_A_NAME = 'expected a String or Symbol'
 
       class << self
@@ -46,11 +49,16 @@ module ConsoleKit
       def isolation_model = :process_global
       def thread_isolated? = false
 
+      # A prefix ConsoleKit writes but cannot read back cannot be snapshotted,
+      # so rollback would put nil where the previous prefix was. A reset writes
+      # too, and is refused on the same terms; only a module with no setter at
+      # all is left alone, because then nothing is written.
       def prepare(target)
         validate_target!(target)
-        return if normalize(target).nil?
+        raise UnsupportedBackendError, UNSUPPORTED unless registry.settable? || normalize(target).nil?
+        return unless registry.settable?
 
-        raise UnsupportedBackendError, UNSUPPORTED unless registry.settable?
+        raise UnsupportedBackendError, UNVERIFIABLE unless registry.readable?
       end
 
       def snapshot = { global: registry.global, thread: registry.current }

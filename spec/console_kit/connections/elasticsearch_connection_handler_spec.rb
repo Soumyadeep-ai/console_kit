@@ -140,6 +140,38 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
         expect { handler.prepare(nil) }.not_to raise_error
       end
     end
+
+    # A prefix that can be written but not read back cannot be snapshotted:
+    # #snapshot records nil, #verify! falls back to ConsoleKit's own registry
+    # instead of reading Elasticsearch, and a rollback writes nil over the
+    # previous tenant's process-wide prefix while the switch reports itself
+    # verified. Both a tenant prefix and a reset write, so both are refused.
+    context 'when Elasticsearch::Model can set a prefix but cannot read one back' do
+      before { stub_const('Elasticsearch::Model', Elasticsearch::ModelWithWriteOnlyPrefix) }
+
+      it 'refuses a tenant prefix' do
+        expect { handler.prepare('acme') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+
+      it 'names the backend in the refusal' do
+        expect { handler.prepare('acme') }.to raise_error(/Elasticsearch/)
+      end
+
+      it 'refuses a reset, which would also write over an unknown prefix' do
+        expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+
+      it 'records nothing in the registry when it refuses' do
+        refuse_prefix
+        expect(registry.current).to be_nil
+      end
+
+      def refuse_prefix
+        handler.prepare('acme')
+      rescue ConsoleKit::UnsupportedBackendError
+        nil
+      end
+    end
   end
 
   describe '#connect!' do

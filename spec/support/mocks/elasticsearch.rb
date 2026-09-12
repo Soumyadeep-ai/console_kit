@@ -58,6 +58,16 @@ module Elasticsearch
       def client = ElasticsearchMocks::Client.new
     end
   end
+
+  # Variant whose prefix can be written but never read back: a setter with no
+  # matching reader.
+  module ModelWithWriteOnlyPrefix
+    class << self
+      attr_writer :index_name_prefix
+
+      def client = ElasticsearchMocks::Client.new
+    end
+  end
 end
 
 # Stable handle on the real mock module so specs can reset it even while
