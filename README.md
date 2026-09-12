@@ -13,19 +13,18 @@ ConsoleKit helps you manage tenant-specific database connections (SQL, MongoDB, 
 
 ## Compatibility
 
+Every combination below is exercised by CI on each push - 28 cells, all of them required.
+
 | Rails | Ruby |
 |---|---|
-| 6.1 | 3.1 |
-| 7.0 | 3.1 |
-| 7.1 | 3.1, 3.2, 3.3 |
-| 7.2 | 3.1, 3.2, 3.3, 3.4 |
-| 8.0 | 3.2, 3.3, 3.4 |
+| 6.1 | 3.1, 3.2, 3.3, 3.4, 4.0 |
+| 7.0 | 3.1, 3.2, 3.3, 3.4, 4.0 |
+| 7.1 | 3.1, 3.2, 3.3, 3.4, 4.0 |
+| 7.2 | 3.1, 3.2, 3.3, 3.4, 4.0 |
+| 8.0 | 3.2, 3.3, 3.4, 4.0 |
 | 8.1 | 3.2, 3.3, 3.4, 4.0 |
 
-CI additionally runs every other combination the declared constraints permit - 28 cells in total -
-as informational builds, so a Ruby or Rails release that starts working (or stops) shows up as
-evidence rather than as a surprise. The gem itself requires Ruby `>= 3.1` and Rails `>= 6.1`, with no
-upper bound on either.
+The gem requires Ruby `>= 3.1` and Rails `>= 6.1`, with no upper bound on either.
 
 ## Installation
 
