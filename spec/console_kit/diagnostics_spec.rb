@@ -35,13 +35,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     described_class.clear_cache!
   end
 
-  def blocking_handler(key, release)
-    DiagnosticsSpecHandler.new(key) do
-      release.pop
-      connected_row(key.to_s)
-    end
-  end
-
   def failing_handler(key, error)
     DiagnosticsSpecHandler.new(key) { raise error }
   end
@@ -78,234 +71,94 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  describe 'level dispatch' do
-    it 'runs the basic level inline without spawning a worker thread' do
-      baseline = described_class::Runner.live_thread_count
-      described_class::Runner.call(fast_handler(:basic_dispatch), level: :basic)
-      expect(described_class::Runner.live_thread_count).to eq(baseline)
+  # A handler reads its backend state from thread-local storage: the SQL shard
+  # frame, Mongoid's overrides, the scoped Redis client. A check taken anywhere
+  # but the calling thread therefore describes a tenant nobody asked about.
+  describe 'where a :full check executes' do
+    def thread_probe(key)
+      DiagnosticsSpecHandler.new(key) { connected_row(key.to_s).merge(details: { thread: Thread.current }) }
     end
 
-    it 'may dispatch the full level through a worker thread' do
-      baseline = described_class::Runner.live_thread_count
-      described_class::Runner.call(fast_handler(:full_dispatch), level: :full)
-      expect(described_class::Runner.live_thread_count).to eq(baseline + 1)
+    it 'runs on the calling thread' do
+      row = described_class::Runner.call(thread_probe(:thread_probe_backend), level: :full)
+      expect(row[:details][:thread]).to equal(Thread.current)
     end
   end
 
-  describe 'the bounded, leak-free runner' do
-    describe 'when many calls target handlers that block past their timeout' do
-      let(:releases) { Array.new(3) { Queue.new } }
-      let(:handlers) { releases.each_with_index.map { |queue, i| blocking_handler(:"cap_backend_#{i}", queue) } }
+  describe 'a :full check taken while a tenant is applied' do
+    include_context 'with a four-backend tenant setup'
 
-      after { releases.each { |queue| queue.push(:release) } }
+    before { ConsoleKit.switch_tenant('acme') }
 
-      it 'never holds more live threads than the number of distinct backends called' do
-        baseline = described_class::Runner.live_thread_count
-        50.times { handlers.each { |handler| described_class::Runner.call(handler, timeout: 0.01, level: :full) } }
-        expect(described_class::Runner.live_thread_count).to eq(baseline + handlers.size)
-      end
+    def full_details(handler_class)
+      described_class::Runner.call(handler_class.new(context_class), level: :full)[:details]
     end
 
-    describe 'a request for a backend whose worker is still busy with a previous timed-out call' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:busy_backend, release) }
+    it 'reports the Mongo database the caller is on' do
+      expect(full_details(ConsoleKit::Connections::MongoConnectionHandler)[:database]).to eq('acme_db')
+    end
+  end
 
-      before { described_class::Runner.call(handler, timeout: 0.01, level: :full) }
+  # The runner used to bound a slow backend on a worker thread, and paid for that
+  # bound with a row describing the worker's tenant rather than the caller's. What
+  # replaced it is pinned here: the budget is reported, the check still answers,
+  # and no thread is held.
+  describe 'a check that overruns its budget' do
+    let(:handler) { fast_handler(:overrun_backend) }
 
-      after { release.push(:release) }
-
-      it 'does not spawn another thread' do
-        baseline = described_class::Runner.live_thread_count
-        described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(described_class::Runner.live_thread_count).to eq(baseline)
-      end
-
-      it 'answers with a :timeout status' do
-        row = described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(row[:status]).to eq(:timeout)
-      end
-
-      it 'explains that a previous check is still running' do
-        row = described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(row[:details][:error]).to eq(ConsoleKit::Connections::DiagnosticHelpers::BUSY_REASON)
-      end
-
-      it 'answers immediately rather than waiting out the timeout again' do
-        start = ConsoleKit::Connections::DiagnosticHelpers.clock_time
-        described_class::Runner.call(handler, timeout: 5, level: :full)
-        elapsed = ConsoleKit::Connections::DiagnosticHelpers.clock_time - start
-        expect(elapsed).to be < 1
-      end
+    it 'still answers with the row the backend gave' do
+      row = described_class::Runner.call(handler, timeout: 0, level: :full)
+      expect(row[:status]).to eq(:connected)
     end
 
-    # The busy answer carries its own counter site, separate from the one a
-    # timed-out check emits, and an operator watching diagnostics_timeout has to
-    # see a permanently occupied backend just as clearly. The counters are
-    # cleared after the first call, so only the busy answer is being counted.
-    describe 'the counter a busy answer emits' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:busy_counter_backend, release) }
-
-      before do
-        described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        ConsoleKit::Instrumentation.clear!
-      end
-
-      after { release.push(:release) }
-
-      it 'counts the busy answer under the diagnostics timeout counter' do
-        described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(ConsoleKit::Instrumentation.counts[described_class::TIMEOUT_COUNTER]).to eq(1)
-      end
+    it 'counts the overrun under the diagnostics timeout counter' do
+      described_class::Runner.call(handler, timeout: 0, level: :full)
+      expect(ConsoleKit::Instrumentation.counters[described_class::TIMEOUT_COUNTER]).to eq(1)
     end
 
-    # A worker is released BEFORE its outcome is published, so a caller that has
-    # just been handed its result can ask again without being told the worker is
-    # busy. Holding the worker's own lock is what makes the order observable: it
-    # pins the release, and nothing may be published ahead of it.
-    describe 'the order a finished job is released and published in' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:ordering_backend, release) }
-      let(:worker) { described_class::Worker.new(:ordering_backend) }
-      let(:job) { described_class::Job.new(handler, :full) }
+    it 'leaves a check that stayed inside its budget uncounted' do
+      described_class::Runner.call(handler, timeout: 30, level: :full)
+      expect(ConsoleKit::Instrumentation.counters[described_class::TIMEOUT_COUNTER]).to eq(0)
+    end
+  end
 
-      before do
-        worker.call(job, 0.01)
-        worker.instance_variable_get(:@mutex).lock
-        release.push(:release)
-      end
-
-      after do
-        worker.instance_variable_get(:@mutex).unlock
-        worker.stop
-        worker.join(1)
-      end
-
-      it 'publishes nothing while the release is still pending' do
-        expect(job.wait(0.2)).to be_nil
-      end
+  describe 'the threads a check uses' do
+    it 'holds no diagnostics thread of its own' do
+      described_class::Runner.call(fast_handler(:threadless_backend), level: :full)
+      expect(described_class::Runner.live_thread_count).to eq(0)
     end
 
-    # The caller-facing half of that guarantee, driven through the public entry
-    # point: a completed check leaves the worker free straight away.
-    describe 'a second request made the moment the first one has answered' do
-      let(:handler) { fast_handler(:reask_backend) }
+    it 'winds down without anything to stop' do
+      expect(described_class::Runner.shutdown!).to eq(0)
+    end
+  end
 
-      before { described_class::Runner.call(handler, level: :full) }
-
-      it 'gets a real row rather than being told the worker is busy' do
-        expect(described_class::Runner.call(handler, level: :full)[:status]).to eq(:connected)
-      end
+  describe 'a handler that raises a plain failure' do
+    it 'never raises into the caller' do
+      handler = failing_handler(:non_raising_backend, StandardError.new('boom'))
+      expect { described_class::Runner.call(handler, level: :basic) }.not_to raise_error
     end
 
-    describe 'a straggler that finishes after the caller has already timed out' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:straggler_backend, release) }
-      let(:worker) { described_class::Worker.new(:straggler_backend) }
-
-      # Runs the whole scenario once (memoized) so every `it` below observes
-      # the same sequence of events without duplicating the choreography.
-      let(:scenario) do
-        first_job = described_class::Job.new(handler, :full)
-        first_outcome = worker.call(first_job, 0.01)
-        release.push(:release_first)
-        straggler_outcome = first_job.wait(5)
-        thread_before_second_job = worker.instance_variable_get(:@thread)
-        release.push(:release_second)
-        second_outcome = worker.call(described_class::Job.new(handler, :full), 5)
-        {
-          first_outcome: first_outcome, straggler_outcome: straggler_outcome, second_outcome: second_outcome,
-          thread_before_second_job: thread_before_second_job,
-          thread_after_second_job: worker.instance_variable_get(:@thread)
-        }
-      end
-
-      after do
-        release.push(:cleanup)
-        worker.stop
-        worker.join(1)
-      end
-
-      it 'reports :timeout to the caller while the straggler is still running' do
-        expect(scenario[:first_outcome]).to eq(:timeout)
-      end
-
-      it 'eventually resolves the straggler to the handler row' do
-        expect(scenario[:straggler_outcome]).to be_a(Hash)
-      end
-
-      it 'accepts the next job on the same worker instead of answering :busy' do
-        expect(scenario[:second_outcome]).to be_a(Hash)
-      end
-
-      it 'never spawns a second thread for the reused worker' do
-        expect(scenario[:thread_after_second_job]).to equal(scenario[:thread_before_second_job])
-      end
+    it 'reports :error status' do
+      handler = failing_handler(:error_status_backend, StandardError.new('boom'))
+      row = described_class::Runner.call(handler, level: :basic)
+      expect(row[:status]).to eq(:error)
     end
 
-    describe 'a thread blocked past its timeout' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:not_killed_backend, release) }
-      let(:worker) { described_class::Worker.new(:not_killed_backend) }
-
-      before { worker.call(described_class::Job.new(handler, :full), 0.01) }
-
-      after do
-        release.push(:release)
-        worker.stop
-        worker.join(1)
-      end
-
-      it 'keeps the blocked thread alive rather than killing it' do
-        expect(worker.alive?).to be(true)
-      end
+    it 'carries the failure message in details[:error]' do
+      handler = failing_handler(:error_message_backend, StandardError.new('boom'))
+      row = described_class::Runner.call(handler, level: :basic)
+      expect(row[:details][:error]).to eq('boom')
     end
+  end
 
-    describe 'a handler that blocks past its timeout' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:timeout_status_backend, release) }
+  # Rescuing this would swallow Interrupt as well, and a check that blocks its
+  # caller is exactly the one an operator has to be able to abandon.
+  describe 'a failure the runner deliberately does not rescue' do
+    let(:handler) { failing_handler(:interrupted_backend, Interrupt.new('ctrl-c')) }
 
-      after { release.push(:release) }
-
-      it 'reports :timeout status' do
-        row = described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(row[:status]).to eq(:timeout)
-      end
-    end
-
-    describe 'a handler that raises a plain failure' do
-      it 'never raises into the caller' do
-        handler = failing_handler(:non_raising_backend, StandardError.new('boom'))
-        expect { described_class::Runner.call(handler, level: :basic) }.not_to raise_error
-      end
-
-      it 'reports :error status' do
-        handler = failing_handler(:error_status_backend, StandardError.new('boom'))
-        row = described_class::Runner.call(handler, level: :basic)
-        expect(row[:status]).to eq(:error)
-      end
-
-      it 'carries the failure message in details[:error]' do
-        handler = failing_handler(:error_message_backend, StandardError.new('boom'))
-        row = described_class::Runner.call(handler, level: :basic)
-        expect(row[:details][:error]).to eq('boom')
-      end
-    end
-
-    # Neither a StandardError nor a ScriptError, so the worker unwinds past the
-    # runner's rescue. It used to leave the job outcome nil, which the caller
-    # reads as "did not finish in time" - reporting a backend that blew up as a
-    # backend that was merely slow.
-    describe 'a handler that fails with something the runner does not rescue' do
-      let(:handler) { failing_handler(:unrescued_backend, Exception.new('worker died')) }
-
-      it 'does not report it as a timeout' do
-        expect(described_class::Runner.call(handler, level: :full)[:status]).not_to eq(:timeout)
-      end
-
-      it 'reports the failure it actually hit' do
-        expect(described_class::Runner.call(handler, level: :full)[:details][:error]).to eq('worker died')
-      end
+    it 'reaches the caller' do
+      expect { described_class::Runner.call(handler, level: :full) }.to raise_error(Interrupt)
     end
   end
 
@@ -571,18 +424,6 @@ RSpec.describe ConsoleKit::Diagnostics do
       ConsoleKit::Instrumentation.subscribe { |name, _duration, payload| events << [name, payload] }
       described_class::Runner.call(fast_handler(:instrumented_backend), level: :full)
       expect(events).to include([described_class::EVENT, hash_including(backend: :instrumented_backend, level: :full)])
-    end
-
-    describe 'a timed-out check' do
-      let(:release) { Queue.new }
-      let(:handler) { blocking_handler(:instrumented_timeout_backend, release) }
-
-      after { release.push(:release) }
-
-      it 'increments the timeout counter' do
-        described_class::Runner.call(handler, timeout: 0.01, level: :full)
-        expect(ConsoleKit::Instrumentation.counters[described_class::TIMEOUT_COUNTER]).to eq(1)
-      end
     end
   end
 

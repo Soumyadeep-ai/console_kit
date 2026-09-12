@@ -31,7 +31,6 @@ module ConsoleKit
       CREDENTIAL_PATTERN = Regexp.union(CREDENTIAL_URL, CREDENTIAL_ASSIGNMENT, CREDENTIAL_PHRASE,
                                         CREDENTIAL_PRINCIPAL, CREDENTIAL_PRINCIPAL_AT).freeze
       REDACTED = '[redacted]'
-      BUSY_REASON = 'A previous check is still running'
 
       module_function
 
@@ -49,20 +48,6 @@ module ConsoleKit
 
       def error_diagnostics(name, error)
         { name: name, status: :error, latency_ms: nil, details: { error: scrub(error.message).truncate(60) } }
-      end
-
-      def timeout_diagnostics(name, timeout)
-        expired_diagnostics(name, "Timed out after #{timeout}s")
-      end
-
-      # Reported as :timeout so the dashboard renders a worker still busy with a
-      # previous, timed-out check as a failure rather than an unknown state.
-      def busy_diagnostics(name)
-        expired_diagnostics(name, BUSY_REASON)
-      end
-
-      def expired_diagnostics(name, reason)
-        { name: name, status: :timeout, latency_ms: nil, details: { error: reason } }
       end
     end
   end

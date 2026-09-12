@@ -141,6 +141,7 @@ module ConsoleKit
 
     def verify_committed(state, dropped = nil)
       handlers = Connections::ConnectionManager.available_handlers(context, dropped)
+      dropped&.concat(state.backends_missing_from(handlers.map(&:backend_key)) - dropped)
       verify_all(handlers, TenantPlan.new(state.tenant_key, constants: state.constants).targets_for(handlers))
       nil
     end

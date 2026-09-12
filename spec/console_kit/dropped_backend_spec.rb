@@ -218,4 +218,74 @@ RSpec.describe DroppedBackend do
       expect(ConsoleKit::Output).not_to have_received(:print_warning).with(a_string_including('verified only for'))
     end
   end
+
+  # A backend can commit cleanly and then lose what it needs - an optional gem
+  # unloaded, a client constant undefined. `available?` answers false with no
+  # reason, which is exactly how a gem that was never installed reads, so
+  # ConnectionManager drops it silently and verification walked straight past it.
+  describe 'a backend whose dependency is unloaded after a clean switch' do
+    let(:unloaded_handler) do
+      Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :unloaded, display_name: 'Unloaded', context_attribute: :tenant_unloaded_key,
+                           constants_key: :unloaded_key, detail_label: 'Unloaded Key'
+
+        class << self
+          attr_accessor :gone
+        end
+
+        def available? = !self.class.gone
+        def snapshot = {}
+        def connect!(_target) = nil
+        def verify!(_target) = nil
+        def restore(_snapshot) = nil
+      end
+    end
+
+    before do
+      unloaded_handler
+      ConsoleKit.switch_tenant('acme')
+      unloaded_handler.gone = true
+    end
+
+    after { ConsoleKit::Connections::BaseConnectionHandler.unregister(unloaded_handler) }
+
+    it 'was not dropped at switch time' do
+      expect(state.dropped_backends).to be_empty
+    end
+
+    it 'names the backend the verification could not reach' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('unloaded'))
+    end
+
+    it 'says the tenant is only partly verified' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).to have_received(:print_warning).with(a_string_including('verified only for'))
+    end
+
+    it 'counts the incomplete verification' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Instrumentation.counts['console_kit.incomplete_verification']).to eq(1)
+    end
+
+    it 'still returns the verified state' do
+      expect(ConsoleKit.verify_tenant!.tenant_key).to eq('acme')
+    end
+  end
+
+  # The same silence is correct for a backend that never took part: an optional
+  # gem absent from the start is not in the committed state either.
+  describe 'an optional gem that was absent before the switch as well' do
+    before do
+      absent_handler
+      ConsoleKit.switch_tenant('acme')
+    end
+
+    after { ConsoleKit::Connections::BaseConnectionHandler.unregister(absent_handler) }
+
+    it 'reports nothing on verification' do
+      ConsoleKit.verify_tenant!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(a_string_including('verified only for'))
+    end
+  end
 end

@@ -392,10 +392,15 @@ dashboard(level: :full)   # adds version, health and latency probes
 `:basic` is the default and reports only what can be read locally, so it is cheap enough to run
 freely. Switching a tenant never triggers diagnostics on its own.
 
-`:full` queries each handler with a 2-second timeout, on a bounded set of reusable per-backend
-workers - the thread count is capped no matter how often you type `dashboard`, and a backend whose
-previous check is still running reports as busy rather than starting another one. `:basic` needs no
-timeout because it never leaves the process.
+Both levels run in your own thread, so they report the connections your console is actually using.
+That matters more than it sounds: a backend's tenant lives in thread-local state, so a check run on
+a worker thread would inspect a different tenant than the one you are on.
+
+The cost is that `:full` has no timeout of its own - a backend that hangs holds the dashboard until
+its own client gives up, and `Ctrl-C` interrupts it. The `timeout:` option reports a budget rather
+than enforcing one; an overrun is counted, not cut off. Bound a slow backend by configuring a
+timeout on that client, which is the only layer that can cancel its own call safely. `:basic` never
+leaves the process, so none of this applies to it.
 
 Only `:full` results are cached, for a couple of seconds; `:basic` is never cached, because it is a
 local read and caching it bought nothing while costing correctness.

@@ -174,4 +174,73 @@ RSpec.describe RollbackIntegrity do
       expect(restore_order).to eq(handlers.map(&:backend_key).reverse)
     end
   end
+
+  # The captured undo bundle is the authority on what has to be put back, for the
+  # context exactly as for the backends: the handler that owned a context slot can
+  # be gone by the time the scope closes, and the slot is still on the inner
+  # tenant until someone writes the captured value back.
+  describe 'the context slot of a backend whose handler vanished mid-scope' do
+    let(:context_class) do
+      Class.new do
+        class << self
+          attr_accessor :partner_identifier, :tenant_shard, :tenant_mongo_db, :tenant_redis_db,
+                        :tenant_elasticsearch_prefix, :tenant_probe_key
+        end
+      end
+    end
+
+    let(:applied_inside) { [] }
+
+    let(:probe_handler) do
+      Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
+        backend :probe, display_name: 'Probe', context_attribute: :tenant_probe_key,
+                        constants_key: :probe_key, detail_label: 'Probe Key'
+
+        class << self
+          attr_accessor :gone
+        end
+
+        def available? = !self.class.gone
+        def snapshot = {}
+        def connect!(_target) = nil
+        def verify!(_target) = nil
+        def restore(_snapshot) = nil
+      end
+    end
+
+    before do
+      probe_handler
+      ConsoleKit.configuration.tenants = probe_tenants
+      vanish_mid_scope
+    end
+
+    after { ConsoleKit::Connections::BaseConnectionHandler.unregister(probe_handler) }
+
+    def probe_tenants
+      TenantBackends::TENANTS.transform_values do |tenant|
+        { constants: tenant[:constants].merge(probe_key: "#{tenant[:constants][:partner_code]}_probe") }
+      end
+    end
+
+    def vanish_mid_scope
+      ConsoleKit.with_tenant('acme') do
+        applied_inside << context_class.tenant_probe_key
+        probe_handler.gone = true
+      end
+    rescue ConsoleKit::RollbackError
+      nil
+    end
+
+    it 'had applied the slot on the way in' do
+      expect(applied_inside).to eq(['ACME_probe'])
+    end
+
+    it 'writes the captured value back into the slot' do
+      expect(context_class.tenant_probe_key).to be_nil
+    end
+
+    it 'restores the slots whose handlers survived as well' do
+      expect(context_class.tenant_shard).to be_nil
+    end
+  end
 end

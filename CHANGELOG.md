@@ -33,12 +33,12 @@ completes fully or leaves the previous tenant exactly as it was.
 ### Changed
 - **Connection pool churn removed.** The SQL handler uses the native `connecting_to(shard:)` path when the target is a registered shard, detected by capability check rather than Rails version, and keeps ConsoleKit to exactly one entry on the `connected_to` stack. The `establish_connection` fallback re-establishes only when the resolved configuration actually changes, and no longer disconnects a pool Rails is about to replace anyway. Switching to the shard already in use performs no pool work.
 - **`reapply`** no longer re-establishes a connection already on the target shard.
-- Diagnostics run on a bounded set of reusable per-backend workers rather than a fresh thread per call.
+- Diagnostics run in the calling thread. A backend's tenant lives in thread-local state, so a check run anywhere else inspects a different tenant than the caller is on.
 - `ContextWrapper#assign` returns a Hash of applied values rather than triples, and owns the case-mismatch warning. It gained `current_values` and `restore`.
 - `TenantConfigurator.validate_constants!` moved to `ConsoleKit::TenantPlan`. `configuration_success` is derived from `StateStore` and joined by a `configuration_success?` predicate.
 
 ### Fixed
-- **Diagnostic threads leaked without bound.** Every diagnostic call spawned a thread, and a timed-out one was abandoned - deliberately, since 1.3.0 removed `Thread.kill` to avoid corrupting a connection mid-operation - so each dashboard render could leak another. Diagnostics now run on a capped set of reusable per-backend workers; a backend whose previous check is still running reports as busy rather than starting another. Threads are still never killed.
+- **Diagnostic threads leaked without bound.** Every diagnostic call spawned a thread, and a timed-out one was abandoned - deliberately, since 1.3.0 removed `Thread.kill` to avoid corrupting a connection mid-operation - so each dashboard render could leak another. Diagnostics no longer spawn threads at all, so there is nothing left to leak or to kill.
 - **A failed Mongoid, Redis or Elasticsearch switch reported success.** Each handler rescued `NoMethodError` and printed a warning while the caller carried on, so a tenant switch that had not actually happened looked like one that had. Failures now propagate and roll back, and a client that genuinely cannot support the request is refused before anything is mutated.
 - **Elasticsearch `:full` diagnostics reported `Connected` for an unreachable cluster.** The ping failure was swallowed and `cluster.health` was called anyway.
 - **A misconfigured `sql_base_class` silently removed SQL from every switch.** An unresolvable class name made `available?` return false, which is indistinguishable from ActiveRecord not being loaded, so SQL was never switched while the switch reported success. A non-default class name that cannot be resolved now warns.
@@ -76,6 +76,8 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 - **Allocations per switch:** ~187 objects.
 - The ActiveRecord `connected_to` stack holds exactly one ConsoleKit entry regardless of switch count or `reload!` count.
 - The 1.3.0 `base_class` memoization is retained.
+
+- **`level: :full` diagnostics no longer time out.** They previously ran on a thread ConsoleKit could abandon after two seconds. That thread could not see the caller's tenant - a backend's tenant lives in thread-local state - so it inspected a different tenant than the one being reported on, and could check out a second pool connection doing it. Reporting the wrong tenant is worse than reporting slowly, so the check now runs in the calling thread. A backend that hangs holds the dashboard until its own client gives up; `Ctrl-C` interrupts it, `:full` is never the default, and `timeout:` now counts overruns rather than cutting them off. Configure a timeout on the client to bound it - that is the only layer that can cancel its own call safely.
 
 ### Breaking changes
 - **redis-rb 5 and redis-client:** these expose no process-wide client handle, so a non-default `redis_db` now raises `UnsupportedBackendError` instead of printing a warning and silently running against the wrong DB. Give each tenant its own Redis URL, for example `redis://redis.internal:6379/<db>`.

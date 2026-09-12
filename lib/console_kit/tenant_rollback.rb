@@ -15,10 +15,13 @@ module ConsoleKit
       # The context object the switch actually moved, not whatever the
       # configuration points at now: a reload or a reconfigure between the switch
       # and the unwind would otherwise write the captured values to a new object
-      # and leave the original on the inner tenant.
+      # and leave the original on the inner tenant. The captured bundle names the
+      # slots too, for the same reason the snapshot names the backends: a handler
+      # that was available at switch time may be gone now, and re-detecting the
+      # attributes would leave its slot on the inner tenant.
       def unwind(state, previous)
         ctx = state.context_object || ConsoleKit.configuration.context_class
-        wrapper = TenantConfigurator::ContextWrapper.for_context(ctx)
+        wrapper = TenantConfigurator::ContextWrapper.new(ctx, state.undo_context.keys)
         live, missing = resolve_handlers(state, ctx)
         failures = new(state.undo, wrapper).call(live, missing)
         StateStore.current = previous

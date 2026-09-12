@@ -12,32 +12,37 @@ module ConsoleKit
 
     attr_reader :tenant_key, :constants, :context_values, :undo, :captured_at
 
+    # Containers are copied and then frozen: a copy because the constants a switch
+    # is handed belong to the application's configuration, and freezing that in
+    # place makes a later `configure` or config reload raise FrozenError far from
+    # here. A leaf is left alone - it may be a live class or client object, which
+    # is neither ours to freeze nor safe to duplicate.
+    module OwnCopy
+      class << self
+        def call(value)
+          case value
+          when Hash then value.transform_values { |entry| call(entry) }.freeze
+          when Array then value.map { |entry| call(entry) }.freeze
+          else value
+          end
+        end
+      end
+    end
+
     class << self
       def empty = new
 
       def undo_bundle(context:, backends:, dropped: NO_DROPPED, context_object: nil)
-        { context: deep_freeze(context), backends: deep_freeze(backends),
-          dropped: deep_freeze(dropped), context_object: context_object }.freeze
-      end
-
-      private
-
-      # Containers only: a snapshot leaf may be a live class or client object, and
-      # freezing one of those would break the application it was read from.
-      def deep_freeze(value)
-        case value
-        when Hash then value.each_value { |entry| deep_freeze(entry) }.freeze
-        when Array then value.each { |entry| deep_freeze(entry) }.freeze
-        else value
-        end
+        { context: OwnCopy.call(context), backends: OwnCopy.call(backends),
+          dropped: OwnCopy.call(dropped), context_object: context_object }.freeze
       end
     end
 
     def initialize(tenant_key: nil, constants: {}, context_values: {}, undo: EMPTY_UNDO, configured: false)
       @tenant_key = tenant_key
       @configured = configured
-      @constants = constants.freeze
-      @context_values = context_values.freeze
+      @constants = OwnCopy.call(constants)
+      @context_values = OwnCopy.call(context_values)
       @undo = undo
       @captured_at = Connections::DiagnosticHelpers.clock_time
       freeze
@@ -58,6 +63,12 @@ module ConsoleKit
     # verify or roll them back. They are still serving whatever tenant they had.
     def dropped_backends = @undo[:dropped] || NO_DROPPED
     def snapshot_for(backend) = @undo[:backends][backend]
+
+    # Backends this state committed that `live` no longer lists. A dependency
+    # unloaded since the switch answers `available?` false with no reason, which
+    # nothing outside this record can tell apart from a gem nobody installed.
+    def backends_missing_from(live) = @undo[:backends].keys - live
+
     def age_ms = ((Connections::DiagnosticHelpers.clock_time - @captured_at) * 1000).round(1)
 
     def inspect = "#<ConsoleKit::TenantState #{@tenant_key.inspect} backends=#{@undo[:backends].keys.inspect}>"
