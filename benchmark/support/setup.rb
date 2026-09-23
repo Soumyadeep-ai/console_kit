@@ -4,7 +4,6 @@ require 'active_support/core_ext/object/try'
 require 'console_kit'
 require_relative 'fakes'
 require_relative 'counters'
-require_relative 'call_counting'
 
 # Shared ConsoleKit configuration for every benchmark file. Every backend runs
 # against the fakes in support/fakes.rb - no real DB/Redis/Mongo/Elasticsearch
@@ -26,10 +25,9 @@ module ConsoleKitBenchmark
 
     class << self
       # Default fixture: all four backends available, SQL on the native
-      # `connecting_to` shard path. Used by benchmarks 1, 2, 4 and 5.
+      # `connecting_to` shard path.
       def configure_native!(tenants: TENANTS)
         Fakes.install!
-        Fakes::Sql.native_base
         apply(tenants, 'ConsoleKitBenchmark::Fakes::Sql::NativeBase')
       end
 
@@ -37,7 +35,6 @@ module ConsoleKitBenchmark
       # fallback path (the base class exposes no native shard API).
       def configure_fallback!(tenants: TENANTS)
         Fakes.install!
-        Fakes::Sql.fallback_base
         apply(tenants, 'ConsoleKitBenchmark::Fakes::Sql::FallbackBase')
       end
 
@@ -48,7 +45,6 @@ module ConsoleKitBenchmark
       # process (a script that never requires support/fakes' Mongo/Redis/ES
       # installers), since those constants cannot be "uninstalled" once defined.
       def configure_sql_only!(tenants: TENANTS)
-        Fakes::Sql.native_base
         ConsoleKit.configure do |config|
           config.tenants = tenants
           config.context_class = sql_only_context_class
@@ -69,7 +65,7 @@ module ConsoleKitBenchmark
       def reset_tenant_state!
         ConsoleKit::StateStore.clear!
         ConsoleKit::Diagnostics.clear_cache!
-        Counters.reset!
+        Counters.clear
       end
 
       private

@@ -28,8 +28,6 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z -- lib LICENSE.txt], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true)
   end
-  spec.bindir = 'exe'
-  spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
   spec.add_dependency 'activerecord', '>= 6.1'

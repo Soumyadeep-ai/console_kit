@@ -13,17 +13,18 @@
 # iteration count timed with Benchmark.realtime, comfortably inside the TTL
 # window (printed below so that isn't just asserted).
 #
-# Network-op counters (sql_execute/select_value, mongo_command, redis_ping/
-# info, es_ping/es_cluster_health) prove the cache claim directly: a cached
-# call must add ZERO to them.
+# Network-op counts (SQL statements, mongo_command, redis_ping/info, es_ping/
+# es_cluster_health) prove the cache claim directly: a cached call must add
+# ZERO to them.
 
 require 'benchmark'
 require 'benchmark/ips'
 require_relative 'support/setup'
 require_relative 'support/report'
 
-NETWORK_KEYS = %i[sql_execute sql_select_value mongo_command redis_ping redis_info es_ping es_cluster_health].freeze
+NETWORK_KEYS = %i[mongo_command redis_ping redis_info es_ping es_cluster_health].freeze
 CACHED_ITERATIONS = 2_000
+STATEMENTS = ConsoleKitBenchmark::Fakes::Sql::NativeBase.connection.statements
 
 ConsoleKitBenchmark::Setup.configure_native!
 ConsoleKit::Output.silence { ConsoleKit.switch_tenant('acme') }
@@ -64,12 +65,14 @@ end
 ConsoleKitBenchmark::Report.title('Network-op calls per `dashboard`, cold vs cached (headline: cached must add zero)')
 ConsoleKit::Output.silence do
   diagnostics.clear_cache!
-  ConsoleKitBenchmark::Report.count_delta('level: :basic, cold call', NETWORK_KEYS) { dashboard.display(level: :basic) }
-  ConsoleKitBenchmark::Report.count_delta('level: :basic, cached call (repeat, same tenant)',
-                                          NETWORK_KEYS) { dashboard.display(level: :basic) }
+  ConsoleKitBenchmark::Report.count_delta('level: :basic, cold call', NETWORK_KEYS,
+                                          statements: STATEMENTS) { dashboard.display(level: :basic) }
+  ConsoleKitBenchmark::Report.count_delta('level: :basic, cached call (repeat, same tenant)', NETWORK_KEYS,
+                                          statements: STATEMENTS) { dashboard.display(level: :basic) }
 
   diagnostics.clear_cache!
-  ConsoleKitBenchmark::Report.count_delta('level: :full, cold call', NETWORK_KEYS) { dashboard.display(level: :full) }
-  ConsoleKitBenchmark::Report.count_delta('level: :full, cached call (repeat, same tenant)',
-                                          NETWORK_KEYS) { dashboard.display(level: :full) }
+  ConsoleKitBenchmark::Report.count_delta('level: :full, cold call', NETWORK_KEYS,
+                                          statements: STATEMENTS) { dashboard.display(level: :full) }
+  ConsoleKitBenchmark::Report.count_delta('level: :full, cached call (repeat, same tenant)', NETWORK_KEYS,
+                                          statements: STATEMENTS) { dashboard.display(level: :full) }
 end
