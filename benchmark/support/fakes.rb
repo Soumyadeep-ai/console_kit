@@ -3,53 +3,17 @@
 require_relative '../../spec/support/mocks/active_record'
 require_relative 'counters'
 
-# Stateful, in-process stand-ins for the backends ConsoleKit talks to.
-#
-# WHY: the brief requires benchmarks to run with NO real DB/Redis/Mongo/
-# Elasticsearch. These fakes model exactly the API surface each connection
-# handler touches (see lib/console_kit/connections/*.rb) and nothing else,
-# so `available_handlers` finds all four backends "available" without a
-# single socket ever opening. Every operation a real client would perform as
-# a network round trip (a PING, a cluster health check, a Mongo command)
-# increments ConsoleKitBenchmark::Counters so the benchmarks can prove how
-# many of those actually happen per switch - the headline claim is "zero
-# network calls per switch", and a claim like that is worthless unless
-# something is actually counting.
-#
-# SQL is the exception: the spec suite's ActiveRecord stand-in already keeps
-# those counts (`connection.statements`, `pool.disconnects`,
-# `handler.disconnects`), so it is reused here and the benchmarks read its
-# numbers directly.
 module ConsoleKitBenchmark
-  # One fake per backend, plus the top-level constants that make each one
-  # "available" to ConsoleKit's connection handlers.
   module Fakes
-    # --- SQL ---------------------------------------------------------------
-    #
-    # Two base classes mirror the two paths SqlStrategy can take:
-    #   NativeBase   - responds to connecting_to/connected_to_stack/etc, so
-    #                  SqlStrategy prefers the native shard-switching path.
-    #   FallbackBase - exposes only establish_connection, forcing the
-    #                  database.yml fallback path.
-    #
-    # They are named constants because `sql_base_class` is configured by name
-    # and resolved with `safe_constantize`.
     module Sql
       CONFIGS = %w[primary shard_acme shard_globex shard_initech].freeze
 
-      # Every CONFIGS entry is both a database.yml config and a native
-      # `connects_to shards:` shard, so SqlStrategy takes the connecting_to path.
       NativeBase = ActiveRecordMock.sharded_base(configs: CONFIGS, shards: CONFIGS.drop(1))
 
-      # No native shard API, so only the establish_connection fallback is
-      # reachable.
       FallbackBase = ActiveRecordMock.plain_base(configs: CONFIGS)
     end
 
-    # --- Mongoid -------------------------------------------------------------
     module MongoFake
-      # Counts every #command call - the only network-style operation :full
-      # diagnostics perform against Mongo.
       class Database
         attr_reader :name
 
@@ -61,8 +25,6 @@ module ConsoleKitBenchmark
         end
       end
 
-      # Exposes the effective client/database names MongoConnectionHandler
-      # reads back to prove a switch landed.
       class Client
         attr_reader :name, :database
 
@@ -73,10 +35,7 @@ module ConsoleKitBenchmark
       end
     end
 
-    # --- Redis -----------------------------------------------------------
     module RedisFake
-      # A client with a mutable logical DB (mutated by #select, exactly as a
-      # real SELECT would) and counted #ping/#info calls.
       class Client
         attr_reader :db
 
@@ -101,9 +60,7 @@ module ConsoleKitBenchmark
       end
     end
 
-    # --- Elasticsearch -----------------------------------------------------
     module ElasticsearchFake
-      # Counts every #health call.
       class Cluster
         def health
           Counters[:es_cluster_health] += 1
@@ -111,8 +68,6 @@ module ConsoleKitBenchmark
         end
       end
 
-      # Counts every #ping call. Returns the running count rather than a bare
-      # boolean; the handler only cares that this does not raise.
       class Client
         def cluster = @cluster ||= Cluster.new
         def ping = Counters[:es_ping] += 1
@@ -120,8 +75,6 @@ module ConsoleKitBenchmark
     end
 
     class << self
-      # Wires up the top-level constants (Mongoid, Redis, Elasticsearch::Model)
-      # every handler's #available? checks for. Idempotent.
       def install!
         install_mongoid!
         install_redis!

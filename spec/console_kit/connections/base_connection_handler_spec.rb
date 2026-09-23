@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_shard, :tenant_mongo_db, :partner_identifier
 
@@ -151,18 +150,12 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
-  # The default is what an optional gem that is not installed answers, and it is
-  # the answer that keeps a handler out of the dropped-backend record.
   describe '#unavailable_reason' do
     it 'is nil unless a handler says otherwise' do
       expect(handler.unavailable_reason).to be_nil
     end
   end
 
-  # A context attribute that is set but blank means "use the default", exactly
-  # as an unset one does. Reading it as a value instead sends "" down the legacy
-  # #connect path, where a blank Redis value reaches coerce_db("") and raises
-  # ConfigurationError rather than selecting the default database.
   describe '#target when the context attribute is blank' do
     let(:handler_class) do
       stub_const('BlankTargetHandler', Class.new(described_class) do
@@ -191,9 +184,6 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
-  # The rejected value is printed and may be forwarded to a log, and a tenant
-  # constant routinely carries a whole connection URI. ConfigurationValidator
-  # already scrubs the same value through the same rule.
   describe '#prepare rejecting a target that carries a credential' do
     let(:handler_class) do
       stub_const('CredentialTargetHandler', Class.new(described_class) do
@@ -222,8 +212,6 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
-  # The template lives on the base class, so the NotImplementedError the manager
-  # reads as a half-implemented handler now comes from the level it would call.
   describe '#diagnostics' do
     it 'raises NotImplementedError when the handler cannot even say whether it is available' do
       expect { handler.diagnostics }.to raise_error(NotImplementedError, /must implement #available?/)

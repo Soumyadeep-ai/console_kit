@@ -3,9 +3,7 @@
 require_relative 'configuration'
 require_relative 'tenant_orchestrator'
 
-# The 1.4.0 API, kept as delegators until 2.0. Delete this file then.
 module ConsoleKit
-  # Warns once per name per process, then runs the replacement.
   module Deprecation
     class << self
       def call(name, replacement)
@@ -19,7 +17,6 @@ module ConsoleKit
     end
   end
 
-  # 1.4.0 entry point for console setup.
   module Setup
     class << self
       def setup = Deprecation.call('Setup.setup', 'TenantOrchestrator.run') { TenantOrchestrator.run }
@@ -70,7 +67,6 @@ module ConsoleKit
     end
   end
 
-  # 1.4.0 non-raising validation.
   class Configuration
     def validate
       Deprecation.call('Configuration#validate', 'Configuration#validate!') do

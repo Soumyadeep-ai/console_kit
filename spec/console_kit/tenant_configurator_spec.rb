@@ -13,7 +13,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
   end
 
   before do
-    # Stub configuration accessor
     allow(ConsoleKit.configuration).to receive_messages(tenants: tenants, context_class: context_class)
   end
 
@@ -33,9 +32,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  # Since 1.5.0 every backend proves the switch landed before it is committed,
-  # so the backend calls must really run: spying without calling through would
-  # make verification fail for the wrong reason.
   shared_context 'with live backends' do
     before do
       allow(ApplicationRecord).to receive(:establish_connection).and_call_original
@@ -199,8 +195,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       it_behaves_like 'prints backtrace'
     end
 
-    # Pre-1.5 a backend that could not honour the switch was skipped with a
-    # warning; the switch is now fail-fast, so an unusable Mongoid aborts it.
     context 'when Mongoid does not support override_database' do
       before do
         mongo_class = Class.new
@@ -222,7 +216,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
 
     context 'with partial constants missing' do
-      # missing partner_code
       before do
         allow(ConsoleKit.configuration).to receive(:tenants)
           .and_return({ tenant_key => { constants: { shard: 'shard_acme' } } })
@@ -266,7 +259,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
       context_class.tenant_mongo_db = 'some_db'
       context_class.partner_identifier = 'some_partner'
       allow(ConsoleKit::Output).to receive(:print_info)
-      # A tenant connection is live, so clearing has something to put back.
       ApplicationRecord.establish_connection(:shard_acme)
     end
 
@@ -329,9 +321,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  # Required-constant validation moved out of TenantConfigurator into the
-  # TenantPlan stage of a switch, which resolves constants before anything is
-  # touched.
   describe 'required constant validation' do
     subject(:constants) { ConsoleKit::TenantPlan.new(tenant_key).constants }
 

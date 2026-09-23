@@ -57,8 +57,6 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
       end
     end
 
-    # A configuration reload can drop a tenant while the state store still
-    # points at it. Reporting on that tenant must degrade, not raise.
     context 'when the current tenant is no longer in the configuration' do
       before do
         allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return('ghost')

@@ -5,13 +5,6 @@ require_relative 'redis_client_adapter'
 
 module ConsoleKit
   module Connections
-    # Handles Redis connections.
-    #
-    # SELECT is a property of a connection, not of a thread, so isolation is
-    # probed rather than assumed: #isolation_model reports :scoped,
-    # :process_global, :none or :unknown, and only :scoped is really
-    # tenant-isolated (see the README for what each state means). #prepare
-    # rejects a non-default DB when no selectable, readable client is reachable.
     class RedisConnectionHandler < BaseConnectionHandler
       backend :redis,
               display_name: 'Redis',
@@ -25,7 +18,6 @@ module ConsoleKit
                                'thread. Threads on different tenants share one logical DB.'
 
       class << self
-        # Reset to re-arm the one-time process-global isolation warning.
         attr_accessor :isolation_warned
 
         def target_error(value) = RedisClientAdapter.db_index_error(value)
@@ -36,9 +28,6 @@ module ConsoleKit
       def isolation_model = adapter.isolation_model
       def thread_isolated? = isolation_model == :scoped
 
-      # Under :process_global the DB index is shared by every thread, so a cached
-      # diagnostic row has to stay true for it. Reads cached state, issues no
-      # command.
       def diagnostic_identity = adapter.current_db
 
       def prepare(target)
@@ -60,9 +49,6 @@ module ConsoleKit
         apply(db)
       end
 
-      # ConsoleKit never writes to a client that cannot report its DB, so a nil
-      # reading here is the DB the application chose rather than an unproved
-      # switch: only a target that asked for no DB at all can reach it.
       def verify!(target)
         expected = coerce_db(target)
         actual = adapter.current_db
@@ -80,7 +66,6 @@ module ConsoleKit
 
       private
 
-      # No network call.
       def basic_diagnostics
         {
           name: display_name, status: adapter.selectable? ? :connected : :unknown, latency_ms: nil,

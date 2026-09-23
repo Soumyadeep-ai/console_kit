@@ -2,7 +2,6 @@
 
 module ConsoleKit
   module Connections
-    # Renders diagnostic data into a Unicode box-drawing table
     module TableRenderer
       HEADERS = %w[Service Status Latency Details].freeze
       STATUS = {
@@ -45,8 +44,6 @@ module ConsoleKit
           lines.join("\n")
         end
 
-        # The three corner/junction characters of one horizontal rule, in the
-        # order they appear on it.
         def rule(widths, corners)
           left, join, right = corners.chars
           "#{left}#{widths.map { |width| "\u2500" * (width + 2) }.join(join)}#{right}"

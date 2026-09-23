@@ -2,9 +2,6 @@
 
 require 'spec_helper'
 
-# The six things that must be true after ANY failed tenant switch: the tenant
-# key, the context object and all four backend identities are exactly what they
-# were before the switch was attempted.
 RSpec.shared_examples 'a fully rolled back switch' do
   it 'restores the previous tenant' do
     expect(ConsoleKit.current_tenant).to eq(baseline[:tenant])
@@ -31,8 +28,6 @@ RSpec.shared_examples 'a fully rolled back switch' do
   end
 end
 
-# Starts on acme, records everything observable, lets the example arrange a
-# failure through #arrange_failure, then attempts a switch to globex.
 RSpec.shared_context 'with a failed switch away from acme' do
   let(:baseline) { observable_state }
   let(:error) { failed_switch('globex') }
@@ -48,8 +43,6 @@ RSpec.shared_context 'with a failed switch away from acme' do
   def arrange_failure = nil
 end
 
-# A fixed handler order, so "SQL succeeded, Mongo succeeded, then Redis failed"
-# is a scenario rather than an accident of Class#descendants ordering.
 module FailureInjection
   ORDER = %i[sql mongo redis elasticsearch].freeze
 end
@@ -70,8 +63,6 @@ RSpec.describe FailureInjection do
 
   def handler_for(key) = handlers.find { |handler| handler.backend_key == key }
 
-  # Installed only once the baseline switch is done, so "never connected" means
-  # "not during the switch under test".
   def spy_on_handlers!
     handlers.each do |handler|
       allow(handler).to receive(:connect!).and_call_original
@@ -177,9 +168,6 @@ RSpec.describe FailureInjection do
   describe 'a connection that succeeds but points at the wrong tenant' do
     include_context 'with a failed switch away from acme'
 
-    # Every connect! succeeds. A foreign writer moves Redis in the window
-    # between the last connect and the first verify, so the switch is only
-    # caught because #verify! reads the live identity back.
     def arrange_failure
       allow(handler_for(:elasticsearch)).to receive(:connect!).and_wrap_original do |original, target|
         Redis.current.select(9)
@@ -435,7 +423,6 @@ RSpec.describe FailureInjection do
       expect(consolekit_authored_message).not_to match(/password|secret|token/i)
     end
 
-    # Everything in the message except the backend's own root-cause text.
     def consolekit_authored_message
       error.message.sub(error.original_error.message, '')
     end

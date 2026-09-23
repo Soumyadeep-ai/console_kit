@@ -2,25 +2,6 @@
 
 require 'spec_helper'
 
-# Invariant 1, driven over whole sequences rather than single switches: at every
-# observable point ConsoleKit is either still on the previous tenant or
-# completely on the new one, never a mixture.
-#
-# Two rules are checked after EVERY step:
-#
-#   verify_consistency!  after a SUCCESSFUL switch - the tenant key, every
-#                        context value and all four backend identities agree
-#                        with that tenant's configured constants
-#   verify_restored!     after a FAILED switch - everything matches the
-#                        pre-switch snapshot exactly
-#
-# Both return a description of the disagreement, or nil, so a sequence collapses
-# to one expectation whose failure output names the step that broke.
-
-# Inputs for the generated sequences. The seed is fixed and travels with the
-# result, so a failure names the seed that reproduces it. `nonexistent` is not a
-# configured tenant, so it always lands as a failed step: the generated run
-# exercises rollback as well as commit.
 module SwitchSequence
   SEED = 20_250_904
   LENGTH = 24
@@ -82,8 +63,6 @@ RSpec.describe SwitchSequence do
   end
 
   describe 'a sequence whose middle step fails inside the transaction' do
-    # acme -> globex, where Redis refuses the SELECT after SQL and Mongo have
-    # already moved -> initech, once Redis is reachable again.
     let(:report) { run_with_unreachable_redis }
 
     it 'restores every observable after the failed middle step' do
@@ -110,13 +89,8 @@ RSpec.describe SwitchSequence do
     end
   end
 
-  # --- the two rules ---------------------------------------------------
-
-  # After a SUCCESSFUL switch: tenant key, context values and all four backend
-  # identities agree with the tenant's configured constants.
   def verify_consistency!(key) = mismatch(key, expected_state(key))
 
-  # After a FAILED switch: everything matches the pre-switch snapshot exactly.
   def verify_restored!(key, snapshot) = mismatch(key, snapshot)
 
   def mismatch(step, expected)
@@ -124,10 +98,6 @@ RSpec.describe SwitchSequence do
     { step: step, expected: expected, observed: observed } unless observed == expected
   end
 
-  # --- driving ---------------------------------------------------------
-
-  # Drives a sequence, applying the right rule after every step. Returns one row
-  # per step that disagreed, so an empty result means the whole run held.
   def run(steps)
     [mismatch(:initial, expected_state(nil)), *steps.map { |step| step_mismatch(step) }].compact
   end

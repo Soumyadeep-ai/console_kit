@@ -15,17 +15,14 @@ require 'logger'
 require 'console_kit'
 require 'generator_spec'
 
-# Load all support files
 Dir[File.expand_path('support/**/*.rb', __dir__)].each { |f| require f }
 
 RSpec.configure do |config|
-  # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = '.rspec_status'
 
   config.order = :random
   Kernel.srand config.seed
 
-  # Disable RSpec exposing methods globally on `Module` and `main`
   config.disable_monkey_patching!
 
   config.include GeneratorSpec::TestCase, type: :generator
@@ -38,13 +35,6 @@ RSpec.configure do |config|
     mocks.verify_partial_doubles = true
   end
 
-  # Every piece of state ConsoleKit keeps outside a single example. Leaking any
-  # of it makes examples order-dependent.
-  #
-  # A handler class an example declares is removed from HandlerRegistry by that
-  # example itself: registration is explicit (a handler joins by calling
-  # `backend`), so a class the registry never heard of cannot poison a later
-  # example and nothing here has to wait for it to be collected.
   config.after do
     ConsoleKit.reset_configuration!
     ConsoleKit::StateStore.clear!

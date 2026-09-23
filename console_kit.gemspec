@@ -21,10 +21,6 @@ Gem::Specification.new do |spec|
   spec.metadata['changelog_uri'] = 'https://github.com/Soumyadeep-ai/console_kit/blob/main/CHANGELOG.md'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  # An allowlist, not an exclusion list: only what the gem needs at runtime is
-  # packaged, so a new file or directory in the repository cannot quietly end up
-  # in the released gem. Tracked files only, so untracked local artefacts and
-  # build output are never picked up either.
   spec.files = IO.popen(%w[git ls-files -z -- lib LICENSE.txt], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true)
   end

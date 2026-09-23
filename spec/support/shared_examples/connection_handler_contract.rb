@@ -1,18 +1,5 @@
 # frozen_string_literal: true
 
-# The contract every ConsoleKit connection handler must satisfy, so that adding
-# a fifth backend later is a matter of writing a handler and pointing these
-# examples at it rather than rediscovering the rules by hand.
-#
-# The including group supplies one memoized helper, `contract`, answering the
-# HandlerContract::Subject interface, plus two methods:
-#
-#   prepare_invalid_target      - arranges whatever makes a target unapplyable
-#                                 and returns that target
-#   hide_contract_dependency!   - removes the backend's client library
-#
-# Ready-made groups for the four shipped backends live in
-# spec/support/shared_contexts/connection_handler_contracts.rb.
 RSpec.shared_examples 'a connection handler' do
   describe 'availability' do
     it 'answers available? with a boolean' do
@@ -199,7 +186,6 @@ RSpec.shared_examples 'a connection handler' do
     end
   end
 
-  # Applies the target, then hands back a snapshot of the previous identity.
   def round_trip_snapshot
     contract.handler.connect!(contract.previous_target)
     state = contract.handler.snapshot

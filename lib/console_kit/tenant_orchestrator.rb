@@ -7,7 +7,6 @@ require_relative 'output'
 require_relative 'setup_ui'
 
 module ConsoleKit
-  # Orchestrates tenant lifecycle, selection, and configuration
   class TenantOrchestrator
     NO_TENANT_SELECTED = 'No tenant selected. Loading without tenant configuration.'
 
@@ -16,8 +15,6 @@ module ConsoleKit
 
       def current_tenant = StateStore.tenant_key
 
-      # Declares the current tenant key without touching connections. Re-assigning
-      # the key that is already current preserves the fully-configured state.
       def current_tenant=(val)
         return if StateStore.tenant_key == val
 

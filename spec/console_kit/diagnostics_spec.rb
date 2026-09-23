@@ -2,9 +2,6 @@
 
 require 'spec_helper'
 
-# Minimal diagnostics-capable handler used across this file. Deliberately NOT a
-# BaseConnectionHandler subclass, so it can never leak into
-# BaseConnectionHandler.registry (which walks .descendants).
 class DiagnosticsSpecHandler
   attr_reader :backend_key, :display_name
 
@@ -17,9 +14,6 @@ class DiagnosticsSpecHandler
 
   def diagnostics(level:) = @block.call(level)
 
-  # What a cached :full row's freshness is keyed on. A Proc is re-read on every
-  # call, so an example can move the backend - or break the read - between two
-  # renders.
   def diagnostic_identity = @identity.is_a?(Proc) ? @identity.call : @identity
 
   def safe_diagnostics(level:, timeout: ConsoleKit::Diagnostics::DEFAULT_TIMEOUT)
@@ -44,10 +38,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     { name: name, status: :connected, latency_ms: nil, details: {} }
   end
 
-  # Fetches through the cache, bumping counter[0] on every real backend call
-  # (a cache hit never runs the block), so tests can assert on call counts
-  # without relying on instance variables. Only :full is cached, so that is the
-  # level every cache example uses unless it is about :basic specifically.
   def counting_fetch(backend_key, counter, row_proc = -> { connected_row }, level: :full)
     described_class::Cache.fetch_row(DiagnosticsSpecHandler.new(backend_key), level) do
       counter[0] += 1
@@ -68,9 +58,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # A handler reads its backend state from thread-local storage: the SQL shard
-  # frame, Mongoid's overrides, the scoped Redis client. A check taken anywhere
-  # but the calling thread therefore describes a tenant nobody asked about.
   describe 'where a :full check executes' do
     def thread_probe(key)
       DiagnosticsSpecHandler.new(key) { connected_row(key.to_s).merge(details: { thread: Thread.current }) }
@@ -96,10 +83,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # The runner used to bound a slow backend on a worker thread, and paid for that
-  # bound with a row describing the worker's tenant rather than the caller's. What
-  # replaced it is pinned here: the budget is reported, the check still answers,
-  # and no thread is held.
   describe 'a check that overruns its budget' do
     let(:handler) { fast_handler(:overrun_backend) }
 
@@ -145,8 +128,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # Rescuing this would swallow Interrupt as well, and a check that blocks its
-  # caller is exactly the one an operator has to be able to abandon.
   describe 'a failure the runner deliberately does not rescue' do
     let(:handler) { failing_handler(:interrupted_backend, Interrupt.new('ctrl-c')) }
 
@@ -201,9 +182,6 @@ RSpec.describe ConsoleKit::Diagnostics do
       expect(counter.first).to eq(2)
     end
 
-    # Freshness can only observe THIS thread's TenantState, so a cached :basic
-    # row survives another thread moving a process-global backend. A :basic row
-    # is a local read anyway, so it is never cached.
     it 'does not cache a :basic row, because it is read out of memory anyway' do
       counter = [0]
       2.times { counting_fetch(:basic_uncached_backend, counter, level: :basic) }
@@ -228,9 +206,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # Elasticsearch and Redis are documented as process-global: another thread
-  # moving one changes nothing this thread's TenantState can show, so a cached
-  # row would keep reporting a tenant that has already been switched away.
   describe 'a process-global backend moved by another thread' do
     let(:live_prefix) { ['acme_es'] }
     let(:handler) do
@@ -251,10 +226,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # The same defect at the level that IS cached. Freshness keyed on this
-  # thread's TenantState cannot see a foreign thread move a process-global
-  # attribute, so the cached :full row went on reporting a prefix the process
-  # had already left - which is exactly why :basic stopped being cached.
   describe 'a cached :full row whose process-global backend was moved by another thread' do
     let(:handler) { ConsoleKit::Connections::ElasticsearchConnectionHandler.new(Class.new) }
 
@@ -271,9 +242,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # Freshness reads identity out of memory, so re-reading it on every render
-  # must not turn into re-asking the backend: sparing the backends is the whole
-  # reason this cache exists.
   describe 'a cached :full row whose backend has not moved' do
     let(:handler) { ConsoleKit::Connections::ElasticsearchConnectionHandler.new(Class.new) }
 
@@ -289,8 +257,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # An identity ConsoleKit cannot read is not evidence that the row is still
-  # true, and the dashboard must not blow up over it either.
   describe 'a backend whose identity cannot be read' do
     let(:counter) { [0] }
 
@@ -340,10 +306,6 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  # Freshness is keyed on the thread's TenantState, so the cache has to be read
-  # and written in that same scope. A fiber reading a state of its own sees the
-  # empty one, which matches every other empty one - and a row cached under the
-  # tenant the thread has since left would go on being served.
   describe 'the cache inside a fiber' do
     let(:counter) { [0] }
     let(:fiber) { Fiber.new { loop { Fiber.yield(counting_fetch(:fiber_cache_backend, counter)) } } }

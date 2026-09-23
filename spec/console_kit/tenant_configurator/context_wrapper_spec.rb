@@ -165,9 +165,6 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
     end
   end
 
-  # A rollback puts back the bundle it captured, and the handler that owned a
-  # slot can be gone by then - so a value is written back whether or not the
-  # wrapper lists its attribute.
   describe '#restore for an attribute the wrapper does not list' do
     before do
       ctx.tenant_mongo_db = 'inner_db'

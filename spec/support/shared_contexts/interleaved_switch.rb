@@ -1,12 +1,5 @@
 # frozen_string_literal: true
 
-# Runs two tenant switches on two threads in one fixed, latch-driven order:
-#
-#   thread A switches -> thread B switches -> thread B observes -> thread A observes
-#
-# so "did A keep its tenant while B moved?" is answered by construction rather
-# than by luck. Every hand-off is a Queue pop, so there is no sleep and no race;
-# both threads are joined before `run` returns.
 class InterleavedSwitch
   attr_reader :threads
 
@@ -18,8 +11,6 @@ class InterleavedSwitch
     @threads = []
   end
 
-  # `first` runs on thread A, `second` on thread B. Returns
-  # { a: <observation>, b: <observation> }.
   def run(first, second)
     @threads = [spawn { thread_a(first) }, spawn { thread_b(second) }]
     @threads.each(&:join)

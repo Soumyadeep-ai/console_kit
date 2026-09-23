@@ -11,9 +11,6 @@ RSpec.describe ConsoleKit do
     end
   end
 
-  # A base class that really moves its pool onto the configuration it is given,
-  # so SqlConnectionHandler#verify! can read the identity back honestly instead
-  # of being stubbed into agreement.
   def self.build_application_record
     ActiveRecordMock.plain_base(configs: %w[primary shard_acme shard_globex])
   end
@@ -137,7 +134,6 @@ RSpec.describe ConsoleKit do
 
       it 'does not re-run connection handlers if already cleared' do
         ConsoleKit::TenantConfigurator.clear
-        # Reset mocks to track new calls
         allow(ApplicationRecord).to receive(:establish_connection).and_call_original
 
         ConsoleKit::TenantConfigurator.clear
@@ -259,9 +255,6 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    # Since 1.5.0 a re-applied switch still runs every stage, but the SQL
-    # strategy skips `establish_connection` when the pool already resolves to
-    # the shard being asked for, so re-applying no longer churns the pool.
     describe 'reapply silently re-applies current tenant' do
       let(:reapply_output) do
         ConsoleKit::TenantOrchestrator.run
@@ -411,8 +404,6 @@ RSpec.describe ConsoleKit do
       self.class.build_context_class(:tenant_shard, :partner_identifier)
     end
     let(:connected_diag) { ->(name) { { name: name, status: :connected, latency_ms: 10, details: {} } } }
-    # Diagnostics keys its per-thread row cache by backend, so every handler
-    # double has to answer #backend_key as well as #safe_diagnostics.
     let(:stub_handlers) do
       [
         instance_double(ConsoleKit::Connections::SqlConnectionHandler,
@@ -458,10 +449,6 @@ RSpec.describe ConsoleKit do
       end
     end
 
-    # Pre-1.5 the dashboard proved a broken SQL connection by having
-    # ApplicationRecord.connection raise. The default :basic level issues no
-    # query at all now, so a broken connection is invisible to it: the honest
-    # error row is a backend that cannot even report its identity.
     context 'when a backend cannot report its identity' do
       before { allow(Mongoid).to receive(:default_client).and_raise(StandardError, 'timeout') }
 

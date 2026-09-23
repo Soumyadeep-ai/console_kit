@@ -2,9 +2,6 @@
 
 require 'spec_helper'
 
-# `ConsoleKit.switch_tenant` can be called without `Configuration#validate!`
-# ever having run, so the plan is the last place a malformed tenant map is
-# caught - before the switch starts touching backends.
 RSpec.describe ConsoleKit::TenantPlan do
   describe 'a tenant whose :constants is not a Hash' do
     before { ConsoleKit.configuration.tenants = { 'acme' => { constants: 'shard_acme' } } }
@@ -47,11 +44,6 @@ RSpec.describe ConsoleKit::TenantPlan do
     end
   end
 
-  # An omitted backend key means the tenant does not name that backend, and a
-  # switch RESETS it to its default. Preserving it instead would leave the
-  # previous tenant's Redis live under the new tenant's SQL - the mixed-tenant
-  # state every other guarantee in this release exists to prevent, and one that
-  # `verify_tenant!` would then attest as fully verified.
   describe 'a tenant that omits a backend key' do
     include_context 'with a four-backend tenant setup'
 

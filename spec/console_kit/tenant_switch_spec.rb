@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 RSpec.describe ConsoleKit::TenantSwitch do
-  # A handler that satisfies the contract without inheriting BaseConnectionHandler,
-  # so it can never leak into the descendants-based registry.
   let(:handler_class) do
     Class.new do
       class << self
@@ -66,9 +64,6 @@ RSpec.describe ConsoleKit::TenantSwitch do
   end
 
   describe 'a handler that does not implement the contract' do
-    # NotImplementedError descends from ScriptError, not StandardError, so a
-    # partially implemented handler used to escape the transaction entirely and
-    # leave the process half-switched.
     subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
 
     it 'raises TenantSwitchError rather than letting the raw error escape' do
@@ -105,8 +100,6 @@ RSpec.describe ConsoleKit::TenantSwitch do
       expect(ConsoleKit::StateStore.tenant_key).to be_nil
     end
 
-    # The handler raised a bare NotImplementedError and never wrapped it, so the
-    # only thing that knows which backend was being applied is the coordinator.
     it 'attributes the raw failure to the backend that raised it' do
       switch
     rescue ConsoleKit::TenantSwitchError => e
@@ -257,19 +250,12 @@ RSpec.describe ConsoleKit::TenantSwitch do
     end
   end
 
-  # `ConsoleKit.verify_tenant!` is reachable from the console at any moment,
-  # including before a tenant has ever been chosen. There is nothing to verify
-  # then, and answering "verified" would be a lie.
   describe '.verify_current! before any tenant has been configured' do
     it 'raises ConfigurationError rather than verifying nothing' do
       expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
     end
   end
 
-  # A clear is a completed switch, but it leaves no tenant. Committing it as
-  # "configured" made `StateStore.configured?` true with a nil tenant key, so
-  # the pre-1.5 `configuration_success?` answered yes after a clear and
-  # `verify_tenant!` verified the default state as though a tenant were live.
   describe '.clear' do
     before do
       allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
@@ -291,11 +277,6 @@ RSpec.describe ConsoleKit::TenantSwitch do
   end
 
   describe 'verifying after the configuration has drifted' do
-    # A console session can outlive the configuration it started with: a reload
-    # or a re-`configure` can replace the tenant map underneath a thread that is
-    # already switched. Verification asks "is this connection still the tenant I
-    # committed", so it must read the constants frozen into the state at commit
-    # time, not re-resolve them through the mutable global config.
     before do
       allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
       ConsoleKit::Output.silence { described_class.call(:acme) }

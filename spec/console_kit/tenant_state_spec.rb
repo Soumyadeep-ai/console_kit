@@ -2,11 +2,6 @@
 
 require 'spec_helper'
 
-# A TenantState is documented immutable, and its undo bundle is the only thing
-# that can put the process back after a switch. The bundle is reachable from
-# anywhere the state is - `ConsoleKit::StateStore.current` is public - so a
-# console session, an application hook or a later switch could otherwise empty
-# the per-backend snapshot map and leave the rollback with nothing to restore.
 RSpec.describe ConsoleKit::TenantState do
   include_context 'with a four-backend tenant setup'
 
@@ -41,9 +36,6 @@ RSpec.describe ConsoleKit::TenantState do
     end
   end
 
-  # The tenant map belongs to the application, so a state that deep-freezes what
-  # it commits has to commit a copy: freezing the configured entry in place made
-  # the next `ConsoleKit.configure` or config reload raise FrozenError.
   describe 'the constants a committed switch carries' do
     let(:configured) { { shard: 'shard_acme', partner_code: 'ACME', redis_db: 2 } }
     let(:state) { ConsoleKit::StateStore.current }

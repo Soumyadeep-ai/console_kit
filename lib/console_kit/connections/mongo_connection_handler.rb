@@ -5,9 +5,6 @@ require_relative 'mongoid_support'
 
 module ConsoleKit
   module Connections
-    # Handles MongoDB connections. Every call into Mongoid's global API is made
-    # through MongoidSupport, which feature-detects the override slots this
-    # Mongoid version actually has.
     class MongoConnectionHandler < BaseConnectionHandler
       UNSUPPORTED_OVERRIDE = 'Mongoid.%<setter>s, which this target needs, is not available in this Mongoid version.'
       UNVERIFIABLE = 'state cannot be read back in this Mongoid version, so a switch could not be verified or ' \

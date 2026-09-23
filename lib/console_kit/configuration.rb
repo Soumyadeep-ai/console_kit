@@ -3,7 +3,6 @@
 require_relative 'configuration_validator'
 
 module ConsoleKit
-  # Stores ConsoleKit configurations such as tenant map and context behavior
   class Configuration
     attr_accessor :pretty_output, :tenants, :sql_base_class, :show_dashboard
     attr_writer :context_class

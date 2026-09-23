@@ -77,7 +77,7 @@ RSpec.describe ConsoleKit do
       end
 
       it 'returns the tenant on any calls' do
-        described_class.current_tenant # call once to simulate first call
+        described_class.current_tenant
         expect(described_class.current_tenant).to eq('tenant1')
       end
     end
@@ -106,9 +106,6 @@ RSpec.describe ConsoleKit do
     end
   end
 
-  # Since 1.5.0 reset_configuration! clears ConsoleKit::StateStore directly, and
-  # TenantConfigurator.configuration_success is derived from that store rather
-  # than being an independently settable flag.
   describe '.reset_configuration!' do
     before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme', configured: true) }
 

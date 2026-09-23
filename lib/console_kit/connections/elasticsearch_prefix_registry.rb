@@ -2,18 +2,11 @@
 
 module ConsoleKit
   module Connections
-    # Everywhere the Elasticsearch index-name prefix lives: `.global` wraps the
-    # PROCESS-WIDE `Elasticsearch::Model.index_name_prefix`, while `.current` /
-    # `.record` note what each live thread asked for. The note provides no
-    # isolation - it exists so disagreeing threads can be detected and reported.
-    # `Thread.current[:console_kit_elasticsearch_prefix]` is kept in sync purely
-    # as a backward-compatible read path.
     class ElasticsearchPrefixRegistry
       THREAD_KEY = :console_kit_elasticsearch_prefix
       REPORTED_KEY = :console_kit_elasticsearch_prefix_conflict
 
       class << self
-        # nil or a blank prefix means "use the default" and is always valid.
         def prefix_error(prefix)
           return unless prefix
           return 'must be lowercase' if prefix.match?(/[[:upper:]]/)
@@ -32,8 +25,6 @@ module ConsoleKit
           model.index_name_prefix = prefix if settable?
         end
 
-        # Prunes like every other entry point: a Thread key pins that thread's
-        # thread-locals, so a dead thread's note must not survive.
         def current
           synchronize do
             prune
@@ -52,7 +43,6 @@ module ConsoleKit
           end
         end
 
-        # So repeated switches against an unchanged set of threads report once.
         def unreported_conflicts(prefix)
           thread = Thread.current
           others = conflicts(prefix)

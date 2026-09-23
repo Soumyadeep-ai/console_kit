@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Sets the console prompt to show the current tenant.
   module Prompt
     IRB_MODE = :CONSOLE_KIT
-    # Used only when nothing else has configured a prompt yet.
     FALLBACK_IRB_PROMPT = {
       PROMPT_I: '%N(%m):%03n> ',
       PROMPT_S: '%N(%m):%03n%l ',
@@ -12,9 +10,6 @@ module ConsoleKit
       RETURN: "=> %s\n"
     }.freeze
 
-    # IRB.setup resets IRB.conf after the railtie's console hook has run, discarding
-    # the prompt installed there, so it is re-applied when IRB::Irb is constructed
-    # (every Rails 6.1-8.x path reaches that). Pry reads its prompt at session start.
     module IrbBoot
       def initialize(*args, **kwargs, &)
         ConsoleKit::Prompt.reapply_irb_prompt
@@ -28,7 +23,6 @@ module ConsoleKit
         apply_pry_prompt if defined?(Pry)
       end
 
-      # A cosmetic prompt must never take the console down with it.
       def reapply_irb_prompt
         install_irb_prompt if defined?(IRB) && IRB.respond_to?(:conf)
       rescue StandardError => e
@@ -63,8 +57,6 @@ module ConsoleKit
         conf[:PROMPT_MODE] = IRB_MODE
       end
 
-      # Re-reading our own decorated prompt would stack a second label on every
-      # call, so the undecorated source is remembered.
       def capture_source(conf, prompts)
         mode = conf[:PROMPT_MODE]
         return @irb_source if mode == IRB_MODE && @irb_source

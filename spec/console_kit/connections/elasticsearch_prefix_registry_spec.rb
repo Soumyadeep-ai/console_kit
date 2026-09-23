@@ -3,14 +3,6 @@
 require 'spec_helper'
 
 RSpec.describe ConsoleKit::Connections::ElasticsearchPrefixRegistry do
-  # elasticsearch-model is optional, and not every version that is loaded
-  # exposes `index_name_prefix`. The registry feature-detects both the reader
-  # and the writer rather than sniffing a version, so these are the library
-  # shapes those guards exist for.
-  # `conflicts` reports the OTHER live threads holding a different prefix. The
-  # asking thread is never one of them: a console that records a prefix and then
-  # asks about a different one would otherwise be warned about itself, on every
-  # switch, with no second thread in the process at all.
   describe '.conflicts when this thread is the only one holding a prefix' do
     before { described_class.record('alpha') }
 
@@ -19,10 +11,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchPrefixRegistry do
     end
   end
 
-  # Entries were pruned only where the registry is WRITTEN, so a thread that
-  # recorded a prefix and then died stayed referenced - and a Thread reference
-  # pins everything that thread's thread-locals hold - until some other thread
-  # happened to record a prefix or ask for conflicts.
   describe 'a thread that died after recording a prefix' do
     let(:dead_thread) { Thread.new { described_class.record('ghost') }.tap(&:join) }
 

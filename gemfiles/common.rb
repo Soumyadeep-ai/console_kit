@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Shared by every gemfiles/*.gemfile; only the Rails pins differ, and those stay
-# in the individual files.
-
 gemspec path: '..'
 
 gem 'irb'

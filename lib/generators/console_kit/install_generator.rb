@@ -5,7 +5,6 @@ require 'rails/generators/base'
 
 module ConsoleKit
   module Generators
-    # Generates the required files
     class InstallGenerator < Rails::Generators::Base
       source_root File.expand_path('templates', __dir__)
 

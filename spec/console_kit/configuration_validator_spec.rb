@@ -17,8 +17,6 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
     config.context_class = 'Something'
   end
 
-  # Runs the block, answering whether it raised ConfigurationError. Keeps the
-  # table-driven parity examples below to one assertion each.
   def raises_configuration_error?
     yield
     false
@@ -216,8 +214,6 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
       expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/no writer for/)
     end
 
-    # The generator template documents it, SetupUI reads it to decide whether to
-    # print a production warning, and the console detail table displays it.
     it 'does not call the :environment constants key a possible typo' do
       config.tenants = { acme: { constants: valid_constants.merge(environment: 'production') } }
       validate!
@@ -225,10 +221,6 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
     end
   end
 
-  # ContextWrapper detects the attributes it can write with `ctx.public_methods`,
-  # which sees singleton writers. Checking only instance methods told the
-  # operator ConsoleKit would silently never configure a backend it configures
-  # perfectly well - about the very context shape the README recommends.
   describe 'a context class whose writers live on the singleton' do
     let(:singleton_context) do
       Class.new do
@@ -271,10 +263,6 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
     end
   end
 
-  # A tenant that uses only some of the backends is an ordinary deployment, not
-  # a misconfiguration: only :shard and :partner_code are ever required. An
-  # omitted key does NOT mean "leave that backend alone" - a switch to this
-  # tenant resets that backend to its default.
   describe 'a tenant that configures only the backends it uses' do
     before { config.tenants = { acme: { constants: { shard: :shard1, partner_code: 'acme' } } } }
 
@@ -288,9 +276,6 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
     end
   end
 
-  # A map whose tenants disagree about which backends they name is where the
-  # reset rule bites: switching from the tenant that names Redis to the one that
-  # does not puts Redis back on its default rather than leaving it where it was.
   describe 'a tenant map where only some tenants name a backend' do
     before do
       config.tenants = { acme: { constants: valid_constants },

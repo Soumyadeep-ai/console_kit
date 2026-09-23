@@ -5,9 +5,6 @@ require_relative 'sql_strategy'
 
 module ConsoleKit
   module Connections
-    # Handles SQL connections. Shard application, verification and rollback are
-    # delegated to SqlStrategy, which prefers Rails' native shard switching and
-    # falls back to `establish_connection` for plain database.yml names.
     class SqlConnectionHandler < BaseConnectionHandler
       backend :sql,
               display_name: 'SQL',
@@ -33,13 +30,8 @@ module ConsoleKit
         def base_class_name = ConsoleKit.configuration.sql_base_class
       end
 
-      # Never raises: raising from here would escape every switch, every
-      # dashboard and the rollback's handler lookup.
       def available? = resolved_base_class.present?
 
-      # An unresolvable DEFAULT base class only means the application has no
-      # ActiveRecord, which is supported; a configured one that will not resolve
-      # is a fault, and the switch records it as a dropped backend.
       def unavailable_reason
         name = self.class.base_class_name
         return nil if name.to_s == DEFAULT_BASE_CLASS || resolved_base_class.present?
@@ -75,14 +67,10 @@ module ConsoleKit
 
       def restore(state) = strategy.restore(state)
 
-      # The `establish_connection` fallback replaces the base class's pool for
-      # the whole process, so the resolved pool is what a cached diagnostic row
-      # has to stay true for.
       def diagnostic_identity = strategy.pool_details
 
       private
 
-      # No query.
       def basic_diagnostics
         details = strategy.pool_details
         { name: display_name, status: details.empty? ? :unknown : :connected, latency_ms: nil, details: details }
@@ -105,8 +93,6 @@ module ConsoleKit
       def strategy = @strategy ||= SqlStrategy.new(base_class)
       def normalize(target) = target.presence&.to_sym
 
-      # Deliberately not memoized: the configured name can be repointed, and a
-      # cached nil would answer for a class that has since loaded.
       def resolved_base_class = self.class.base_class_name.to_s.safe_constantize
 
       def base_class

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Helper methods available in the Rails console
   module ConsoleHelpers
     def switch_tenant
       ConsoleKit.reset_current_tenant

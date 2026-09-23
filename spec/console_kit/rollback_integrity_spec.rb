@@ -2,19 +2,9 @@
 
 require 'spec_helper'
 
-# An unwind decides what to put back from the snapshot it captured, never from
-# whatever happens to be available when the scope closes. A backend whose
-# handler has disappeared in between - a reload that undefined a gem constant, a
-# reconfigured base class, an `available?` that fails transiently - is still
-# serving the inner tenant, so it has to be reported rather than quietly counted
-# as restored.
 module RollbackIntegrity
 end
 
-# A handler that satisfies the transactional contract and carries a readable
-# identity, so an unwind can be judged by the state it left behind rather than
-# by the messages it received. Deliberately not a BaseConnectionHandler
-# subclass, so it can never join the registry.
 class RollbackProbeHandler
   PREVIOUS = 'previous'
 
@@ -67,8 +57,6 @@ RSpec.describe RollbackIntegrity do
     let(:live_handlers) { ConsoleKit::Connections::ConnectionManager.available_handlers(context_class) }
     let(:without_redis) { live_handlers.reject { |handler| handler.backend_key == :redis } }
 
-    # Every handler is present for the switch; Redis' handler is gone by the time
-    # the scope closes and the unwind asks what is available.
     before do
       allow(ConsoleKit::Connections::ConnectionManager)
         .to receive(:available_handlers).and_return(live_handlers, without_redis)
@@ -111,11 +99,6 @@ RSpec.describe RollbackIntegrity do
     end
   end
 
-  # The central claim of TenantRollback: every component is attempted even when
-  # an earlier one fails. Two backends raise while being put back, and the ones
-  # ordered after them must still be restored rather than stranded on the inner
-  # tenant. An operator who fixes only the first reported backend would
-  # otherwise be left on a process that is still half-switched.
   describe 'an unwind in which two backends fail to restore' do
     let(:survivor) { RollbackProbeHandler.new(:alpha) }
     let(:handlers) do
@@ -150,9 +133,6 @@ RSpec.describe RollbackIntegrity do
     end
   end
 
-  # Apply order is declaration order, so rollback order is its exact reverse.
-  # Nothing else pins it: a switch that puts backends back in declaration order,
-  # or in no particular order at all, passes every other example in the suite.
   describe 'the order the backends are put back in' do
     let(:restore_order) { [] }
     let(:handlers) { ConsoleKit::Connections::ConnectionManager.available_handlers(context_class) }
@@ -175,10 +155,6 @@ RSpec.describe RollbackIntegrity do
     end
   end
 
-  # The captured undo bundle is the authority on what has to be put back, for the
-  # context exactly as for the backends: the handler that owned a context slot can
-  # be gone by the time the scope closes, and the slot is still on the inner
-  # tenant until someone writes the captured value back.
   describe 'the context slot of a backend whose handler vanished mid-scope' do
     let(:context_class) do
       Class.new do

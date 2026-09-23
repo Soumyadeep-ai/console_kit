@@ -1,21 +1,12 @@
 # frozen_string_literal: true
 
-# Stand-ins for the ActiveRecord APIs the SQL connection handler actually talks
-# to. Only those APIs are modelled, and they are modelled the way Rails 6.1-8.0
-# behaves: `connecting_to` pushes onto a fiber-local stack, `establish_connection`
-# replaces (and disconnects) the pool registered for the current owner/role/shard,
-# and pools expose a `db_config` carrying `env_name`, `name` and `adapter`.
 module ActiveRecordMock
-  # Raised when no pool is registered for the current owner/role/shard.
   class ConnectionNotEstablished < StandardError; end
 
-  # Raised when a name cannot be found in `configurations`.
   class AdapterNotSpecified < StandardError; end
 
   DbConfig = Struct.new(:env_name, :name, :adapter, keyword_init: true)
 
-  # Adapter connection stand-in. Records every statement it is asked to run so
-  # specs can prove that a code path performed no query.
   class Connection
     attr_reader :adapter_name, :statements
 
@@ -33,7 +24,6 @@ module ActiveRecordMock
     end
   end
 
-  # Connection pool bound to a single database configuration.
   class Pool
     attr_reader :db_config, :size, :disconnects
 
@@ -46,13 +36,11 @@ module ActiveRecordMock
     def disconnect! = @disconnects += 1
   end
 
-  # `database.yml` stand-in supporting the `configs_for(env_name:)` lookup.
   class Configurations
     def initialize(configs) = @configs = configs
     def configs_for(env_name:) = @configs.select { |config| config.env_name == env_name }
   end
 
-  # Pools keyed by [owner, role, shard], exactly as ActiveRecord keys them.
   class ConnectionHandler
     attr_reader :disconnects
 
@@ -65,13 +53,10 @@ module ActiveRecordMock
 
     def register(owner, db_config, role:, shard:) = @pools[[owner, role, shard]] = Pool.new(db_config)
 
-    # Mirrors ActiveRecord: the pool is unregistered, so the owner is back to
-    # having none for that role/shard at all.
     def remove_connection_pool(owner, role:, shard:)
       @pools.delete([owner, role, shard])&.tap(&:disconnect!)
     end
 
-    # Mirrors ActiveRecord: the replaced pool is removed and disconnected.
     def establish_connection(owner, db_config, role:, shard:)
       existing = @pools[[owner, role, shard]]
       if existing
@@ -82,7 +67,6 @@ module ActiveRecordMock
     end
   end
 
-  # Shard-aware base class, mirroring Rails 6.1+ `ActiveRecord::Base`.
   class Base
     class << self
       attr_accessor :configurations, :connection_handler, :connection_specification_name, :env_name
@@ -95,9 +79,6 @@ module ActiveRecordMock
         connected_to_stack << { role: role, shard: shard, prevent_writes: prevent_writes, klasses: [self] }
       end
 
-      # Rails' block form. The frame is popped in an `ensure` BY POSITION, not
-      # by identity, so the block removes whatever frame happens to be on top
-      # when it exits - including one something else pushed inside it.
       def connected_to(role: default_role, shard: default_shard, prevent_writes: false, &block)
         raise ArgumentError, '`connected_to` requires a block' unless block
 
@@ -137,8 +118,6 @@ module ActiveRecordMock
     end
   end
 
-  # A base class exposing none of Rails' shard APIs, so only the
-  # `establish_connection` fallback is possible.
   class PlainBase
     class << self
       attr_accessor :configurations, :env_name
@@ -149,15 +128,11 @@ module ActiveRecordMock
         @connection_pool = Pool.new(resolve_config(config_name))
       end
 
-      # Rails' `remove_connection`: the pool is disconnected and forgotten, so
-      # the class is back to having none at all.
       def remove_connection
         @connection_pool&.disconnect!
         @connection_pool = nil
       end
 
-      # Puts the pool back on the first configuration without going through
-      # `establish_connection`, which examples routinely stub.
       def reset_connection! = @connection_pool = Pool.new(resolve_config(nil))
 
       def connection = @connection ||= Connection.new
@@ -172,9 +147,6 @@ module ActiveRecordMock
   end
 
   class << self
-    # Builds a fresh, fully isolated shard-aware base class.
-    #   configs: db_config names present in database.yml for `env`
-    #   shards:  subset of those names also registered via `connects_to shards:`
     def sharded_base(configs:, shards: [], env: 'test', owner: 'ApplicationRecord')
       klass = Class.new(Base)
       prepare(klass, configs, env, owner)
@@ -183,17 +155,12 @@ module ActiveRecordMock
       klass
     end
 
-    # Builds a shard-aware base class whose pools have never been registered.
-    # Rails connects lazily, so an application that has booted but not yet run a
-    # query has exactly this shape: `configurations` and `connection_handler`
-    # are set, and `connection_pool` raises ConnectionNotEstablished.
     def unconnected_sharded_base(configs:, env: 'test', owner: 'ApplicationRecord')
       klass = Class.new(Base)
       prepare(klass, configs, env, owner)
       klass
     end
 
-    # The same, before anything has established its pool.
     def unconnected_plain_base(configs:, env: 'test')
       klass = Class.new(PlainBase)
       klass.env_name = env
@@ -201,7 +168,6 @@ module ActiveRecordMock
       klass
     end
 
-    # Builds a fresh base class without any native shard API.
     def plain_base(configs:, env: 'test')
       klass = Class.new(PlainBase)
       klass.env_name = env
@@ -233,24 +199,12 @@ module ActiveRecordMock
   end
 end
 
-# Default `ApplicationRecord` for the whole suite.
-#
-# SqlConnectionHandler#verify! proves a switch landed by comparing the shard it
-# asked for against the db_config name the live connection pool resolves to, so
-# the stand-in has to carry that identity honestly: `establish_connection(:x)`
-# really does move the pool onto the `x` configuration, and reading it back is
-# the only thing that makes #verify! pass. The declared configurations are the
-# suite's own `database.yml`.
 ApplicationRecord = ActiveRecordMock.plain_base(configs: %w[primary shard_acme shard_globex])
 
 module ActiveRecordMock
-  # Stable handle on the default base class, so its connection state can be
-  # reset between examples even while `stub_const` swaps the constant out.
   DEFAULT_BASE = ApplicationRecord
 
   class << self
-    # Deliberately bypasses `establish_connection`: examples stub it (sometimes
-    # to raise), and this runs while those stubs are still installed.
     def reset_default_base! = DEFAULT_BASE.reset_connection!
   end
 end

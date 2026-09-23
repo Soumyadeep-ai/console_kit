@@ -2,30 +2,21 @@
 
 require_relative 'connections/diagnostic_helpers'
 
-# Main module for ConsoleKit
 module ConsoleKit
-  # Errors that mean ConsoleKit itself is broken rather than that a dependency is
-  # unavailable. Never rescue one into an "unavailable" result: that is how a real
-  # bug hides.
   PROGRAMMING_ERRORS = [NameError, ArgumentError, TypeError].freeze
 
   class << self
     def programming_error?(error) = PROGRAMMING_ERRORS.any? { |klass| error.is_a?(klass) }
   end
 
-  # Base error class for ConsoleKit-related exceptions.
   class Error < StandardError; end
 
-  # Raised when ConsoleKit configuration is missing, malformed or unusable.
   class ConfigurationError < Error; end
 
-  # Raised when a tenant key is not present in the configured tenant map.
   class TenantNotFoundError < ConfigurationError; end
 
-  # Raised when a backend cannot support the requested tenant operation.
   class UnsupportedBackendError < Error; end
 
-  # Raised when a backend connection cannot be established or inspected.
   class ConnectionError < Error
     attr_reader :backend, :tenant, :operation
 
@@ -37,7 +28,6 @@ module ConsoleKit
     end
   end
 
-  # Raised when a backend connects successfully but points at the wrong tenant resource.
   class ConnectionVerificationError < ConnectionError
     attr_reader :expected, :actual
 
@@ -54,7 +44,6 @@ module ConsoleKit
     end
   end
 
-  # Raised when restoring previous state fails. Carries every per-backend failure.
   class RollbackError < Error
     attr_reader :failures
 
@@ -64,7 +53,6 @@ module ConsoleKit
     end
   end
 
-  # Raised when a tenant switch fails. Preserves the root cause and any rollback failures.
   class TenantSwitchError < Error
     attr_reader :from_tenant, :to_tenant, :backend, :original_error, :rollback_failures
 
@@ -85,7 +73,6 @@ module ConsoleKit
       [headline, scrub(original_error.message), rollback_summary].compact.join("\n")
     end
 
-    # Tenant constants can carry connection URIs, and this message reaches logs.
     def scrub(message) = Connections::DiagnosticHelpers.scrub(message)
 
     def headline

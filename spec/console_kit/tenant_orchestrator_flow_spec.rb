@@ -320,8 +320,6 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
     end
   end
 
-  # Since 1.5.0 reapply runs a full transactional switch through TenantSwitch
-  # rather than the non-raising TenantConfigurator.configure_tenant façade.
   describe '.reapply' do
     before { allow(ConsoleKit::TenantSwitch).to receive(:call) }
 

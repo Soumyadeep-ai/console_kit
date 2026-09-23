@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Handles Console outputs
   module Output
     PREFIX = '[ConsoleKit]'
     TYPES = {

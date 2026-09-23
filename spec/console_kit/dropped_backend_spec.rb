@@ -2,23 +2,12 @@
 
 require 'spec_helper'
 
-# A handler that exists but is broken is dropped from the switch entirely: it is
-# never snapshotted, switched, verified or rolled back. That used to be
-# invisible after the fact - `verify_tenant!` walks only the handlers it was
-# handed, so it reported a clean, verified tenant while the dropped backend was
-# still serving the previous one.
-#
-# The distinction that has to survive: a handler whose `available?` answers
-# false is an optional gem that is simply not loaded, which is a supported
-# setup and stays silent.
 module DroppedBackend
 end
 
 RSpec.describe DroppedBackend do
   include_context 'with a four-backend tenant setup'
 
-  # Declared the way a real backend is, and broken the way a half-implemented
-  # one is: it inherits `#available?`, which raises NotImplementedError.
   let(:ghost_handler) do
     Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
       backend :ghost, display_name: 'Ghost', context_attribute: :tenant_ghost_key,
@@ -26,7 +15,6 @@ RSpec.describe DroppedBackend do
     end
   end
 
-  # An optional gem that is not installed: complete, and honestly absent.
   let(:absent_handler) do
     Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
       backend :absent, display_name: 'Absent', context_attribute: :tenant_absent_key,
@@ -107,11 +95,6 @@ RSpec.describe DroppedBackend do
     end
   end
 
-  # A handler can be healthy when the switch runs and broken by the time anyone
-  # verifies - a reload that half-loaded it, a client library unloaded
-  # underneath it. It is dropped at VERIFY time, which the committed state
-  # cannot possibly know about, so a verification that reads only that state
-  # reports a clean tenant while the backend is still serving another one.
   describe 'a backend that breaks after a clean switch' do
     let(:fragile_handler) do
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
@@ -163,9 +146,6 @@ RSpec.describe DroppedBackend do
     end
   end
 
-  # An explicitly configured `sql_base_class` that will not resolve is not an
-  # absent optional gem: the operator named a class, and ConsoleKit cannot drive
-  # the backend it names.
   describe 'a sql_base_class that is configured but cannot be resolved' do
     before do
       ConsoleKit.configuration.sql_base_class = 'Legacy::NotARealRecord'
@@ -219,10 +199,6 @@ RSpec.describe DroppedBackend do
     end
   end
 
-  # A backend can commit cleanly and then lose what it needs - an optional gem
-  # unloaded, a client constant undefined. `available?` answers false with no
-  # reason, which is exactly how a gem that was never installed reads, so
-  # ConnectionManager drops it silently and verification walked straight past it.
   describe 'a backend whose dependency is unloaded after a clean switch' do
     let(:unloaded_handler) do
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
@@ -273,8 +249,6 @@ RSpec.describe DroppedBackend do
     end
   end
 
-  # The same silence is correct for a backend that never took part: an optional
-  # gem absent from the start is not in the committed state either.
   describe 'an optional gem that was absent before the switch as well' do
     before do
       absent_handler

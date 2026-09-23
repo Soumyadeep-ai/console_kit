@@ -4,7 +4,6 @@ require 'spec_helper'
 
 RSpec.describe 'ConsoleKit::Railtie' do
   before do
-    # Mock Rails and Railtie
     stub_const('Rails', Module.new)
     stub_const('Rails::Railtie', Class.new do
       def self.config
@@ -28,7 +27,6 @@ RSpec.describe 'ConsoleKit::Railtie' do
       end
     end)
 
-    # Use stub_const to manage ConsoleKit::Railtie
     stub_const('ConsoleKit::Railtie', Class.new(Rails::Railtie))
     load File.expand_path('../../lib/console_kit/railtie.rb', __dir__)
   end
@@ -73,7 +71,6 @@ RSpec.describe 'ConsoleKit::Railtie' do
       stub_const('Rails::Console', Class.new)
       allow(ConsoleKit::TenantOrchestrator).to receive(:reapply)
 
-      # Manually trigger the to_prepare blocks
       ConsoleKit::Railtie.config.to_prepare_blocks.each(&:call)
 
       expect(ConsoleKit::TenantOrchestrator).to have_received(:reapply)

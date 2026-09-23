@@ -2,19 +2,6 @@
 
 require 'spec_helper'
 
-# The counter and event names ConsoleKit emits are a public contract:
-# applications build dashboards and alerts on them, so a rename or a deletion is
-# a breaking change. Every behavioural example in the suite passes with any of
-# these names changed, which is why each emitting path is pinned here by name.
-#
-# The rollback names - console_kit.rollback and console_kit.rollback_failure -
-# are pinned in rollback_integrity_spec.rb instead, alongside the unwind
-# scenarios that raise them.
-
-# A handler that satisfies the transactional contract and then fails
-# verification, so a switch reaches the verification-failure path with nothing
-# stubbed out of the switch itself. Deliberately not a BaseConnectionHandler
-# subclass, so it can never join the registry.
 class UnverifiableProbeHandler
   class << self
     def context_attribute = nil
@@ -67,10 +54,6 @@ RSpec.describe ConsoleKit::Instrumentation do
   end
 
   describe 'a registered handler that turns out to be half-implemented' do
-    # Broken the way a half-implemented backend is: it inherits #available?,
-    # which raises NotImplementedError. It is handed to the manager through a
-    # stubbed registry rather than declared, so the count cannot be disturbed by
-    # whatever else the suite has registered.
     let(:ghost_handler) do
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
         class << self

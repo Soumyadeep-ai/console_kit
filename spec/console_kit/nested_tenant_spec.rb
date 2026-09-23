@@ -2,10 +2,6 @@
 
 require 'spec_helper'
 
-# `with_tenant` is the only API that promises to put the *enclosing* tenant back
-# rather than the default one, so every exit route out of the block has to be
-# checked: falling off the end, raising, and an inner switch that never
-# committed at all.
 module NestedTenant
 end
 
@@ -175,9 +171,6 @@ RSpec.describe NestedTenant do
     end
   end
 
-  # The scope closes from an `ensure`, so a rollback failure raised there would
-  # discard whatever the block was already raising - the exact failure the
-  # operator called about.
   describe 'a rollback that fails while the block is already raising' do
     let(:handlers) { ConsoleKit::Connections::ConnectionManager.available_handlers(context_class) }
     let(:sql) { handlers.find { |handler| handler.backend_key == :sql } }

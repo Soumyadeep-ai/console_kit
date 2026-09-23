@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_elasticsearch_prefix
 
@@ -86,10 +85,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
-    # A prefix is a name, not an arbitrary object. Coercing the value with
-    # `#to_s` before checking it let an Integer through as "5" and an Array as
-    # "[:acme]" - both legal index-name prefixes once stringified, and both
-    # written straight to `index_name_prefix`.
     context 'with a target that is not a name at all' do
       it 'rejects an Integer rather than coercing it' do
         expect { handler.prepare(5) }.to raise_error(ConsoleKit::ConfigurationError)
@@ -103,8 +98,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
         expect { handler.prepare({ prefix: 'acme' }) }.to raise_error(ConsoleKit::ConfigurationError)
       end
 
-      # Configuration#validate! reports this reason without ever calling
-      # #prepare, so the rule has to be readable there too.
       it 'says what it expected' do
         expect(described_class.target_error(5)).to eq('expected a String or Symbol')
       end
@@ -141,11 +134,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
-    # A prefix that can be written but not read back cannot be snapshotted:
-    # #snapshot records nil, #verify! falls back to ConsoleKit's own registry
-    # instead of reading Elasticsearch, and a rollback writes nil over the
-    # previous tenant's process-wide prefix while the switch reports itself
-    # verified. Both a tenant prefix and a reset write, so both are refused.
     context 'when Elasticsearch::Model can set a prefix but cannot read one back' do
       before { stub_const('Elasticsearch::Model', Elasticsearch::ModelWithWriteOnlyPrefix) }
 
@@ -403,8 +391,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
     end
   end
 
-  # Pins the documented :process_global behaviour: no isolation, but the
-  # disagreement is detected and reported rather than hidden.
   describe 'two threads switching concurrently' do
     let(:gate) { { started: Queue.new, release: Queue.new, observed: Queue.new } }
     let(:worker) do
@@ -541,9 +527,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
-    # The ConnectionError carries the transport's own message, and an
-    # Elasticsearch transport names the cluster URL it could not reach - user
-    # and password included. Whoever rescues the error reads that message.
     context 'when the transport error names the cluster URL' do
       def ping_failure_message
         transport_error = 'Could not connect to http://elastic:s3cr3t@es.internal:9200'
@@ -594,10 +577,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
       end
     end
 
-    # A bug inside ConsoleKit must reach the operator as the bug it is. The
-    # handler's own rescue used to catch it first, so `Runner.failed_row` never
-    # got the chance to re-raise it and the row described a healthy backend as
-    # broken instead.
     context 'when :full diagnostics hit a bug rather than an unreachable cluster' do
       before do
         allow(Elasticsearch::Model).to receive(:client).and_raise(NoMethodError, "undefined method 'client'")
@@ -631,9 +610,6 @@ RSpec.describe ConsoleKit::Connections::ElasticsearchConnectionHandler do
     end
   end
 
-  # An elasticsearch-model too old to expose index_name_prefix can still be
-  # reset to "no prefix", and ConsoleKit's own record is then the only account
-  # of what this thread asked for.
   describe 'a library version that exposes no index_name_prefix' do
     before { stub_const('Elasticsearch::Model', Elasticsearch::ModelWithoutPrefix) }
 

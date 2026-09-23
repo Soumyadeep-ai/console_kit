@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # UI helpers for Setup
   module SetupUI
     ENVIRONMENT_WARNINGS = {
       'production' => -> { Output.print_error('!!! CAUTION: YOU ARE IN PRODUCTION ENVIRONMENT !!!') },

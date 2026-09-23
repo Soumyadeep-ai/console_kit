@@ -52,8 +52,6 @@ RSpec.describe ConsoleKit::Prompt do
       end
     end
 
-    # The Railtie applies the prompt at console boot, which is before any tenant
-    # has been chosen.
     context 'when no tenant has been chosen yet' do
       let(:irb_conf) { { PROMPT: {}, PROMPT_MODE: nil } }
 
@@ -115,7 +113,6 @@ RSpec.describe ConsoleKit::Prompt do
           def self.config; end
         end
         stub_const('Pry', pry_class)
-        # Do NOT define Pry::Prompt — simulates old Pry
         allow(Pry).to receive(:config).and_return(pry_config)
       end
 
@@ -143,10 +140,6 @@ RSpec.describe ConsoleKit::Prompt do
     end
   end
 
-  # Rails starts IRB by calling IRB.setup, which resets IRB.conf and throws away
-  # anything configured before it - including a prompt installed from the
-  # railtie's console hook. Rails then installs its own prompt and selects it.
-  # This is the real sequence, for every Rails version from 6.1 to 8.0.
   describe 'surviving the way Rails boots IRB' do
     let(:irb_conf) { { PROMPT: {}, PROMPT_MODE: nil } }
     let(:rails_prompt) do
@@ -165,13 +158,10 @@ RSpec.describe ConsoleKit::Prompt do
 
       described_class.apply
 
-      # IRB.setup: resets the whole config.
       irb_conf[:PROMPT] = { DEFAULT: { PROMPT_I: '%N> ' } }
       irb_conf[:PROMPT_MODE] = :DEFAULT
-      # Rails then installs and selects its own prompt.
       irb_conf[:PROMPT][:RAILS_PROMPT] = rails_prompt
       irb_conf[:PROMPT_MODE] = :RAILS_PROMPT
-      # Rails constructs the session last.
       IRB::Irb.new
     end
 

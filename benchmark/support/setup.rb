@@ -5,11 +5,7 @@ require 'console_kit'
 require_relative 'fakes'
 require_relative 'counters'
 
-# Shared ConsoleKit configuration for every benchmark file. Every backend runs
-# against the fakes in support/fakes.rb - no real DB/Redis/Mongo/Elasticsearch
-# is ever touched.
 module ConsoleKitBenchmark
-  # Builds a ConsoleKit configuration wired against the fakes.
   module Setup
     TENANTS = {
       'acme' => { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME',
@@ -24,26 +20,16 @@ module ConsoleKitBenchmark
                             tenant_redis_db tenant_elasticsearch_prefix].freeze
 
     class << self
-      # Default fixture: all four backends available, SQL on the native
-      # `connecting_to` shard path.
       def configure_native!(tenants: TENANTS)
         Fakes.install!
         apply(tenants, 'ConsoleKitBenchmark::Fakes::Sql::NativeBase')
       end
 
-      # Same four backends, SQL forced onto the `establish_connection`
-      # fallback path (the base class exposes no native shard API).
       def configure_fallback!(tenants: TENANTS)
         Fakes.install!
         apply(tenants, 'ConsoleKitBenchmark::Fakes::Sql::FallbackBase')
       end
 
-      # SQL only: Mongoid/Redis/Elasticsearch::Model are deliberately never
-      # defined in this process, so ConnectionManager.available_handlers finds
-      # only the SQL backend. Used to isolate one backend's marginal cost from
-      # the four-backends-together case in benchmark 3. Must run in its own
-      # process (a script that never requires support/fakes' Mongo/Redis/ES
-      # installers), since those constants cannot be "uninstalled" once defined.
       def configure_sql_only!(tenants: TENANTS)
         ConsoleKit.configure do |config|
           config.tenants = tenants

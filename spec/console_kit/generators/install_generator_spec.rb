@@ -5,7 +5,6 @@ require 'generators/console_kit/install_generator'
 require 'pathname'
 require 'fileutils'
 
-# Stub Rails.root because this is not a Rails app
 module Rails
   def self.root
     Pathname.new(Dir.pwd)

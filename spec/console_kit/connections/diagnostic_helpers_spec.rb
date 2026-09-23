@@ -2,8 +2,6 @@
 
 RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
   describe '.scrub' do
-    # Real client error shapes. Every one of these previously reached the console
-    # and the logs with a credential or a principal intact.
     leaking = {
       'a connection URL' => ['cannot reach redis://user:hunter2@cache.internal:6379/2', 'hunter2'],
       'a quoted hash assignment' => ['cfg={"host"=>"db.internal","password"=>"hunter2"}', 'hunter2'],
@@ -19,8 +17,6 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       end
     end
 
-    # Over-redaction destroys the diagnostic value of an error, so the parts an
-    # operator actually needs must survive.
     it 'keeps the error class of a Mongo authorization failure' do
       message = 'Mongo::Auth::Unauthorized: User svc_admin@admin is not authorized'
       expect(described_class.scrub(message)).to include('Mongo::Auth::Unauthorized')
@@ -45,15 +41,6 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       expect(described_class.scrub(nil)).to eq('')
     end
 
-    # "hunter2=password" reads as a value followed by a keyword, not a key=value
-    # assignment, so only CREDENTIAL_PHRASE fires on it in one scan, matching
-    # "password extra" as its trailing token. A naive chain that ran
-    # CREDENTIAL_PRINCIPAL afterwards would then see "for user hunter2=[redacted]"
-    # and swallow the whole thing - losing "extra" - because CREDENTIAL_PRINCIPAL's
-    # trailing \S+ cannot distinguish a freshly inserted [redacted] marker from
-    # real content. A single scan over the original message never produces that
-    # intermediate text, so CREDENTIAL_PRINCIPAL wins the match outright and
-    # "extra" survives untouched.
     it 'redacts in a single scan, so a later shape cannot re-match an earlier redaction' do
       message = 'for user hunter2=password extra'
       expect(described_class.scrub(message)).to eq('[redacted] extra')
@@ -64,9 +51,6 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       expect(described_class.scrub(described_class.scrub(message))).to eq(described_class.scrub(message))
     end
 
-    # An HTTP-flavoured client (Elasticsearch, any REST backend) puts the scheme
-    # and the secret in separate words. Stopping at the first space redacted the
-    # label and left the credential.
     context 'with an auth header' do
       it 'redacts a bearer token' do
         message = 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def'
@@ -82,8 +66,6 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       end
     end
 
-    # scrub runs inside TenantSwitchError's constructor, so raising here would
-    # replace the root cause with an encoding error and escape switch_tenant.
     context 'with a message that is not valid UTF-8' do
       let(:invalid) { "connection failed \xC3(".dup.force_encoding('UTF-8') }
 
@@ -96,8 +78,6 @@ RSpec.describe ConsoleKit::Connections::DiagnosticHelpers do
       end
     end
 
-    # Over-redaction destroys the diagnostic value of an error. These carry no
-    # secret at all and must survive intact.
     context 'with ordinary words that merely look like secrets' do
       it 'keeps a token limit message' do
         expect(described_class.scrub('token limit exceeded for index')).to eq('token limit exceeded for index')

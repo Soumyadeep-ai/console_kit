@@ -40,9 +40,6 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     stub_const('ConsoleKit::Connections::DummyHandlerB', dummy_handler_b)
   end
 
-  # `backend` registers on HandlerRegistry, which lives for the whole suite
-  # rather than being reset per example the way stub_const's own constants
-  # are, so a handler declared only for this spec must be removed by hand.
   after do
     ConsoleKit::Connections::HandlerRegistry.remove(dummy_handler_a)
     ConsoleKit::Connections::HandlerRegistry.remove(dummy_handler_b)
@@ -79,21 +76,6 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
     end
   end
 
-  # Reload-generation replacement, cross-name collision warnings and
-  # declaration ordering are now HandlerRegistry's job, since registration is
-  # explicit (a handler joins by declaring `backend`) rather than implicit via
-  # `descendants`. See "ConsoleKit::Connections::HandlerRegistry" in
-  # base_connection_handler_spec.rb for that coverage; ConnectionManager only
-  # has to read the registry it is handed, which ".available_handlers" above
-  # already covers.
-
-  # A dropped handler vanishes from the switch, the verification, the snapshot
-  # AND the rollback, so a switch can report itself verified while that backend
-  # still serves another tenant. "Half-implemented" has to be loud; "optional gem
-  # not loaded" has to stay silent.
-  #
-  # These handlers deliberately do not inherit BaseConnectionHandler and stub
-  # `.registry` directly, so they never actually join HandlerRegistry.
   describe 'a handler that cannot answer whether it is available' do
     before { allow(ConsoleKit::Output).to receive(:print_warning) }
 
@@ -105,8 +87,6 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       end
     end
 
-    # The same backend key, half-implemented in a different way: a reload can
-    # leave a handler broken for a new reason, and that is news.
     def broken_differently
       Class.new do
         def self.backend_key = :half_implemented
@@ -123,8 +103,6 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
       end
     end
 
-    # Complete, loaded, and pointed at something that is not there: the operator
-    # asked for this backend, so its absence is news rather than a supported setup.
     def misconfigured
       Class.new do
         def self.backend_key = :misconfigured
@@ -155,18 +133,12 @@ RSpec.describe ConsoleKit::Connections::ConnectionManager do
           .to have_received(:print_warning).with(a_string_including('NOT be switched, verified or rolled back'))
       end
 
-      # A warning alone is lost the moment it scrolls past. The caller that
-      # commits tenant state needs the key itself, or nothing downstream can
-      # tell that the backend was left behind.
       it 'hands the dropped backend key back to the caller that asked for one' do
         dropped = []
         described_class.available_handlers(context, dropped)
         expect(dropped).to eq([:half_implemented])
       end
 
-      # The dashboard reads the same handler list, so an unchanged broken
-      # handler reprinted this on every single render and buried whatever the
-      # operator typed `dashboard` to look at.
       it 'says it once rather than on every call' do
         2.times { described_class.available_handlers(context) }
         expect(ConsoleKit::Output).to have_received(:print_warning).once

@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Helper module for FullConsoleFlow integration tests
 module FullConsoleFlow
 end
 
@@ -39,17 +38,9 @@ RSpec.describe FullConsoleFlow do
       config.show_dashboard = true
     end
 
-    # Reset thread local state
     ConsoleKit::TenantOrchestrator.current_tenant = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
 
-    # No backend is stubbed here on purpose. Since 1.5.0 every switch verifies
-    # its own identity before committing, so the whole flow is driven against
-    # the stateful fakes: ApplicationRecord really moves its pool, Mongoid
-    # really records its overrides, `Redis.current` really SELECTs a DB and
-    # Elasticsearch::Model really carries the index prefix.
-
-    # Mock user input for TenantSelector
     allow($stdin).to receive_messages(tty?: true, gets: '1')
   end
 
@@ -90,7 +81,7 @@ RSpec.describe FullConsoleFlow do
 
     context 'when switching to the same tenant again' do
       let(:idempotent_output) do
-        allow($stdin).to receive(:gets).and_return('2') # select globex again
+        allow($stdin).to receive(:gets).and_return('2')
         capture_all_output { ConsoleKit::TenantOrchestrator.reset }
       end
 
@@ -138,8 +129,6 @@ RSpec.describe FullConsoleFlow do
 
     it 'handles TenantSelector returning nil' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-      # Setup will retry or fail if select returns nil
-      # We need to ensure it doesn't crash
       expect { ConsoleKit::TenantOrchestrator.run }.not_to raise_error
     end
 

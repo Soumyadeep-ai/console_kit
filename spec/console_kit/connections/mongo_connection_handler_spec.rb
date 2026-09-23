@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_mongo_db
 
@@ -174,9 +173,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  # Clearing the tenant has to be PROVABLE, not assumed: an override left
-  # behind means the console is still pointed at the previous tenant's data
-  # while reporting itself clean.
   describe '#verify! after a reset that did not fully clear' do
     it 'passes when both overrides really are gone' do
       expect { handler.verify!(nil) }.not_to raise_error
@@ -207,10 +203,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  # Every Mongoid API this handler touches beyond `override_database` is
-  # feature-detected. A facade that offers nothing else can still be cleared and
-  # restored, but it cannot be read back - so a switch to a tenant on it is
-  # refused up front rather than applied and then found unverifiable.
   describe 'a Mongoid that exposes only override_database' do
     let(:legacy) { MongoidMocks::DatabaseOverrideOnly }
 
@@ -320,10 +312,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
     end
 
-    # A bug inside ConsoleKit must reach the operator as the bug it is. The
-    # handler's own rescue used to catch it first, so `Runner.failed_row` never
-    # got the chance to re-raise it and the row described a healthy backend as
-    # broken instead.
     context 'when :full diagnostics hit a bug rather than an unreachable database' do
       before { allow(Mongoid).to receive(:default_client).and_return(nil) }
 
@@ -368,11 +356,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
   end
 
   describe 'a Mongoid whose state cannot be read back' do
-    # A Mongoid facade can expose override_database while exposing no
-    # ::Threaded or ::Config to read the override back from. ConsoleKit cannot
-    # prove a switch landed on such a client, and cannot snapshot it either - so
-    # it must refuse before it mutates anything, the way the Redis handler
-    # refuses a client it cannot select on.
     subject(:handler) { described_class.new(nil) }
 
     before { stub_const('Mongoid', MongoidMocks::DatabaseOverrideOnly) }
@@ -397,19 +380,11 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
       end
     end
 
-    # A reset writes too, and its snapshot is just as empty: clearing an
-    # override that could not be read means a later backend failure restores
-    # nil over whatever the previous tenant left behind.
     it 'refuses a reset, which would also write over an override it cannot read' do
       expect { handler.prepare(nil) }.to raise_error(ConsoleKit::UnsupportedBackendError)
     end
   end
 
-  # #connect! routes a target naming a configured client to `override_client`
-  # and everything else to `override_database`, so the setter the target will
-  # actually use is the one #prepare has to find. Checking `override_database`
-  # for every target let a client target through to a NoMethodError raised
-  # mid-transaction.
   describe 'a Mongoid without the client override setter' do
     before do
       stub_const('Mongoid', MongoidMocks::WithoutClientOverride)
@@ -429,10 +404,6 @@ RSpec.describe ConsoleKit::Connections::MongoConnectionHandler do
     end
   end
 
-  # The client override is half of the snapshot. A Mongoid that can be written
-  # but not read there snapshots nil, so a rollback calls override_client(nil)
-  # and clears the override the console was running under instead of restoring
-  # it - whichever setter the target itself uses.
   describe 'a Mongoid whose client override cannot be read back' do
     before do
       stub_const('Mongoid::Threaded', MongoidMocks::WriteOnlyClientOverride)

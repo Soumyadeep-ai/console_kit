@@ -5,13 +5,7 @@ require_relative 'output'
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
-  # One tenant as it was configured: its identifier and the entry declared under
-  # it. Every per-tenant check needs both halves - the key only to name the tenant
-  # it is complaining about - so the checks are this pair's own behaviour, and
-  # ConfigurationValidator just collects what they found.
   class TenantEntry
-    # Constants keys ConsoleKit reads without routing them through a backend
-    # handler, so `context_mapping` does not know about them.
     EXTRA_CONSTANTS_KEYS = [:environment].freeze
 
     attr_reader :key, :errors, :warnings
@@ -23,8 +17,6 @@ module ConsoleKit
       @warnings = []
     end
 
-    # The declared constants Hash, or nil when this tenant does not have a usable
-    # one - the checks across tenants can only speak for the tenants that do.
     def constants
       constants = @entry[:constants] if @entry.is_a?(Hash)
       constants if constants.is_a?(Hash)
@@ -68,8 +60,6 @@ module ConsoleKit
                  "(expected: #{required.join(', ')})."
     end
 
-    # Calling each handler's own `.target_error`, rather than re-deriving the rule,
-    # is what keeps this check and the handler's `#prepare` from drifting apart.
     def check_constants_values
       values = constants
       Connections::BaseConnectionHandler.registry.each do |handler_class|
@@ -98,10 +88,6 @@ module ConsoleKit
     end
   end
 
-  # An omitted backend key does not mean "leave that backend alone": a switch
-  # RESETS that backend to its default, which is what stops a tenant from ending
-  # up half on the tenant before it. Tenants that disagree with each other about
-  # which backends they name are where that bites, so only those are reported.
   class BackendCoverage
     WARNING = 'tenant %<tenant>p does not name %<omitted>s, which other tenants do. Switching to it RESETS those ' \
               'backends to their defaults rather than leaving them on the tenant before it.'
@@ -127,9 +113,6 @@ module ConsoleKit
     end
   end
 
-  # Deep validation of a Configuration's tenant map and context class, run by
-  # Configuration#validate! once the bare presence checks pass. Errors are
-  # aggregated and raised together; warnings are printed via Output, never raised.
   class ConfigurationValidator
     def initialize(configuration)
       @configuration = configuration
@@ -153,7 +136,6 @@ module ConsoleKit
 
     def entries = @entries ||= configuration.tenants.map { |key, entry| TenantEntry.new(key, entry) }
 
-    # The checks that need every tenant at once, plus the context class they share.
     def check_across_tenants
       check_duplicate_identifiers
       warnings.concat(BackendCoverage.new(entries).warnings)
@@ -180,17 +162,11 @@ module ConsoleKit
                   'never configure that backend during a tenant switch.'
     end
 
-    # Only backends some tenant actually names can be configured, so only those
-    # can be silently dropped - warning about the rest is noise about a switch
-    # that was never going to happen.
     def configured_attributes
       named = entries.filter_map { |entry| entry.constants&.keys }.flatten.uniq
       TenantConfigurator.context_mapping.select { |_attr, field| named.include?(field) }.keys
     end
 
-    # The context object is the class itself, and a `class << self; attr_accessor`
-    # writer answers `respond_to?` but not `method_defined?`. Checking only the
-    # latter warned that ConsoleKit would never configure a backend it configures.
     def writer?(klass, writer) = klass.respond_to?(writer) || klass.method_defined?(writer)
 
     def resolve_context_class

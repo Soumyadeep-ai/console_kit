@@ -2,14 +2,7 @@
 
 require_relative 'tenant_backends'
 
-# Drivers for the shared 'a connection handler' examples: one per shipped
-# backend, each exposing the same network-free probes.
-#
-# A subject owns its own fakes so the contract can also assert that switching
-# one backend leaves the other three alone.
 module HandlerContract
-  # Shared plumbing: a fresh shard-aware base class and a fresh context object,
-  # plus the identities of the three backends this subject does NOT own.
   class Subject
     attr_reader :handler, :base_class, :context_class
 
@@ -24,7 +17,6 @@ module HandlerContract
     end
   end
 
-  # SQL, driven through Rails' native shard stack.
   class Sql < Subject
     def handler_class = ConsoleKit::Connections::SqlConnectionHandler
     def target = :shard_acme
@@ -40,7 +32,6 @@ module HandlerContract
     end
   end
 
-  # MongoDB, driven through Mongoid's per-thread database override.
   class Mongo < Subject
     def handler_class = ConsoleKit::Connections::MongoConnectionHandler
     def target = 'acme_db'
@@ -55,7 +46,6 @@ module HandlerContract
     end
   end
 
-  # Redis, driven through SELECT on the process-wide client.
   class Redis < Subject
     def handler_class = ConsoleKit::Connections::RedisConnectionHandler
     def target = 2
@@ -67,7 +57,6 @@ module HandlerContract
     def mutation_probe = ::Redis.current.selects.dup
   end
 
-  # Elasticsearch, driven through the process-wide index name prefix.
   class Elasticsearch < Subject
     def handler_class = ConsoleKit::Connections::ElasticsearchConnectionHandler
     def target = 'acme_es'
@@ -88,8 +77,6 @@ module HandlerContract
   end
 end
 
-# Installs every backend fake, so a handler contract can prove it touched only
-# its own backend.
 RSpec.shared_context 'with every backend fake installed' do
   before do
     stub_const('ApplicationRecord', contract.base_class)
@@ -119,8 +106,6 @@ RSpec.shared_context 'with the MongoDB handler contract' do
 
   let(:contract) { HandlerContract::Mongo.new }
 
-  # Mongoid validates no database name, so the target it cannot apply is any
-  # target on a Mongoid version without the override API.
   def prepare_invalid_target
     stub_const('Mongoid', TenantBackends::OverridelessMongoid)
     contract.target

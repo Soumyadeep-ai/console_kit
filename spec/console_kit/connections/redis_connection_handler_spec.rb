@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_redis_db
 
@@ -95,10 +94,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
-  # The probe is the only thing in a switch that spawns a thread, and it used to
-  # be memoised per adapter - which is per handler instance, which is per switch.
-  # Every switch, and every Rails `reload!` through the Railtie's to_prepare,
-  # therefore paid for a fresh thread inside the transactional #connect!.
   describe 'the isolation probe across repeated switches' do
     let(:spawned) { [0] }
 
@@ -114,8 +109,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       expect(spawned.first).to eq(1)
     end
 
-    # The verdict describes the client the application hands back, so it is only
-    # reusable while that is still the same object.
     it 'probes again when the application hands back a different client' do
       described_class.new(context).isolation_model
       Redis.reset!
@@ -124,9 +117,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
-  # A bug inside ConsoleKit must never be laundered into an isolation VERDICT the
-  # rest of the system then trusts, and a probe that could not run must not claim
-  # :process_global. Genuine client failures stay :none, exactly as before.
   describe '#isolation_model when the probe itself fails' do
     context 'when resolving the client raises a programming error' do
       before { allow(Redis).to receive(:current).and_raise(NoMethodError, "undefined method 'db' for nil") }
@@ -140,8 +130,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       end
     end
 
-    # The bug is in the client the probe THREAD resolves, so it arrives back
-    # through Thread#value rather than from the calling thread's own resolve.
     context 'when the probe thread hits a programming error' do
       before do
         resolves = [0]
@@ -262,11 +250,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
-  # SELECT 0 is a write like any other: on a client that cannot say where it is,
-  # #snapshot records nil, #verify! reads the nil as proof of the default and
-  # #restore leaves the connection wherever the failed switch left it. So
-  # nothing is written to one - a requested DB is refused at #prepare, and a
-  # target that asked for no DB moves nothing.
   describe 'a client that can SELECT but cannot report its DB' do
     before { Redis.current = RedisFakes::Opaque.new(7) }
 
@@ -334,9 +317,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       expect(client.selects).to be_empty
     end
 
-    # #prepare rejects this value through the scrubbed validator, but #connect!
-    # is reached without it on the diagnostics path, and a tenant constant that
-    # is not a DB index is exactly the one likely to hold a whole Redis URL.
     context 'with an invalid index that carries a credential' do
       let(:message) do
         handler.connect!('rediss://app:s3cr3t@cache.internal:6379/2')
@@ -477,9 +457,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       expect(client.selects).to be_empty
     end
 
-    # Rollback is the one path that reaches SELECT with a client that was never
-    # allowed to switch: #prepare refuses a non-default DB for such a client and
-    # #connect! returns early, but a snapshot taken earlier can still name one.
     context 'when the client has no SELECT to drive' do
       let(:command_only) { RedisFakes::CommandOnly.new }
 
@@ -626,13 +603,6 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       end
     end
 
-    # `available?` only asks whether a Redis library is loaded. A loaded library
-    # with no reachable client handle has nothing to ping, so a :full check has
-    # to degrade to the basic answer instead of claiming it pinged.
-    # A bug inside ConsoleKit must reach the operator as the bug it is. The
-    # handler's own rescue used to catch it first, so `Runner.failed_row` never
-    # got the chance to re-raise it and the row described a healthy backend as
-    # broken instead.
     context 'when :full diagnostics hit a bug rather than an unreachable server' do
       before { allow(client).to receive(:info).and_return(nil) }
 

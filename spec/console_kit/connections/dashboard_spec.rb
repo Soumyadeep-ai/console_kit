@@ -135,7 +135,6 @@ RSpec.describe ConsoleKit::Connections::Dashboard do
 
     context 'with diagnostic levels' do
       let(:row) { { name: 'Redis', status: :connected, latency_ms: nil, details: {} } }
-      # `diagnostic_identity` is what a cached :full row is checked against.
       let(:mock_handler) { double(backend_key: :redis, safe_diagnostics: row, diagnostic_identity: nil) }
 
       before do

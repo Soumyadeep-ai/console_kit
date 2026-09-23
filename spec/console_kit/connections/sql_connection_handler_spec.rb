@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_shard
 
@@ -42,10 +41,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
-  # A configured base class that does not resolve drops SQL out of the switch,
-  # the verify, the snapshot and the rollback. That is indistinguishable from
-  # "ActiveRecord is not loaded" unless the handler says which of the two it is,
-  # which is what the reason is for - the switch records it as a dropped backend.
   describe '#unavailable_reason' do
     before { allow(ConsoleKit::Output).to receive(:print_warning) }
 
@@ -123,9 +118,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       nil
     end
 
-    # A tenant constant can hold a whole database URI, and #prepare runs before
-    # the transaction, so this rejection escapes switch_tenant unwrapped and
-    # reaches the logs with whatever the constant held.
     context 'with an unresolved shard that carries a credential' do
       let(:uri) { 'postgres://app:s3cr3t@db.internal:5432/acme' }
       let(:message) do
@@ -221,10 +213,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
-  # `connecting_to` pushes onto the fiber-local shard stack and Rails offers no
-  # matching pop, so every committed switch used to leave a frame behind. Rails
-  # walks that stack on every `current_shard` lookup, i.e. on every query, and
-  # the Railtie re-applies the tenant on every `reload!`.
   describe '#connect! stack growth' do
     it 'holds the stack at one frame across five successive switches' do
       %w[shard_one shard_two shard_one shard_two shard_one].each { |name| handler.connect!(name) }
@@ -577,9 +565,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
-  # Rails connects lazily, so the first console command after boot runs against
-  # an ActiveRecord that has never resolved a pool: `connection_pool` raises
-  # until something establishes one.
   describe 'a base class that has not connected to anything yet' do
     let(:base_class) { ActiveRecordMock.unconnected_sharded_base(configs: config_names) }
 
@@ -606,7 +591,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
-  # `SELECT version()` is a courtesy detail, not the point of the probe.
   describe '#diagnostics when the version query fails' do
     subject(:result) { handler.diagnostics(level: :full) }
 
@@ -624,9 +608,6 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       end
     end
 
-    # The handler's own rescue used to catch this first, so `Runner.failed_row`
-    # never got the chance to re-raise it and a bug inside ConsoleKit came back
-    # as an ordinary :error row describing a backend that is perfectly healthy.
     context 'when the failure is a bug rather than a database refusal' do
       before { allow(conn).to receive(:select_value).and_raise(NameError, 'undefined local variable sql') }
 

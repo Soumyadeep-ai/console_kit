@@ -2,11 +2,6 @@
 
 require 'spec_helper'
 
-# `Thread.current[]` is fiber-local, but the SQL `connected_to` frame ConsoleKit
-# pairs its bookkeeping with is thread-local - that is where Rails keeps
-# `connected_to_stack`. Both halves of the one per-thread invariant therefore
-# have to live in the same scope: a second fiber shares the connections of the
-# thread it runs on, so it has to share the TenantState describing them.
 module FiberScope
 end
 
@@ -55,8 +50,6 @@ RSpec.describe FiberScope do
       expect(identities[:sql]).to eq('shard_acme')
     end
 
-    # ConsoleKit invents no isolation: Mongoid keeps its overrides in
-    # `Thread.current[]`, so a switch inside a fiber moves only that fiber's Mongo.
     it 'leaves a backend whose own library is fiber-local behind in the fiber' do
       expect(Mongoid::Threaded.database_override).to be_nil
     end

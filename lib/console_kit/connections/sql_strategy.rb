@@ -6,15 +6,6 @@ require_relative '../instrumentation'
 
 module ConsoleKit
   module Connections
-    # ConsoleKit's single frame on Rails' shard stack.
-    #
-    # Rails' `connected_to` pops that stack BY POSITION, not by identity, so
-    # ConsoleKit's frame is replaced where it already sits - below any host
-    # frame - rather than re-pushed.
-    #
-    # The slot is a THREAD variable, not fiber-local `Thread#[]`, because Rails
-    # keeps `connected_to_stack` per thread; a fiber-local slot would disagree
-    # with the very stack it describes as soon as any Fiber or Enumerator ran.
     class ShardFrame
       KEY = :console_kit_sql_connected_to_frame
       STOLEN = 'ConsoleKit: a `connected_to` block removed the shard frame ConsoleKit had committed, so shard ' \
@@ -25,16 +16,11 @@ module ConsoleKit
 
       def initialize(base_class) = @base_class = base_class
 
-      # Moves the frame `connecting_to` just pushed into the slot ConsoleKit
-      # already owns, keeping it to one frame.
       def apply(shard)
         base_class.connecting_to(shard: shard || base_class.default_shard, role: base_class.current_role)
         place(shard)
       end
 
-      # A host block can destroy ConsoleKit's frame on the way out, so the frame
-      # goes back here - and is reported, because the queries that ran in between
-      # really did use the block's shard.
       def live_shard
         reassert if taken?
         base_class.current_shard
@@ -46,8 +32,6 @@ module ConsoleKit
         owned[:shard] || base_class.default_shard
       end
 
-      # A frame given up deliberately is forgotten, so no later read mistakes it
-      # for one a host block took.
       def forget_unless_on
         Thread.current.thread_variable_set(KEY, nil) if owned && !on?
       end
@@ -82,8 +66,6 @@ module ConsoleKit
         index if current[index].equal?(entry[:frame])
       end
 
-      # One slot serves the whole thread, so a record left by another base class
-      # is somebody else's business.
       def owned
         entry = Thread.current.thread_variable_get(KEY)
         entry if entry && entry[:base].equal?(base_class)
@@ -96,9 +78,6 @@ module ConsoleKit
       end
     end
 
-    # The base class's connection pool as a thing that can be ABSENT.
-    # `connection_pool` cannot say "there is none" without raising, so absence is
-    # read through the handler's own lookup wherever there is one.
     class PoolSlot
       attr_reader :base_class
 
@@ -106,8 +85,6 @@ module ConsoleKit
 
       def absent? = lookup.nil?
 
-      # A pool established where there was none is removed, not re-pointed:
-      # re-pointing leaves the failed tenant's database connected.
       def remove
         return if absent?
         return handler.remove_connection_pool(spec, role: role, shard: shard) if removable_handler?
@@ -136,12 +113,6 @@ module ConsoleKit
       def retrievable_handler? = handler.respond_to?(:retrieve_connection_pool) && spec
     end
 
-    # Rails-version-tolerant plumbing for pointing a SQL base class at a shard:
-    # `connecting_to` for a shard registered through `connects_to shards:`,
-    # `establish_connection` for a plain database.yml configuration name.
-    #
-    # Every Rails API touched here is feature-detected with `respond_to?`, never
-    # by Rails version, so one code path serves Rails 6.1 through 8.0.
     class SqlStrategy
       NATIVE_METHODS = %i[connecting_to connected_to_stack default_shard current_shard current_role].freeze
 
@@ -151,8 +122,6 @@ module ConsoleKit
 
       def switchable? = base_class.respond_to?(:establish_connection) || native_capable?
 
-      # A nil shard means "default": the native path only matters there if
-      # something has already pushed onto the stack.
       def native?(shard)
         return false unless native_capable?
         return !connected_to_stack.to_a.empty? if shard.nil?
@@ -160,8 +129,6 @@ module ConsoleKit
         !shard_pool(shard).nil?
       end
 
-      # An unreadable `configurations` is not evidence of a bad shard, so an
-      # empty list resolves rather than rejects.
       def resolvable?(shard)
         return true if !shard || native?(shard)
 
@@ -169,12 +136,6 @@ module ConsoleKit
         configs.empty? || configs.any? { |cfg| config_name(cfg).to_s == shard.to_s }
       end
 
-      # A rollback has to put back the shard in ConsoleKit's OWN frame:
-      # `current_shard` can be a host block's frame sitting above it.
-      # `db_config_name` is nil both for "no pool" and for "a pool that cannot
-      # name itself", so absence is recorded separately: only the first is undone
-      # by removing what the switch established. A pool that names itself is
-      # present by definition, so that is the only case that pays for the lookup.
       def snapshot
         name = current_db_config_name
         {
@@ -196,16 +157,12 @@ module ConsoleKit
         state[:pool_absent] ? pool.remove : reestablish(state[:db_config_name])
       end
 
-      # [expected, actual] identity of the live connection. Local reads, never a
-      # network round trip; the one thing it may write is a frame a host block
-      # removed - see #live_shard.
       def identity(shard)
         return [shard || base_class.default_shard, frame.live_shard] if native?(shard)
 
         [expected_db_config_name(shard), current_db_config_name]
       end
 
-      # Network-free description of the resolved connection.
       def pool_details
         describe_pool(base_class.try(:connection_pool))
       rescue StandardError => e
@@ -230,11 +187,6 @@ module ConsoleKit
       def pool = @pool ||= PoolSlot.new(base_class)
       def apply_native(shard) = frame.apply(shard)
 
-      # Unwinding to the recorded depth is not enough when one frame is reused:
-      # re-applying puts the identity back without growing the stack. The
-      # comparison is against ConsoleKit's own frame, not `current_shard`, which
-      # a host frame above ours can answer with the shard we want while ours
-      # still holds the one being undone.
       def restore_shard(shard)
         return if !shard || !native_capable? || (frame.applied_shard || base_class.current_shard) == shard
 
@@ -248,8 +200,6 @@ module ConsoleKit
         shard ? base_class.establish_connection(shard.to_sym) : base_class.establish_connection
       end
 
-      # The slot is cleared: a record of a frame that is gone would make the next
-      # read think a host block had taken it, and put it back.
       def unwind_stack(depth)
         stack = connected_to_stack
         return unless stack && depth
@@ -282,8 +232,6 @@ module ConsoleKit
         configs.configs_for(env_name: env)
       end
 
-      # `connection_pool` raises when nothing is established yet; that is a
-      # legitimate "no identity" answer, unlike a programming error.
       def current_db_config
         base_class.try(:connection_pool).try(:db_config)
       rescue StandardError => e

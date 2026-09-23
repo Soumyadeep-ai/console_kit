@@ -2,13 +2,6 @@
 
 require 'spec_helper'
 
-# Rails' `connected_to` pops the shard stack in an `ensure`, by POSITION rather
-# than by identity: it removes whatever frame is on top when the block exits.
-# A tenant switch committed inside such a block used to push its frame on top of
-# the block's, so the block destroyed ConsoleKit's frame on the way out and left
-# the block's own shard live underneath ConsoleKit's committed tenant - every
-# query after that ran against another tenant's database, silently, until
-# somebody happened to call `verify_tenant!`.
 module HostConnectedTo
 end
 
@@ -17,8 +10,6 @@ RSpec.describe HostConnectedTo do
 
   let(:stack) { base_class.connected_to_stack }
 
-  # Attempts the inner switch inside a host block pinned to another shard, and
-  # hands back whatever the switch raised.
   def switch_inside_host_block(tenant = 'initech')
     base_class.connected_to(shard: :shard_globex) { failed_switch(tenant) }
   end
@@ -60,9 +51,6 @@ RSpec.describe HostConnectedTo do
     end
   end
 
-  # The frame is replaced where it already sits rather than re-pushed, so
-  # neither repeated switches nor repeated host blocks can grow the stack Rails
-  # walks on every query.
   describe 'host blocks repeated across a console session' do
     before { ConsoleKit.switch_tenant('acme') }
 
@@ -85,10 +73,6 @@ RSpec.describe HostConnectedTo do
     end
   end
 
-  # ConsoleKit owns no frame yet, so this switch has to push one - on top of the
-  # host's, which is exactly where the block's `ensure` will destroy it. It
-  # cannot be prevented, only noticed: the next thing ConsoleKit is asked puts
-  # the frame back rather than reporting a tenant whose shard is not live.
   describe 'a first switch made inside a host connected_to block' do
     before { base_class.connected_to(shard: :shard_globex) { ConsoleKit.switch_tenant('initech') } }
 
@@ -113,11 +97,6 @@ RSpec.describe HostConnectedTo do
     end
   end
 
-  # Rails keeps `connected_to_stack` per THREAD - 6.1 and 7.0 through thread
-  # variables, 7.1+ through IsolatedExecutionState at its default :thread
-  # isolation. ConsoleKit's record of its own frame was fiber-local, so inside
-  # any Fiber or Enumerator it could not see the frame it owns and pushed a
-  # second one that nothing would ever replace, pop or account for.
   describe 'a switch made inside a Fiber' do
     let(:shared_stack) { [] }
 
@@ -136,9 +115,6 @@ RSpec.describe HostConnectedTo do
     end
   end
 
-  # A properly nested scope is popped by ConsoleKit itself before the host block
-  # closes, so it keeps Rails' own semantics: the innermost frame wins, and the
-  # host's shard is live again the moment the scope exits.
   describe 'a with_tenant scope nested inside a host connected_to block' do
     it 'applies the scoped tenant inside the block' do
       inner = base_class.connected_to(shard: :shard_globex) do

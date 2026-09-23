@@ -5,13 +5,6 @@ require_relative 'elasticsearch_prefix_registry'
 
 module ConsoleKit
   module Connections
-    # Handles the Elasticsearch index-name prefix.
-    #
-    # `Elasticsearch::Model.index_name_prefix` is a single attribute on a shared
-    # module, so the prefix is PROCESS-WIDE (#isolation_model is :process_global):
-    # the last thread to #connect! wins for the whole process. ConsoleKit records
-    # each live thread's requested prefix in ElasticsearchPrefixRegistry and
-    # warns once as soon as two live threads disagree.
     class ElasticsearchConnectionHandler < BaseConnectionHandler
       backend :elasticsearch,
               display_name: 'Elasticsearch',
@@ -35,9 +28,6 @@ module ConsoleKit
           false
         end
 
-        # A blank prefix means "use the default". The type check must come
-        # first: coercing with `#to_s` before checking accepts an Integer as
-        # "5" and an Array as "[:acme]".
         def target_error(value)
           return NOT_A_NAME unless value.nil? || value.is_a?(String) || value.is_a?(Symbol)
 
@@ -49,10 +39,6 @@ module ConsoleKit
       def isolation_model = :process_global
       def thread_isolated? = false
 
-      # A prefix ConsoleKit writes but cannot read back cannot be snapshotted,
-      # so rollback would put nil where the previous prefix was. A reset writes
-      # too, and is refused on the same terms; only a module with no setter at
-      # all is left alone, because then nothing is written.
       def prepare(target)
         validate_target!(target)
         settable = registry.settable?
@@ -85,18 +71,14 @@ module ConsoleKit
         registry.record(state[:thread])
       end
 
-      # Falls back to ConsoleKit's own record when the module exposes no reader.
       def effective_prefix = registry.readable? ? registry.global : registry.current
 
-      # Any thread can move this process-wide attribute, so it is read back
-      # rather than assumed.
       def diagnostic_identity = effective_prefix
 
       private
 
       def registry = ElasticsearchPrefixRegistry
 
-      # No network call.
       def basic_diagnostics
         {
           name: display_name, status: :connected, latency_ms: nil,
@@ -114,8 +96,6 @@ module ConsoleKit
         }
       end
 
-      # A failed ping means the cluster is unreachable, so cluster.health must
-      # not be called anyway.
       def ping!(client)
         client.ping
       rescue StandardError => e

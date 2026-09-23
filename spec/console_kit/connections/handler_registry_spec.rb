@@ -2,17 +2,7 @@
 
 require_relative '../../support/shared_contexts/tenant_backends'
 
-# The Open-Closed proof.
-#
-# Before 1.5.0, adding a backend meant editing four files that had nothing to do
-# with it: the context-attribute map, the constants map, the configuration
-# validator and the console detail labels. This spec adds a fifth, fictional
-# backend HERE, in the spec suite, touching no production file at all, and then
-# asserts it is a first-class citizen of every one of those mechanisms.
-#
-# If any example here needs a production edit to pass, the refactor regressed.
 RSpec.describe ConsoleKit::Connections::HandlerRegistry do
-  # A complete backend, declared the way a real one is.
   let(:vault_handler) do
     Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
       backend :vault,
@@ -24,8 +14,6 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
       class << self
         def store = @store ||= { path: nil }
 
-        # This backend's one rule. `prepare` raises on it and
-        # `configuration.validate!` collects it, with no second definition.
         def target_error(value)
           return if value.nil? || value.to_s.start_with?('secret/')
 
@@ -74,7 +62,7 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
   end
 
   before do
-    vault_handler # declaring the class registers it
+    vault_handler
     ConsoleKit.configure do |config|
       config.tenants = tenants
       config.context_class = context_class
@@ -123,10 +111,6 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
   end
 
   describe '4. rollback when a later backend fails' do
-    # A second fictional backend, declared AFTER the first so the registry
-    # applies it later. Nothing is stubbed: the failure is a real handler
-    # raising from its own connect!.
-    # Built lazily, so it only joins the registry inside this group.
     def doomed_handler
       @doomed_handler ||= Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
         backend :doomed, display_name: 'Doomed', context_attribute: :tenant_doomed_key,
@@ -204,12 +188,7 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
-  # A Zeitwerk reload declares the handler class a second time, and the new
-  # generation replaces the old one in the registry. The reloader then discards
-  # the previous constant, which unregisters generation N - that must not take
-  # generation N+1 with it. Reload-only, so no CI run ever reaches it.
   describe 'unregistering a generation a reload has already replaced' do
-    # Built lazily, so it only joins the registry inside this group.
     def reloaded_vault
       @reloaded_vault ||= Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
         backend :vault, display_name: 'Vault', context_attribute: :tenant_vault_path,
@@ -234,9 +213,6 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
-  # One context attribute is one slot on the context object. Two handlers
-  # holding it write each other's constants there, so the context says one thing
-  # while the live connection says another - and the switch reports success.
   describe 'a second handler claiming a context attribute already in use' do
     def declare_shadow
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
@@ -251,8 +227,6 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
       nil
     end
 
-    # Nothing should be left registered, but a regression here would leak the
-    # shadow into every later example.
     after { described_class.all.each { |klass| described_class.remove(klass) if klass.backend_key == :shadow } }
 
     it 'is refused at declaration' do
@@ -269,9 +243,6 @@ RSpec.describe ConsoleKit::Connections::HandlerRegistry do
     end
   end
 
-  # Every switch reads `.all` and iterates it. The answer is a frozen array, and
-  # a different array on every call, so a caller cannot hold on to the one the
-  # next switch will use nor change what that switch drives.
   describe '.all' do
     it 'hands back a frozen array' do
       expect(described_class.all).to be_frozen

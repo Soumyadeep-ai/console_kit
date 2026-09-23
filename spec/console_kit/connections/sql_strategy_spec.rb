@@ -5,10 +5,6 @@ require 'spec_helper'
 RSpec.describe ConsoleKit::Connections::SqlStrategy do
   subject(:strategy) { described_class.new(base_class) }
 
-  # Rails connects lazily. An application that has booted but has not run a
-  # query yet has no pool registered at all, so every read through
-  # `connection_pool` raises ConnectionNotEstablished. That is the shape of the
-  # very first console command after boot, and none of it is a failure.
   describe 'a base class that has never been connected' do
     let(:base_class) { ActiveRecordMock.unconnected_sharded_base(configs: %w[primary shard_one]) }
 
@@ -42,8 +38,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
       expect(strategy.identity(:shard_one)).to eq(%w[shard_one shard_one])
     end
 
-    # "There was no pool" is a state a rollback has to be able to reach: leaving
-    # the pool the switch established keeps the failed tenant's database connected.
     it 'removes the pool it established when the switch is rolled back' do
       state = strategy.snapshot
       strategy.apply(:shard_one)
@@ -52,8 +46,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # A base class with no shard API at all: the only route back to "no pool" is
-  # removing the connection the fallback established.
   describe 'a plain base class that has never been connected' do
     let(:base_class) { ActiveRecordMock.unconnected_plain_base(configs: %w[primary shard_one]) }
 
@@ -69,8 +61,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # The other half of the same rule: a base class that DID have a pool is put
-  # back onto its previous configuration, never left without one.
   describe 'restoring a base class that was already connected' do
     let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary shard_one]) }
 
@@ -86,9 +76,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # #pool_details is the resilience boundary of this file: a dead database must
-  # degrade to "no details", while a bug in ConsoleKit itself must not be
-  # laundered into one.
   describe '#pool_details when the pool chain raises' do
     let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary]) }
 
@@ -113,8 +100,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # A backend the snapshot never captured - one that became available only
-  # after the snapshot was taken - has no state to put back.
   describe '#restore with no snapshot' do
     let(:base_class) { ActiveRecordMock.sharded_base(configs: %w[primary]) }
 
@@ -123,10 +108,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # The native path is chosen by feature detection, never by Rails version, and
-  # it needs EVERY method it is about to call. A base class carrying only part
-  # of the shard API - a version check would happily call this one "6.1+" - has
-  # to fall back instead of calling a method that is not there.
   describe 'a base class that carries only part of the native shard API' do
     let(:base_class) do
       ActiveRecordMock.sharded_base(configs: %w[primary shard_one], shards: %w[shard_one]).tap do |klass|
@@ -144,8 +125,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # `sql_base_class` can be pointed at a class that resolves but is not an
-  # ActiveRecord base, in which case there is nothing to describe.
   describe 'a base class that is not ActiveRecord at all' do
     let(:base_class) { Class.new }
 

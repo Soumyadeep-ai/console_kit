@@ -2,13 +2,6 @@
 
 require 'spec_helper'
 
-# A handler is meant to be the single source of truth for its backend: its
-# `backend` declaration is the only place the backend is named, and its
-# `.target_error` is the only rule that decides whether a target value is
-# usable. These examples pin the places where that ownership used to leak -
-# a second declaration leaving the first key registered, a subclass that never
-# declared one, another handler hijacking the constants key, and a target value
-# that `validate!` and a live switch judged differently.
 module BackendDeclaration
 end
 
@@ -45,10 +38,6 @@ RSpec.describe BackendDeclaration do
     end
   end
 
-  # Class-level instance variables are not inherited, so a subclass that only
-  # adds behaviour used to have a nil key, a nil context attribute and a nil
-  # constants key - a handler for no backend at all, whose `#connect` reset its
-  # parent's backend to the default without a word.
   describe 'a handler subclass that never declares a backend' do
     let(:undeclared) { Class.new(ConsoleKit::Connections::SqlConnectionHandler) }
     let(:context) do
@@ -78,11 +67,6 @@ RSpec.describe BackendDeclaration do
     end
   end
 
-  # `context_mapping` is a merged map keyed by context attribute, so a handler
-  # declaring another backend's context attribute used to silently repoint it:
-  # the context then held the shadow's constant while SQL connected to :shard,
-  # and the switch reported success. One attribute is one slot on the context
-  # object, so the second claim is refused where it is made.
   describe 'a handler that claims another backend context attribute' do
     def declare_shadow
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
@@ -100,9 +84,6 @@ RSpec.describe BackendDeclaration do
     end
   end
 
-  # The other half of the same ownership rule, which needs no collision to
-  # break: TenantPlan asks the handler for its own constants key rather than
-  # routing through a shared map that another handler could have edited.
   describe 'a handler that claims another backend constants key' do
     let(:shadow) do
       Class.new(ConsoleKit::Connections::BaseConnectionHandler) do
@@ -128,10 +109,6 @@ RSpec.describe BackendDeclaration do
     end
   end
 
-  # `target_error` exists so the validator and the switch cannot disagree. They
-  # disagreed anyway: the switch stripped a blank constant to nil before asking,
-  # so a configuration `validate!` refused outright was switched to happily -
-  # onto the default shard and the default Redis DB.
   describe 'a blank constants value' do
     include_context 'with a four-backend tenant setup'
 

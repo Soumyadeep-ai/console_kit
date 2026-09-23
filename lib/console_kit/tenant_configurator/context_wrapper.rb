@@ -2,13 +2,7 @@
 
 module ConsoleKit
   module TenantConfigurator
-    # Encapsulates the tenant context object and the attributes ConsoleKit owns on
-    # it. All context mutation goes through here so it can be snapshotted and put
-    # back verbatim when a tenant switch fails.
     class ContextWrapper
-      # Recorded when a context getter raises: writing nil over a value we could not
-      # read would silently destroy it, so the attribute is skipped on restore and
-      # reported as a rollback failure instead.
       UNREADABLE = :'#<console_kit unreadable>'
       UNREADABLE_MESSAGE = 'Previous value of %s could not be read, so it was left as the new tenant set it.'
 
@@ -55,8 +49,6 @@ module ConsoleKit
 
       def current_values = attributes.to_h { |attr| [attr, safe_read(attr)] }
 
-      # Verbatim write-back for rollback, so it must not warn or transform. Every
-      # attribute is attempted even when an earlier one raises.
       def restore(values)
         failures = values.filter_map { |attr, value| restore_attribute(attr, value) }
         raise_restore_failure(failures) if failures.any?
@@ -92,8 +84,6 @@ module ConsoleKit
                      'Those attributes are still set to the tenant the switch failed to reach.'
       end
 
-      # A tenant whose value differs from the context's only by case is almost
-      # always a configuration typo, not two distinct tenants.
       def warn_case_mismatch(attr, existing, configured)
         return unless existing.is_a?(String) && configured.is_a?(String) &&
                       existing != configured && existing.casecmp(configured).zero?

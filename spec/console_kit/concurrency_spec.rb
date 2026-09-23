@@ -2,16 +2,6 @@
 
 require 'spec_helper'
 
-# What "thread safe" actually means for ConsoleKit, proved rather than claimed.
-#
-# ConsoleKit invents no isolation of its own. It keeps its own bookkeeping per
-# thread and then writes through whatever handle the application's client
-# library hands it, so a backend is tenant-isolated exactly as far as that
-# library is. These examples prove both halves: the isolation that is real, and
-# the leakage that is real and documented.
-#
-# Every hand-off between threads is a Queue pop, never a sleep, and every thread
-# is joined inside the example that started it.
 module Concurrency
 end
 

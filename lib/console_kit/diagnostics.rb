@@ -6,14 +6,9 @@ require_relative 'instrumentation'
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
-  # On-demand connection diagnostics. A :basic row is resolved identity read out
-  # of memory; a :full row may hit the network. Both run in the calling thread,
-  # which is the only place a handler's backend scope exists.
   module Diagnostics
     LEVELS = %i[basic full].freeze
     DEFAULT_TIMEOUT = 2
-    # Deliberately equal to DEFAULT_TIMEOUT: a cached row is then never older than
-    # the budget a fresh check is given.
     CACHE_TTL_SECONDS = 2.0
     EVENT = 'console_kit.diagnostics'
     TIMEOUT_COUNTER = 'console_kit.diagnostics_timeout'
@@ -44,12 +39,6 @@ module ConsoleKit
       end
     end
 
-    # Short-lived, per-thread memo of :full rows; a :basic row is a local read
-    # already and is never cached. An entry survives only while its TTL holds, this
-    # thread is still on the very TenantState that produced it, and the backend
-    # still reports the identity it had when the row was written - Elasticsearch and
-    # Redis are PROCESS-global, so another thread can move one without touching this
-    # thread's TenantState.
     module Cache
       STORE_KEY = :console_kit_diagnostics_cache
       CACHED_LEVEL = :full
@@ -69,8 +58,6 @@ module ConsoleKit
 
         private
 
-        # A thread variable, not `Thread.current[]`: an entry is keyed on the
-        # thread's TenantState, so it has to be read back in that same scope.
         def store
           thread = Thread.current
           thread.thread_variable_get(STORE_KEY) || thread.thread_variable_set(STORE_KEY, {})
@@ -101,8 +88,6 @@ module ConsoleKit
         rescue StandardError => e
           raise e if ConsoleKit.programming_error?(e)
 
-          # Equal to nothing, including itself: an identity ConsoleKit could not
-          # read is not evidence that a row is still true.
           Object.new
         end
 
@@ -119,18 +104,6 @@ module ConsoleKit
       end
     end
 
-    # One handler's diagnostics, executed in the CALLER's thread.
-    #
-    # A handler reads its backend state from thread-local storage - the SQL shard
-    # frame, Mongoid's overrides, the scoped Redis client - so a check taken on a
-    # worker thread describes a tenant nobody asked about, over a connection the
-    # caller is not using. Nothing here can re-establish the caller's scope
-    # elsewhere: only a handler knows what its scope is, and a process-global
-    # backend cannot be re-pointed for one thread at all.
-    #
-    # `timeout` is therefore a budget that is REPORTED when a check overruns it,
-    # not a bound that cuts one short: a slow backend blocks its caller until its
-    # own driver gives up, and Interrupt still reaches that caller.
     module Runner
       class << self
         def call(handler, timeout: DEFAULT_TIMEOUT, level: :basic)
@@ -141,8 +114,6 @@ module ConsoleKit
           resolve(handler, outcome)
         end
 
-        # Never hands a backend's own failure to its caller: a diagnostics row is
-        # not worth taking a console down for.
         def execute(handler, level)
           Instrumentation.instrument(EVENT, backend: handler.backend_key, level: level) do
             handler.diagnostics(level: level)
@@ -155,8 +126,6 @@ module ConsoleKit
 
         def resolve(handler, outcome) = outcome.is_a?(Hash) ? outcome : failed_row(handler, outcome)
 
-        # An operator watching `diagnostics_timeout` still sees a backend that is
-        # too slow to render; it is the report that survived, not the cut-off.
         def report_overrun(started, timeout)
           return if Connections::DiagnosticHelpers.clock_time - started <= timeout
 

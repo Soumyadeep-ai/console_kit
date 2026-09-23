@@ -3,7 +3,6 @@
 require_relative 'output'
 
 module ConsoleKit
-  # For tenant selection
   module TenantSelector
     RETRY_LIMIT = 3
     DEFAULT_SELECTION = '1'

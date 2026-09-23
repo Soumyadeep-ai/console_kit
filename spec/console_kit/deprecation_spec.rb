@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# The 1.4.0 API that 1.5.0 keeps as delegators until 2.0.
 RSpec.describe ConsoleKit::Deprecation do
   let(:setup) { ConsoleKit::Setup }
   let(:context_class) { Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end } }
