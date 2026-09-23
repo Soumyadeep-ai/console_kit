@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'shellwords'
+require 'open3'
 
 # The suite loads Rails (through generator_spec), which pulls in the whole of
 # ActiveSupport and hides every core extension the gem uses but never requires.
@@ -14,9 +14,10 @@ end
 RSpec.describe StandaloneLoad do
   let(:lib_path) { File.expand_path('../../lib', __dir__) }
 
+  # Stdout only: a dependency's deprecation warnings go to stderr and are not the
+  # gem failing to load. A real load failure still leaves stdout empty.
   def standalone(expression)
-    script = "require 'console_kit'; print(#{expression})"
-    `ruby -I#{lib_path.shellescape} -e #{script.shellescape} 2>&1`
+    Open3.capture3('ruby', "-I#{lib_path}", '-e', "require 'console_kit'; print(#{expression})").first
   end
 
   it 'loads without error' do
