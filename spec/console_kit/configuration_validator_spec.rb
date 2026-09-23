@@ -202,10 +202,18 @@ RSpec.describe ConsoleKit::ConfigurationValidator do
       expect(ConsoleKit::Output).to have_received(:print_warning).with(/no writer for:.*partner_identifier/)
     end
 
-    it 'warns about unrecognised top-level tenant keys' do
+    it 'ignores unrecognised top-level tenant keys the host app carries' do
       config.tenants = { acme: { constants: valid_constants, label: 'Acme Inc' } }
       validate!
-      expect(ConsoleKit::Output).to have_received(:print_warning).with(/top-level has unrecognised keys: :label/)
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/unrecognised keys: :label/)
+    end
+
+    it 'does not warn about writers for backends no tenant names' do
+      stub_const('ShardOnlyContext', Class.new { class << self; attr_accessor :partner_identifier, :tenant_shard; end })
+      config.tenants = { acme: { constants: { partner_code: 'acme', shard: :acme } } }
+      config.context_class = 'ShardOnlyContext'
+      validate!
+      expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/no writer for/)
     end
 
     # The generator template documents it, SetupUI reads it to decide whether to

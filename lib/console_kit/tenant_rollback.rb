@@ -20,10 +20,7 @@ module ConsoleKit
       # that was available at switch time may be gone now, and re-detecting the
       # attributes would leave its slot on the inner tenant.
       def unwind(state, previous)
-        ctx = state.context_object || ConsoleKit.configuration.context_class
-        wrapper = TenantConfigurator::ContextWrapper.new(ctx, state.undo_context.keys)
-        live, missing = resolve_handlers(state, ctx)
-        failures = new(state.undo, wrapper).call(live, missing)
+        failures = restore(state, state.context_object || ConsoleKit.configuration.context_class)
         StateStore.current = previous
         raise RollbackError, failures unless failures.empty?
 
@@ -32,13 +29,19 @@ module ConsoleKit
 
       private
 
+      def restore(state, ctx)
+        wrapper = TenantConfigurator::ContextWrapper.new(ctx, state.undo_context.keys)
+        live, missing = resolve_handlers(state, ctx)
+        new(state.undo, wrapper).call(live, missing)
+      end
+
       # The snapshot, not live availability, is the authority on what has to be put
       # back: a backend whose handler has disappeared is still on the inner tenant.
       def resolve_handlers(state, ctx)
         live = Connections::ConnectionManager.available_handlers(ctx)
                                              .to_h { |handler| [handler.backend_key, handler] }
         present, missing = state.undo_backends.keys.partition { |key| live.key?(key) }
-        [present.map { |key| live[key] }, missing]
+        [live.values_at(*present), missing]
       end
     end
 
@@ -61,20 +64,15 @@ module ConsoleKit
     attr_reader :undo, :context_wrapper
 
     def abandoned(keys)
-      keys.map do |key|
-        Instrumentation.increment('console_kit.rollback_failure')
-        { backend: key, error: UnsupportedBackendError.new("ConsoleKit: #{key} - #{MISSING_HANDLER}.") }
-      end
+      keys.map { |key| failure(key, UnsupportedBackendError.new("ConsoleKit: #{key} - #{MISSING_HANDLER}.")) }
     end
 
     def restore_backends(handlers)
-      snapshots = undo[:backends]
       handlers.reverse.filter_map do |handler|
-        handler.restore(snapshots[handler.backend_key])
+        handler.restore(undo[:backends][handler.backend_key])
         nil
       rescue StandardError, NotImplementedError => e
-        Instrumentation.increment('console_kit.rollback_failure')
-        { backend: handler.display_name, error: e }
+        failure(handler.display_name, e)
       end
     end
 
@@ -82,8 +80,12 @@ module ConsoleKit
       context_wrapper.restore(undo[:context])
       []
     rescue StandardError, NotImplementedError => e
+      [failure('context', e)]
+    end
+
+    def failure(backend, error)
       Instrumentation.increment('console_kit.rollback_failure')
-      [{ backend: 'context', error: e }]
+      { backend: backend, error: error }
     end
   end
 end

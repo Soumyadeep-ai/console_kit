@@ -39,7 +39,7 @@ module ConsoleKit
       private
 
       def tenant_label
-        tenant = ConsoleKit::Setup.current_tenant
+        tenant = ConsoleKit::StateStore.tenant_key
         tenant ? "[#{tenant}]" : '[no-tenant]'
       end
 
@@ -75,13 +75,13 @@ module ConsoleKit
       def decorate(source)
         label = tenant_label
         source.merge(
-          PROMPT_I: prefixed(label, source[:PROMPT_I], FALLBACK_IRB_PROMPT[:PROMPT_I]),
-          PROMPT_S: prefixed(label, source[:PROMPT_S], FALLBACK_IRB_PROMPT[:PROMPT_S]),
-          PROMPT_C: prefixed(label, source[:PROMPT_C], FALLBACK_IRB_PROMPT[:PROMPT_C])
+          PROMPT_I: prefixed(label, source[:PROMPT_I] || FALLBACK_IRB_PROMPT[:PROMPT_I]),
+          PROMPT_S: prefixed(label, source[:PROMPT_S] || FALLBACK_IRB_PROMPT[:PROMPT_S]),
+          PROMPT_C: prefixed(label, source[:PROMPT_C] || FALLBACK_IRB_PROMPT[:PROMPT_C])
         )
       end
 
-      def prefixed(label, value, fallback) = "#{label} #{value || fallback}"
+      def prefixed(label, value) = "#{label} #{value}"
 
       def apply_pry_prompt
         procs = pry_prompt_procs(tenant_label)
@@ -90,8 +90,8 @@ module ConsoleKit
 
       def pry_prompt_procs(label)
         [
-          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}> " },
-          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}* " }
+          proc { |obj, nest, _opts| "#{label} (#{obj}):#{nest}> " },
+          proc { |obj, nest, _opts| "#{label} (#{obj}):#{nest}* " }
         ]
       end
 

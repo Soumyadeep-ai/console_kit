@@ -34,7 +34,8 @@ module ConsoleKit
           return if silent
 
           formatted = (type == :header ? "\n--- #{text} ---" : text)
-          print_with(type, formatted, timestamp: timestamp, newline: newline)
+          message = build_formatted_message(type, formatted, timestamp)
+          newline ? puts(message) : print(message)
         end
       end
 
@@ -54,19 +55,10 @@ module ConsoleKit
       def print_backtrace(exception)
         return if silent
 
-        exception&.backtrace&.each do |line|
-          print_with(:trace, "    #{line}", timestamp: true)
-        end
+        exception&.backtrace&.each { |line| print_trace("    #{line}", timestamp: true) }
       end
 
       private
-
-      def print_with(type, text, options = {})
-        opts = options.is_a?(Hash) ? options : { timestamp: options }
-        message = build_formatted_message(type, text, opts[:timestamp])
-
-        opts.fetch(:newline, true) ? puts(message) : print(message)
-      end
 
       def build_formatted_message(type, text, timestamp)
         meta = TYPES.fetch(type)

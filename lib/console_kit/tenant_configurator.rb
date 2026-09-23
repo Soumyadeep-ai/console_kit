@@ -36,10 +36,7 @@ module ConsoleKit
       end
 
       def configure_tenant(key)
-        return true if key == current_tenant_key && configuration_success
-
-        TenantSwitch.call(key)
-        Output.print_success("Tenant set to: #{key}")
+        switch_unless_current(key)
         true
       rescue StandardError, NotImplementedError => e
         report_failure(e, key)
@@ -57,6 +54,14 @@ module ConsoleKit
 
       def backend_context_mapping
         Connections::BaseConnectionHandler.registry.to_h { |handler| [handler.context_attribute, handler.constants_key] }
+      end
+
+      # Re-declaring the tenant that is already fully configured is a no-op, not a
+      # reason to tear every backend down and put it back.
+      def switch_unless_current(key)
+        return if key == current_tenant_key && configuration_success
+
+        TenantSwitch.call(key)
       end
 
       def perform_clear(ctx, wrapper)

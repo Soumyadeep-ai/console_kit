@@ -275,9 +275,9 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
     end
   end
 
-  describe '#connect' do
+  describe '#connect! with the context target' do
     it 'applies the shard resolved from the context' do
-      handler.connect
+      handler.connect!(handler.target)
       expect(base_class.current_shard).to eq(:shard_one)
     end
 
@@ -285,7 +285,7 @@ RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
       let(:shard) { nil }
 
       it 'leaves the connection on the default configuration' do
-        handler.connect
+        handler.connect!(handler.target)
         expect(base_class.connection_pool.db_config.name).to eq('primary')
       end
     end

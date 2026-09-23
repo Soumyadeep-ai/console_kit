@@ -13,7 +13,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
   before do
     allow(config).to receive_messages(tenants: tenants, context_class: Object, validate!: true)
-    ConsoleKit::Setup.current_tenant = nil
+    described_class.current_tenant = nil
   end
 
   describe '.run' do
@@ -38,11 +38,11 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.run
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      expect(described_class.current_tenant).to eq('acme')
     end
 
     it 'does nothing if already configured' do
-      ConsoleKit::Setup.current_tenant = 'acme'
+      described_class.current_tenant = 'acme'
 
       described_class.run
 
@@ -52,7 +52,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
   describe '.reset' do
     before do
-      ConsoleKit::Setup.current_tenant = 'acme'
+      described_class.current_tenant = 'acme'
       allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
       allow(ConsoleKit::TenantConfigurator).to receive(:clear)
       allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
@@ -84,7 +84,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.reset
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+      expect(described_class.current_tenant).to eq('globex')
     end
 
     it 'aborts if selection returns :abort' do
@@ -100,12 +100,12 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.reset
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      expect(described_class.current_tenant).to eq('acme')
     end
 
     context 'when no tenant was configured before the switch' do
       before do
-        ConsoleKit::Setup.current_tenant = nil
+        described_class.current_tenant = nil
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
       end
 
@@ -127,7 +127,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
   # rather than going through TenantConfigurator.configure_tenant.
   describe '.reapply' do
     it 're-applies the current tenant via TenantSwitch' do
-      ConsoleKit::Setup.current_tenant = 'acme'
+      described_class.current_tenant = 'acme'
       allow(ConsoleKit::TenantSwitch).to receive(:call)
 
       described_class.reapply

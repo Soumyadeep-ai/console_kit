@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'active_support/core_ext/string/filters'
 require_relative 'diagnostic_helpers'
 require_relative '../errors'
 require_relative '../output'
@@ -28,8 +27,7 @@ module ConsoleKit
           key = handler_class.backend_key
           reject_duplicate_attribute(handler_class, key)
           drop_other_keys(handler_class, key)
-          previous = entries[key]
-          report_collision(previous, handler_class) if previous
+          report_collision(entries[key], handler_class)
           entries[key] = handler_class
         end
 
@@ -55,22 +53,26 @@ module ConsoleKit
         # generation re-declaring the same backend is not a duplicate.
         def reject_duplicate_attribute(handler_class, key)
           attribute = handler_class.context_attribute
-          previous = entries.find { |other, klass| other != key && klass.context_attribute == attribute }
-          return if previous.nil? || same_declaration?(previous.last, handler_class)
+          previous_key, previous_class =
+            entries.find { |other, klass| other != key && klass.context_attribute == attribute }
+          return if !previous_class || same_declaration?(previous_class, handler_class)
 
-          raise ConfigurationError, format(DUPLICATE_ATTRIBUTE, current: handler_class, previous: previous.last,
-                                                                attribute: attribute, key: previous.first)
+          raise ConfigurationError, format(DUPLICATE_ATTRIBUTE, current: handler_class, previous: previous_class,
+                                                                attribute: attribute, key: previous_key)
         end
 
         def same_declaration?(previous, current)
-          previous.equal?(current) || (!previous.name.nil? && previous.name == current.name)
+          previous_name = previous.name
+          previous.equal?(current) || (previous_name && previous_name == current.name)
         end
 
         # A second class under the SAME name is an expected reload generation;
         # two differently named classes claiming one key is a host bug. Anonymous
         # classes carry no name to compare.
         def report_collision(previous, current)
-          return if previous.name.nil? || current.name.nil? || previous.name == current.name
+          previous_name = previous&.name
+          current_name = current.name
+          return unless previous_name && current_name && previous_name != current_name
 
           Instrumentation.increment('console_kit.handler_collision')
           Output.print_warning(format(COLLISION_WARNING, previous: previous, current: current,
@@ -89,20 +91,20 @@ module ConsoleKit
         # Class-level instance variables are NOT inherited: without the fallback
         # a subclass that adds behaviour without re-declaring `backend` would be
         # a handler for no backend at all.
-        def backend_key = @backend_key || superclass.try(:backend_key)
-        def display_name = @display_name || superclass.try(:display_name)
-        def context_attribute = @context_attribute || superclass.try(:context_attribute)
-        def constants_key = @constants_key || superclass.try(:constants_key)
-        def detail_label = @detail_label || superclass.try(:detail_label)
+        def backend_key = declaration[:backend_key] || superclass.try(:backend_key)
+        def display_name = declaration[:display_name] || superclass.try(:display_name)
+        def context_attribute = declaration[:context_attribute] || superclass.try(:context_attribute)
+        def constants_key = declaration[:constants_key] || superclass.try(:constants_key)
+        def detail_label = declaration[:detail_label] || superclass.try(:detail_label)
 
         def backend(key, display_name:, context_attribute:, constants_key:, detail_label:)
-          @backend_key = key
-          @display_name = display_name
-          @context_attribute = context_attribute
-          @constants_key = constants_key
-          @detail_label = detail_label
+          @declaration = { backend_key: key, display_name: display_name, context_attribute: context_attribute,
+                           constants_key: constants_key, detail_label: detail_label }
           HandlerRegistry.add(self)
         end
+
+        # What `backend` declared on THIS class, empty until it declares any.
+        def declaration = @declaration ||= {}
 
         def registry = HandlerRegistry.all
         def unregister(handler_class) = HandlerRegistry.remove(handler_class)
@@ -147,8 +149,18 @@ module ConsoleKit
       # ConnectionVerificationError on mismatch.
       def verify!(_target) = nil
 
-      def connect = connect!(target)
-      def diagnostics(level: :basic) = raise NotImplementedError, "#{self.class} must implement #diagnostics"
+      # One shape for every backend: an unavailable backend is a row rather than
+      # an error, a real fault becomes an error row, and a ConsoleKit bug is
+      # re-raised so it reaches the operator as the bug it is.
+      def diagnostics(level: :basic)
+        return unavailable_diagnostics unless available?
+
+        diagnostics_at(level)
+      rescue StandardError => e
+        raise e if ConsoleKit.programming_error?(e)
+
+        error_diagnostics(display_name, e)
+      end
 
       # What a cached diagnostic row stays true for, read out of memory rather
       # than over the wire. nil means "nothing outside this thread can move this
@@ -159,22 +171,31 @@ module ConsoleKit
         Diagnostics::Runner.call(self, timeout: timeout, level: level)
       end
 
-      def verification_error(expected, actual, message = nil)
+      def verification_error(expected, actual)
         ConnectionVerificationError.new(
-          message, backend: display_name, tenant: nil, expected: expected, actual: actual
+          nil, backend: display_name, tenant: nil, expected: expected, actual: actual
         )
       end
 
       private
 
+      # NotImplementedError is not a StandardError, so #diagnostics' rescue lets
+      # these through: a handler that implements no level is broken, not broken-
+      # down, and the manager records it as a dropped backend.
+      def diagnostics_at(level) = level == :full ? full_diagnostics : basic_diagnostics
+
+      def basic_diagnostics = raise NotImplementedError, "#{self.class} must implement #basic_diagnostics"
+      def full_diagnostics = raise NotImplementedError, "#{self.class} must implement #full_diagnostics"
+
       # The rejected value is scrubbed: a tenant constant can carry a whole
       # connection URI, and this message may be forwarded to a log.
       def validate_target!(target)
-        reason = self.class.target_error(target)
-        return if reason.nil?
+        handler_class = self.class
+        reason = handler_class.target_error(target)
+        return unless reason
 
         raise ConfigurationError,
-              "ConsoleKit: #{self.class.constants_key} #{scrub(target.inspect)} is invalid: #{reason}."
+              "ConsoleKit: #{handler_class.constants_key} #{scrub(target.inspect)} is invalid: #{reason}."
       end
 
       def measure_latency
@@ -185,8 +206,8 @@ module ConsoleKit
 
       def context_attribute(name) = @context.try(name)
 
-      def unavailable_diagnostics(name = display_name)
-        { name: name, status: :unavailable, latency_ms: nil, details: {} }
+      def unavailable_diagnostics
+        { name: display_name, status: :unavailable, latency_ms: nil, details: {} }
       end
     end
   end

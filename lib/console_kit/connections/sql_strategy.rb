@@ -76,9 +76,10 @@ module ConsoleKit
       def index_in
         current = stack
         entry = owned
-        return nil if entry.nil? || current.nil? || !current[entry[:index]].equal?(entry[:frame])
+        return nil unless entry && current
 
-        entry[:index]
+        index = entry[:index]
+        index if current[index].equal?(entry[:frame])
       end
 
       # One slot serves the whole thread, so a record left by another base class
@@ -144,10 +145,6 @@ module ConsoleKit
     class SqlStrategy
       NATIVE_METHODS = %i[connecting_to connected_to_stack default_shard current_shard current_role].freeze
 
-      class << self
-        def programming_error?(error) = ConsoleKit.programming_error?(error)
-      end
-
       attr_reader :base_class
 
       def initialize(base_class) = @base_class = base_class
@@ -166,7 +163,7 @@ module ConsoleKit
       # An unreadable `configurations` is not evidence of a bad shard, so an
       # empty list resolves rather than rejects.
       def resolvable?(shard)
-        return true if shard.nil? || native?(shard)
+        return true if !shard || native?(shard)
 
         configs = env_configs
         configs.empty? || configs.any? { |cfg| config_name(cfg).to_s == shard.to_s }
@@ -185,14 +182,14 @@ module ConsoleKit
           role: base_class.try(:current_role),
           stack_depth: connected_to_stack&.size,
           db_config_name: name,
-          pool_absent: name.nil? && pool.absent?
+          pool_absent: !name && pool.absent?
         }
       end
 
       def apply(shard) = native?(shard) ? apply_native(shard) : apply_fallback(shard)
 
       def restore(state)
-        return if state.nil?
+        return unless state
 
         unwind_stack(state[:stack_depth])
         restore_shard(state[:shard])
@@ -210,18 +207,21 @@ module ConsoleKit
 
       # Network-free description of the resolved connection.
       def pool_details
-        pool = base_class.try(:connection_pool)
-        return {} if pool.nil?
-
-        { adapter: pool.try(:db_config).try(:adapter), pool_size: pool.try(:size),
-          config: current_db_config_name, shard: base_class.try(:current_shard) }.compact
+        describe_pool(base_class.try(:connection_pool))
       rescue StandardError => e
-        raise e if self.class.programming_error?(e)
+        raise e if ConsoleKit.programming_error?(e)
 
         {}
       end
 
       private
+
+      def describe_pool(live_pool)
+        return {} unless live_pool
+
+        { adapter: live_pool.try(:db_config).try(:adapter), pool_size: live_pool.try(:size),
+          config: current_db_config_name, shard: base_class.try(:current_shard) }.compact
+      end
 
       def native_capable? = NATIVE_METHODS.all? { |method| base_class.respond_to?(method) }
       def connected_to_stack = base_class.try(:connected_to_stack)
@@ -236,7 +236,7 @@ module ConsoleKit
       # a host frame above ours can answer with the shard we want while ours
       # still holds the one being undone.
       def restore_shard(shard)
-        return if shard.nil? || !native_capable? || (frame.applied_shard || base_class.current_shard) == shard
+        return if !shard || !native_capable? || (frame.applied_shard || base_class.current_shard) == shard
 
         apply_native(shard)
       end
@@ -252,14 +252,14 @@ module ConsoleKit
       # read think a host block had taken it, and put it back.
       def unwind_stack(depth)
         stack = connected_to_stack
-        return if stack.nil? || depth.nil?
+        return unless stack && depth
 
         stack.pop while stack.size > depth
         frame.forget_unless_on
       end
 
       def reestablish(name)
-        return if name.nil? || name.to_s == current_db_config_name.to_s
+        return if !name || name.to_s == current_db_config_name.to_s
 
         base_class.establish_connection(name.to_sym)
       end
@@ -267,7 +267,7 @@ module ConsoleKit
       def shard_pool(shard)
         handler = base_class.try(:connection_handler)
         spec_name = base_class.try(:connection_specification_name)
-        return nil if spec_name.nil? || !handler.respond_to?(:retrieve_connection_pool)
+        return nil unless spec_name && handler.respond_to?(:retrieve_connection_pool)
 
         handler.retrieve_connection_pool(spec_name, role: base_class.current_role, shard: shard.to_sym)
       end
@@ -277,7 +277,7 @@ module ConsoleKit
       def env_configs
         configs = base_class.try(:configurations)
         env = current_db_config.try(:env_name)
-        return [] if env.nil? || !configs.respond_to?(:configs_for)
+        return [] unless env && configs.respond_to?(:configs_for)
 
         configs.configs_for(env_name: env)
       end
@@ -287,19 +287,14 @@ module ConsoleKit
       def current_db_config
         base_class.try(:connection_pool).try(:db_config)
       rescue StandardError => e
-        raise e if self.class.programming_error?(e)
+        raise e if ConsoleKit.programming_error?(e)
 
         nil
       end
 
       def current_db_config_name = config_name(current_db_config)
 
-      # Rails 6.1 renamed DatabaseConfig#spec_name to #name; support both.
-      def config_name(config)
-        return nil if config.nil?
-
-        config.respond_to?(:name) ? config.name : config.try(:spec_name)
-      end
+      def config_name(config) = config&.name
     end
   end
 end

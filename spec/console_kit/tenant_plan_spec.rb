@@ -22,6 +22,23 @@ RSpec.describe ConsoleKit::TenantPlan do
     end
   end
 
+  describe 'a tenant key that is not configured' do
+    def error_for(tenants)
+      ConsoleKit.configuration.tenants = tenants
+      described_class.new('acme').constants
+    rescue ConsoleKit::TenantNotFoundError => e
+      e
+    end
+
+    it 'lists the configured tenant keys, so a typo is visible' do
+      expect(error_for('acmee' => {}, globex: {}).message).to end_with('Configured tenants: "acmee", :globex.')
+    end
+
+    it 'says so when no tenants are configured at all' do
+      expect(error_for({}).message).to end_with('No tenants are configured.')
+    end
+  end
+
   describe 'a tenant entry that is not a Hash' do
     before { ConsoleKit.configuration.tenants = { 'acme' => 'shard_acme' } }
 

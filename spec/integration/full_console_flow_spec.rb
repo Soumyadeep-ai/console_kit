@@ -40,7 +40,7 @@ RSpec.describe FullConsoleFlow do
     end
 
     # Reset thread local state
-    ConsoleKit::Setup.current_tenant = nil
+    ConsoleKit::TenantOrchestrator.current_tenant = nil
     Thread.current[:console_kit_elasticsearch_prefix] = nil
 
     # No backend is stubbed here on purpose. Since 1.5.0 every switch verifies
@@ -54,10 +54,10 @@ RSpec.describe FullConsoleFlow do
   end
 
   describe 'Setup' do
-    before { ConsoleKit::Setup.setup }
+    before { ConsoleKit::TenantOrchestrator.run }
 
     it 'sets current_tenant to acme' do
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      expect(ConsoleKit::TenantOrchestrator.current_tenant).to eq('acme')
     end
 
     it 'sets partner_identifier' do
@@ -71,13 +71,13 @@ RSpec.describe FullConsoleFlow do
 
   describe 'Switching' do
     before do
-      ConsoleKit::Setup.setup
+      ConsoleKit::TenantOrchestrator.run
       allow($stdin).to receive(:gets).and_return('2')
-      ConsoleKit::Setup.reset_current_tenant
+      ConsoleKit::TenantOrchestrator.reset
     end
 
     it 'sets current_tenant to globex' do
-      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+      expect(ConsoleKit::TenantOrchestrator.current_tenant).to eq('globex')
     end
 
     it 'sets partner_identifier' do
@@ -91,7 +91,7 @@ RSpec.describe FullConsoleFlow do
     context 'when switching to the same tenant again' do
       let(:idempotent_output) do
         allow($stdin).to receive(:gets).and_return('2') # select globex again
-        capture_all_output { ConsoleKit::Setup.reset_current_tenant }
+        capture_all_output { ConsoleKit::TenantOrchestrator.reset }
       end
 
       it 'prints an already-using message' do
@@ -100,7 +100,7 @@ RSpec.describe FullConsoleFlow do
 
       it 'keeps current_tenant as globex' do
         idempotent_output
-        expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+        expect(ConsoleKit::TenantOrchestrator.current_tenant).to eq('globex')
       end
     end
   end
@@ -113,26 +113,26 @@ RSpec.describe FullConsoleFlow do
   describe 'Edge cases' do
     it 'handles "none" selection by setting current_tenant to nil' do
       allow($stdin).to receive(:gets).and_return('0')
-      ConsoleKit::Setup.setup
-      expect(ConsoleKit::Setup.current_tenant).to be_nil
+      ConsoleKit::TenantOrchestrator.run
+      expect(ConsoleKit::TenantOrchestrator.current_tenant).to be_nil
     end
 
     it 'handles "none" selection by printing a message' do
       allow($stdin).to receive(:gets).and_return('0')
-      output = capture_all_output { ConsoleKit::Setup.setup }
+      output = capture_all_output { ConsoleKit::TenantOrchestrator.run }
       expect(output).to include('No tenant selected')
     end
 
     it 'handles "none" selection by not setting context' do
       allow($stdin).to receive(:gets).and_return('0')
-      ConsoleKit::Setup.setup
+      ConsoleKit::TenantOrchestrator.run
       expect(context_class.partner_identifier).to be_nil
     end
 
     it 'handles abort/exit correctly' do
       allow($stdin).to receive(:gets).and_return('exit')
       allow(Kernel).to receive(:exit)
-      ConsoleKit::Setup.setup
+      ConsoleKit::TenantOrchestrator.run
       expect(Kernel).to have_received(:exit)
     end
 
@@ -140,12 +140,12 @@ RSpec.describe FullConsoleFlow do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
       # Setup will retry or fail if select returns nil
       # We need to ensure it doesn't crash
-      expect { ConsoleKit::Setup.setup }.not_to raise_error
+      expect { ConsoleKit::TenantOrchestrator.run }.not_to raise_error
     end
 
     it 'logs error if configuration is invalid during setup' do
       ConsoleKit.configuration.tenants = nil
-      output = capture_all_output { ConsoleKit::Setup.setup }
+      output = capture_all_output { ConsoleKit::TenantOrchestrator.run }
       expect(output).to include('Error setting up tenant').and include('tenants` is not configured')
     end
   end

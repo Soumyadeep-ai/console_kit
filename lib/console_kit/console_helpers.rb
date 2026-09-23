@@ -9,10 +9,11 @@ module ConsoleKit
     end
 
     def tenant_info
-      tenant = ConsoleKit::Setup.current_tenant
-      return no_tenant_warning unless tenant
+      tenant = ConsoleKit::StateStore.tenant_key
+      return ConsoleKit::Output.print_warning('No tenant is currently configured.') unless tenant
 
-      display_tenant_info(tenant)
+      constants = ConsoleKit.configuration.tenants[tenant]&.[](:constants) || {}
+      ConsoleHelpers.print_tenant_details(tenant, constants)
       nil
     end
 
@@ -23,26 +24,8 @@ module ConsoleKit
 
     def tenants
       names = ConsoleKit.configuration.tenants&.keys || []
-      print_available_tenants(names)
-      names
-    end
-
-    private
-
-    def no_tenant_warning
-      ConsoleKit::Output.print_warning('No tenant is currently configured.')
-      self
-    end
-
-    def display_tenant_info(tenant)
-      constants = ConsoleKit.configuration.tenants[tenant]&.[](:constants) || {}
-      ConsoleHelpers.print_tenant_details(tenant, constants)
-      self
-    end
-
-    def print_available_tenants(names)
       ConsoleKit::Output.print_list(names, header: 'Available Tenants')
-      self
+      names
     end
 
     class << self

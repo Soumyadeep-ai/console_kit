@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'base_connection_handler'
+require_relative 'mongoid_support'
 
 module ConsoleKit
   module Connections
-    # Handles MongoDB connections
+    # Handles MongoDB connections. Every call into Mongoid's global API is made
+    # through MongoidSupport, which feature-detects the override slots this
+    # Mongoid version actually has.
     class MongoConnectionHandler < BaseConnectionHandler
       UNSUPPORTED_OVERRIDE = 'Mongoid.%<setter>s, which this target needs, is not available in this Mongoid version.'
       UNVERIFIABLE = 'state cannot be read back in this Mongoid version, so a switch could not be verified or ' \
@@ -20,94 +23,48 @@ module ConsoleKit
         def target_error(value) = identifier_error(value)
       end
 
-      def available? = !!defined?(Mongoid)
+      def available? = mongoid.available?
 
       def prepare(target)
         validate_target!(target)
-        setter = setter_for(target)
-        raise UnsupportedBackendError, unsupported_message(setter) unless Mongoid.respond_to?(setter)
-        raise UnsupportedBackendError, "#{display_name} #{UNVERIFIABLE}" unless readable?
+        setter = mongoid.setter_for(target)
+        raise UnsupportedBackendError, unsupported_message(setter) unless mongoid.settable?(setter)
+        raise UnsupportedBackendError, "#{display_name} #{UNVERIFIABLE}" unless mongoid.readable?
       end
 
-      def snapshot
-        { client: current_client_override, database: current_database_override }
-      end
+      def snapshot = mongoid.overrides
 
-      def connect!(target)
-        if target.nil?
-          reset_overrides
-        elsif named_client?(target)
-          Mongoid.override_client(target)
-        else
-          Mongoid.override_database(target)
-        end
-      end
+      def connect!(target) = mongoid.override(target)
 
       def verify!(target)
         if target.nil?
           verify_reset!
-        elsif named_client?(target)
-          verify_match!(target, effective_client_name)
+        elsif mongoid.named_client?(target)
+          verify_match!(target, mongoid.client_override)
         else
-          verify_match!(target, effective_database_name)
+          verify_match!(target, mongoid.database_name)
         end
       end
 
-      def restore(state)
-        Mongoid.override_client(state[:client]) if Mongoid.respond_to?(:override_client)
-        Mongoid.override_database(state[:database])
-      end
-
-      def diagnostics(level: :basic)
-        return unavailable_diagnostics unless available?
-
-        level == :full ? full_diagnostics : basic_diagnostics
-      rescue StandardError => e
-        raise e if ConsoleKit.programming_error?(e)
-
-        error_diagnostics(display_name, e)
-      end
+      def restore(state) = mongoid.restore(state)
 
       private
 
+      def mongoid = MongoidSupport
+
       def basic_diagnostics
-        { name: display_name, status: :connected, latency_ms: nil, details: { database: effective_database_name } }
+        { name: display_name, status: :connected, latency_ms: nil, details: { database: mongoid.database_name } }
       end
 
       def full_diagnostics
-        db = Mongoid.default_client.database
-        latency = measure_latency { db.command(ping: 1) }
-        info = db.command(buildInfo: 1).first
+        latency = measure_latency { mongoid.ping }
         {
           name: display_name, status: :connected, latency_ms: latency,
-          details: { database: db.name, version: info['version'] }
+          details: { database: mongoid.database_name, version: mongoid.server_version }
         }
       end
 
-      # #connect! sends a configured client name to override_client and every
-      # other target, a reset included, to override_database, so the setter the
-      # target will actually reach is the one that has to exist.
-      def setter_for(target) = named_client?(target) ? :override_client : :override_database
-
       def unsupported_message(setter) = "#{display_name} #{format(UNSUPPORTED_OVERRIDE, setter: setter)}"
-
-      # A switch that cannot be read back cannot be snapshotted either, so
-      # #prepare refuses one rather than failing at verify with the override
-      # applied and an empty snapshot that would clear it instead of restoring.
-      # A rollback writes both overrides, so both have to be readable - the
-      # client one only where this Mongoid can set a client override at all.
-      def readable?
-        return false unless Mongoid.respond_to?(:default_client) && threaded_readable?(:database_override)
-
-        !Mongoid.respond_to?(:override_client) || threaded_readable?(:client_override)
-      end
-
-      def threaded_readable?(reader)
-        defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(reader)
-      end
-
-      def effective_client_name = Mongoid.default_client.name
-      def effective_database_name = Mongoid.default_client.database.name
 
       def verify_match!(target, actual)
         return if actual.to_s == target.to_s
@@ -116,32 +73,10 @@ module ConsoleKit
       end
 
       def verify_reset!
-        return if current_client_override.nil? && current_database_override.nil?
+        overrides = mongoid.overrides
+        return if overrides.values.none?
 
-        raise verification_error(nil, { client: current_client_override, database: current_database_override })
-      end
-
-      def reset_overrides
-        Mongoid.override_client(nil) if Mongoid.respond_to?(:override_client)
-        Mongoid.override_database(nil)
-      end
-
-      def named_client?(name)
-        return false unless defined?(Mongoid::Config) && Mongoid::Config.respond_to?(:clients)
-
-        Mongoid::Config.clients.key?(name.to_s)
-      end
-
-      def current_client_override
-        return nil unless defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:client_override)
-
-        Mongoid::Threaded.client_override
-      end
-
-      def current_database_override
-        return nil unless defined?(Mongoid::Threaded) && Mongoid::Threaded.respond_to?(:database_override)
-
-        Mongoid::Threaded.database_override
+        raise verification_error(nil, overrides)
       end
     end
   end

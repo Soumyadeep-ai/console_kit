@@ -5,6 +5,99 @@ require_relative 'output'
 require_relative 'connections/diagnostic_helpers'
 
 module ConsoleKit
+  # One tenant as it was configured: its identifier and the entry declared under
+  # it. Every per-tenant check needs both halves - the key only to name the tenant
+  # it is complaining about - so the checks are this pair's own behaviour, and
+  # ConfigurationValidator just collects what they found.
+  class TenantEntry
+    # Constants keys ConsoleKit reads without routing them through a backend
+    # handler, so `context_mapping` does not know about them.
+    EXTRA_CONSTANTS_KEYS = [:environment].freeze
+
+    attr_reader :key, :errors, :warnings
+
+    def initialize(key, entry)
+      @key = key
+      @entry = entry
+      @errors = []
+      @warnings = []
+    end
+
+    # The declared constants Hash, or nil when this tenant does not have a usable
+    # one - the checks across tenants can only speak for the tenants that do.
+    def constants
+      constants = @entry[:constants] if @entry.is_a?(Hash)
+      constants if constants.is_a?(Hash)
+    end
+
+    def validate
+      check_identifier
+      return @errors << "ConsoleKit: tenant #{@key.inspect} configuration must be a Hash, got #{@entry.class}." \
+        unless @entry.is_a?(Hash)
+
+      validate_constants
+    end
+
+    private
+
+    def validate_constants
+      declared = @entry[:constants]
+      tenant = @key.inspect
+      return @errors << "ConsoleKit: tenant #{tenant} is missing a `:constants` Hash." if declared.nil?
+      unless declared.is_a?(Hash)
+        return @errors << "ConsoleKit: tenant #{tenant} `:constants` must be a Hash, got #{declared.class}."
+      end
+
+      check_required_keys
+      check_constants_values
+      warn_unknown_keys
+    end
+
+    def check_identifier
+      return if (@key.is_a?(Symbol) || @key.is_a?(String)) && @key.to_s.strip.present?
+
+      @errors << "ConsoleKit: tenant identifier #{@key.inspect} must be a non-blank Symbol or String."
+    end
+
+    def check_required_keys
+      required = TenantPlan::REQUIRED_KEYS
+      missing = required - constants.keys
+      return if missing.empty?
+
+      @errors << "ConsoleKit: tenant #{@key.inspect} constants missing required keys: #{missing.join(', ')} " \
+                 "(expected: #{required.join(', ')})."
+    end
+
+    # Calling each handler's own `.target_error`, rather than re-deriving the rule,
+    # is what keeps this check and the handler's `#prepare` from drifting apart.
+    def check_constants_values
+      values = constants
+      Connections::BaseConnectionHandler.registry.each do |handler_class|
+        field = handler_class.constants_key
+        next unless values.key?(field)
+
+        check_backend_value(field, values[field], handler_class)
+      end
+    end
+
+    def check_backend_value(field, value, handler_class)
+      reason = handler_class.target_error(value)
+      return unless reason
+
+      scrubbed = Connections::DiagnosticHelpers.scrub(value.inspect)
+      @errors << "ConsoleKit: tenant #{@key.inspect} #{field} #{scrubbed} is invalid: #{reason}"
+    end
+
+    def warn_unknown_keys
+      recognised = TenantConfigurator.context_mapping.values + EXTRA_CONSTANTS_KEYS
+      extra = constants.keys - recognised
+      return if extra.empty?
+
+      @warnings << "tenant #{@key.inspect} constants has unrecognised keys: #{extra.map(&:inspect).join(', ')} " \
+                   "(recognised: #{recognised.map(&:inspect).join(', ')}). Check for typos."
+    end
+  end
+
   # An omitted backend key does not mean "leave that backend alone": a switch
   # RESETS that backend to its default, which is what stops a tenant from ending
   # up half on the tenant before it. Tenants that disagree with each other about
@@ -13,22 +106,24 @@ module ConsoleKit
     WARNING = 'tenant %<tenant>p does not name %<omitted>s, which other tenants do. Switching to it RESETS those ' \
               'backends to their defaults rather than leaving them on the tenant before it.'
 
-    def initialize(tenants)
-      @constants = tenants.select { |_key, entry| entry.is_a?(Hash) && entry[:constants].is_a?(Hash) }
-                          .transform_values { |entry| entry[:constants] }
+    def initialize(entries)
+      @entries = entries.select(&:constants)
     end
 
-    def warnings = @constants.filter_map { |key, constants| warning_for(key, named - constants.keys) }
+    def warnings
+      @entries.filter_map do |entry|
+        omitted = named - entry.constants.keys
+        next if omitted.empty?
+
+        format(WARNING, tenant: entry.key, omitted: omitted.map(&:inspect).join(', '))
+      end
+    end
 
     private
 
-    def named = @named ||= @constants.values.flat_map(&:keys).uniq & backend_keys
-    def backend_keys = Connections::BaseConnectionHandler.registry.map(&:constants_key)
-
-    def warning_for(key, omitted)
-      return nil if omitted.empty?
-
-      format(WARNING, tenant: key, omitted: omitted.map(&:inspect).join(', '))
+    def named
+      @named ||= @entries.flat_map { |entry| entry.constants.keys }
+                         .intersection(Connections::BaseConnectionHandler.registry.map(&:constants_key))
     end
   end
 
@@ -36,10 +131,6 @@ module ConsoleKit
   # Configuration#validate! once the bare presence checks pass. Errors are
   # aggregated and raised together; warnings are printed via Output, never raised.
   class ConfigurationValidator
-    # Constants keys ConsoleKit reads without routing them through a backend
-    # handler, so `context_mapping` does not know about them.
-    EXTRA_CONSTANTS_KEYS = [:environment].freeze
-
     def initialize(configuration)
       @configuration = configuration
       @errors = []
@@ -47,11 +138,12 @@ module ConsoleKit
     end
 
     def validate!
-      configuration.tenants.each { |key, entry| validate_tenant(key, entry) }
-      check_duplicate_identifiers
-      check_uneven_backend_coverage
-      check_context_writers
-      emit_warnings
+      entries.each do |entry|
+        entry.validate
+        errors.concat(entry.errors)
+        warnings.concat(entry.warnings)
+      end
+      check_across_tenants
       raise ConfigurationError, errors.join("\n") if errors.any?
     end
 
@@ -59,35 +151,18 @@ module ConsoleKit
 
     attr_reader :configuration, :errors, :warnings
 
-    def validate_tenant(key, entry)
-      check_identifier(key)
-      return errors << "ConsoleKit: tenant #{key.inspect} configuration must be a Hash, got #{entry.class}." \
-        unless entry.is_a?(Hash)
+    def entries = @entries ||= configuration.tenants.map { |key, entry| TenantEntry.new(key, entry) }
 
-      warn_unknown_keys(key, 'top-level', entry.keys, [:constants])
-      validate_constants(key, entry[:constants])
-    end
-
-    def validate_constants(key, constants)
-      return errors << "ConsoleKit: tenant #{key.inspect} is missing a `:constants` Hash." if constants.nil?
-      unless constants.is_a?(Hash)
-        return errors << "ConsoleKit: tenant #{key.inspect} `:constants` must be a Hash, got #{constants.class}."
-      end
-
-      check_required_keys(key, constants)
-      check_constants_values(key, constants)
-      warn_unknown_keys(key, 'constants', constants.keys,
-                        TenantConfigurator.context_mapping.values + EXTRA_CONSTANTS_KEYS)
-    end
-
-    def check_identifier(key)
-      return if (key.is_a?(Symbol) || key.is_a?(String)) && key.to_s.strip.present?
-
-      errors << "ConsoleKit: tenant identifier #{key.inspect} must be a non-blank Symbol or String."
+    # The checks that need every tenant at once, plus the context class they share.
+    def check_across_tenants
+      check_duplicate_identifiers
+      warnings.concat(BackendCoverage.new(entries).warnings)
+      check_context_writers
+      warnings.each { |message| Output.print_warning("ConsoleKit: #{message}") }
     end
 
     def check_duplicate_identifiers
-      configuration.tenants.keys.group_by { |k| k.to_s.downcase }.each_value do |keys|
+      configuration.tenants.keys.group_by { |key| key.to_s.downcase }.each_value do |keys|
         next if keys.size < 2
 
         errors << "ConsoleKit: tenant identifiers #{keys.map(&:inspect).join(', ')} are duplicates once " \
@@ -96,55 +171,21 @@ module ConsoleKit
       end
     end
 
-    def check_uneven_backend_coverage
-      warnings.concat(BackendCoverage.new(configuration.tenants).warnings)
-    end
-
-    def check_required_keys(key, constants)
-      required = TenantPlan::REQUIRED_KEYS
-      missing = required - constants.keys
-      return if missing.empty?
-
-      errors << "ConsoleKit: tenant #{key.inspect} constants missing required keys: #{missing.join(', ')} " \
-                "(expected: #{required.join(', ')})."
-    end
-
-    # Calling each handler's own `.target_error`, rather than re-deriving the rule,
-    # is what keeps this check and the handler's `#prepare` from drifting apart.
-    def check_constants_values(key, constants)
-      Connections::BaseConnectionHandler.registry.each do |handler_class|
-        field = handler_class.constants_key
-        next unless constants.key?(field)
-
-        check_backend_value(key, field, constants[field], handler_class)
-      end
-    end
-
-    def check_backend_value(key, field, value, handler_class)
-      reason = handler_class.target_error(value)
-      return unless reason
-
-      errors << "ConsoleKit: tenant #{key.inspect} #{field} #{scrub_value(value)} is invalid: #{reason}"
-    end
-
-    def warn_unknown_keys(key, subject, actual, recognised)
-      extra = actual - recognised
-      return if extra.empty?
-
-      warnings << "tenant #{key.inspect} #{subject} has unrecognised keys: #{extra.map(&:inspect).join(', ')} " \
-                  "(recognised: #{recognised.map(&:inspect).join(', ')}). Check for typos."
-    end
-
     def check_context_writers
       klass = resolve_context_class
-      return unless klass
-
-      attributes = TenantConfigurator.context_mapping.keys
-      missing = attributes.reject { |attr| writer?(klass, :"#{attr}=") }
-      return if missing.empty?
+      missing = klass && configured_attributes.reject { |attr| writer?(klass, :"#{attr}=") }
+      return if missing.blank?
 
       warnings << "context_class #{klass} has no writer for: #{missing.join(', ')}. ConsoleKit will silently " \
                   'never configure that backend during a tenant switch.'
+    end
+
+    # Only backends some tenant actually names can be configured, so only those
+    # can be silently dropped - warning about the rest is noise about a switch
+    # that was never going to happen.
+    def configured_attributes
+      named = entries.filter_map { |entry| entry.constants&.keys }.flatten.uniq
+      TenantConfigurator.context_mapping.select { |_attr, field| named.include?(field) }.keys
     end
 
     # The context object is the class itself, and a `class << self; attr_accessor`
@@ -158,11 +199,5 @@ module ConsoleKit
       errors << e.message
       nil
     end
-
-    def emit_warnings
-      warnings.each { |message| Output.print_warning("ConsoleKit: #{message}") }
-    end
-
-    def scrub_value(value) = Connections::DiagnosticHelpers.scrub(value.inspect)
   end
 end

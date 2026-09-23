@@ -7,7 +7,7 @@ module ConsoleKit
   # Errors that mean ConsoleKit itself is broken rather than that a dependency is
   # unavailable. Never rescue one into an "unavailable" result: that is how a real
   # bug hides.
-  PROGRAMMING_ERRORS = [NoMethodError, NameError, ArgumentError, TypeError].freeze
+  PROGRAMMING_ERRORS = [NameError, ArgumentError, TypeError].freeze
 
   class << self
     def programming_error?(error) = PROGRAMMING_ERRORS.any? { |klass| error.is_a?(klass) }
@@ -60,7 +60,7 @@ module ConsoleKit
 
     def initialize(failures)
       @failures = failures
-      super("Rollback failed for: #{failures.map { |f| f[:backend] }.join(', ')}")
+      super("Rollback failed for: #{failures.map { |failure| failure[:backend] }.join(', ')}")
     end
   end
 
@@ -100,7 +100,7 @@ module ConsoleKit
     end
 
     def formatted_failures
-      rollback_failures.map { |f| "  - #{f[:backend]}: #{scrub(f[:error].message)}" }.join("\n")
+      rollback_failures.map { |failure| "  - #{failure[:backend]}: #{scrub(failure[:error].message)}" }.join("\n")
     end
   end
 end

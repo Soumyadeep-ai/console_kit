@@ -22,7 +22,7 @@ completes fully or leaves the previous tenant exactly as it was.
 - **`ConsoleKit.verify_tenant!`** - re-verify that every available backend still points at the current tenant, and report any backend the switch could not drive.
 - **Handlers declare their own backend.** `backend :key, display_name:, context_attribute:, constants_key:, detail_label:` plus `.target_error` as the single validation rule, called by both `prepare` and `validate!`. Adding a backend means adding one file; nothing outside a handler names a backend. Registration is explicit and keyed by backend, so two live reload generations of one backend cannot be represented.
 - **Diagnostic levels.** `dashboard(level: :basic)` (the default) performs no network calls; `level: :full` keeps the version and health probes. Tenant switching triggers no diagnostics at all.
-- **Diagnostic caching.** `:full` rows are cached in a bounded LRU for a couple of seconds. A row is reused only while the TTL holds, the calling thread is on the same tenant state, and the backend still reports the same observed identity - so another thread moving a process-global backend drops the row rather than serving it stale. `:timeout` and `:error` rows are never cached.
+- **Diagnostic caching.** `:full` rows are cached per thread for a couple of seconds. A row is reused only while the TTL holds, the calling thread is on the same tenant state, and the backend still reports the same observed identity - so another thread moving a process-global backend drops the row rather than serving it stale. `:error` rows are never cached.
 - **Instrumentation hook.** `ConsoleKit::Instrumentation.subscribe { |name, duration_ms, payload| ... }` plus counters for switches, verifications, rollbacks, dropped handlers and diagnostic timeouts. No external dependency.
 - **Strict configuration validation.** `ConsoleKit.configuration.validate!` reports every problem in one pass: tenant structure, identifiers, duplicates colliding by case or type, required constants, Redis DB numbers, Elasticsearch prefixes, shard and Mongoid client names. Unrecognised keys and a `context_class` missing writers are reported as warnings.
 - **Isolation reporting.** `RedisConnectionHandler#isolation_model` / `#thread_isolated?` and the Elasticsearch equivalents report at runtime whether a backend is genuinely per-thread or process-global.
@@ -32,10 +32,27 @@ completes fully or leaves the previous tenant exactly as it was.
 
 ### Changed
 - **Connection pool churn removed.** The SQL handler uses the native `connecting_to(shard:)` path when the target is a registered shard, detected by capability check rather than Rails version, and keeps ConsoleKit to exactly one entry on the `connected_to` stack. The `establish_connection` fallback re-establishes only when the resolved configuration actually changes, and no longer disconnects a pool Rails is about to replace anyway. Switching to the shard already in use performs no pool work.
-- **`reapply`** no longer re-establishes a connection already on the target shard.
+- **`TenantOrchestrator.reapply`** (and the deprecated `Setup.reapply`) no longer re-establishes a connection already on the target shard.
 - Diagnostics run in the calling thread. A backend's tenant lives in thread-local state, so a check run anywhere else inspects a different tenant than the caller is on.
 - `ContextWrapper#assign` returns a Hash of applied values rather than triples, and owns the case-mismatch warning. It gained `current_values` and `restore`.
 - `TenantConfigurator.validate_constants!` moved to `ConsoleKit::TenantPlan`. `configuration_success` is derived from `StateStore` and joined by a `configuration_success?` predicate.
+- An unknown tenant key raises `TenantNotFoundError` naming the configured tenant keys, or saying that none are configured.
+- A successful console switch prints one success line, `Tenant initialized: <key>`, instead of two near-identical ones.
+
+### Deprecated
+Still working, each warning once per process; all are removed in 2.0.
+- `ConsoleKit::Setup.setup` -> `ConsoleKit::TenantOrchestrator.run`
+- `ConsoleKit::Setup.current_tenant` -> `ConsoleKit.current_tenant`
+- `ConsoleKit::Setup.current_tenant=` -> `ConsoleKit.switch_tenant`, which also switches the connections
+- `ConsoleKit::Setup.tenant_setup_successful?` -> `ConsoleKit.current_tenant`
+- `ConsoleKit::Setup.reapply` -> `ConsoleKit::TenantOrchestrator.reapply`
+- `ConsoleKit::Setup.reset_current_tenant` -> `ConsoleKit.reset_current_tenant`
+- `ConsoleKit::Setup.auto_select?` -> `ConsoleKit::TenantOrchestrator.auto_select?`
+- `ConsoleKit.pretty_output` / `pretty_output=` -> `ConsoleKit.configuration.pretty_output` / `pretty_output=`
+- `ConsoleKit.tenants=` -> `ConsoleKit.configuration.tenants=`
+- `ConsoleKit.context_class` / `context_class=` -> `ConsoleKit.configuration.context_class` / `context_class=`
+- `ConsoleKit.show_dashboard` / `show_dashboard=` -> `ConsoleKit.configuration.show_dashboard` / `show_dashboard=`
+- `ConsoleKit::Configuration#validate` -> `#validate!`, which raises instead of returning `false`
 
 ### Fixed
 - **Diagnostic threads leaked without bound.** Every diagnostic call spawned a thread, and a timed-out one was abandoned - deliberately, since 1.3.0 removed `Thread.kill` to avoid corrupting a connection mid-operation - so each dashboard render could leak another. Diagnostics no longer spawn threads at all, so there is nothing left to leak or to kill.
@@ -65,15 +82,15 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 
 - **Connection pool churn, per switch:**
 
-  | Path | `establish_connection` | `disconnect` |
-  |------|------------------------|--------------|
-  | native shard - same, different, or reset | 0 | 0 |
-  | fallback - same shard | 0 | 0 |
-  | fallback - different shard or reset | 1 | 1 |
+  | Path | Pools replaced |
+  |------|----------------|
+  | native shard - same, different, or reset | 0 |
+  | fallback - same shard | 0 |
+  | fallback - different shard or reset | 1 |
 
   Before 1.5.0 every switch performed one `disconnect!` plus one `establish_connection` unconditionally, including a switch to the shard already in use.
-- **Network calls per tenant switch: 0**, including `verify_tenant!`. `dashboard(level: :basic)` performs 0 cold and cached; `level: :full` performs 8 cold and 0 within the cache window.
-- **Allocations per switch:** ~187 objects.
+- **Queries and health probes per tenant switch: 0**, including verification. The only round trip a switch makes is the one that moves the tenant, such as a Redis `SELECT`. Asserted, not just measured: every handler runs this check in the shared contract, `spec/support/shared_examples/connection_handler_contract.rb`. `dashboard(level: :basic)` performs 0 cold and cached; `level: :full` performs 8 cold and 0 within the cache window.
+- **Allocations per switch:** 195 objects alternating between two tenants, 192 repeating the same tenant.
 - The ActiveRecord `connected_to` stack holds exactly one ConsoleKit entry regardless of switch count or `reload!` count.
 - The 1.3.0 `base_class` memoization is retained.
 

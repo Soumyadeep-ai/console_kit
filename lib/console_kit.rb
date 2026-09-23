@@ -9,7 +9,6 @@ require 'logger'
 # ActiveSupport.deprecator and only finds it once the base is loaded.
 require 'active_support'
 require 'active_support/core_ext/object/blank'
-require 'active_support/core_ext/object/inclusion'
 require 'active_support/core_ext/object/try'
 require 'active_support/core_ext/string/inflections'
 require 'active_support/core_ext/time/calculations'
@@ -19,6 +18,7 @@ require_relative 'console_kit/errors'
 require_relative 'console_kit/tenant_state'
 require_relative 'console_kit/instrumentation'
 require_relative 'console_kit/configuration'
+require_relative 'console_kit/tenant_orchestrator'
 require_relative 'console_kit/setup'
 require_relative 'console_kit/console_helpers'
 require_relative 'console_kit/prompt'
@@ -39,32 +39,10 @@ module ConsoleKit
       StateStore.clear!
     end
 
-    def pretty_output = configuration.pretty_output
-
-    def pretty_output=(val)
-      configuration.pretty_output = val
-    end
-
     def tenants = configuration.tenants
 
-    def tenants=(val)
-      configuration.tenants = val
-    end
-
-    def context_class = configuration.context_class
-
-    def context_class=(val)
-      configuration.context_class = val
-    end
-
-    def show_dashboard = configuration.show_dashboard
-
-    def show_dashboard=(val)
-      configuration.show_dashboard = val
-    end
-
     def current_tenant = StateStore.tenant_key
-    def reset_current_tenant = Setup.reset_current_tenant
+    def reset_current_tenant = TenantOrchestrator.reset
 
     # Atomic: on failure the previous tenant state is restored and the error raised.
     def switch_tenant(key) = TenantSwitch.call(key)
@@ -79,17 +57,10 @@ module ConsoleKit
     # Nested, exception-safe tenant scope. Completion is tracked with an explicit
     # flag rather than read from `$ERROR_INFO` (`$!`), which is thread-global and
     # non-nil whenever with_tenant is called from inside another `rescue`.
-    def with_tenant(key)
+    def with_tenant(key, &)
       previous = StateStore.current
       state = TenantSwitch.call(key)
-      completed = false
-      begin
-        result = yield
-        completed = true
-        result
-      ensure
-        unwind_scope(state, previous, completed ? nil : $ERROR_INFO)
-      end
+      unwind_after(state, previous, &)
     end
 
     def enable_pretty_output = configuration.pretty_output = true
@@ -107,13 +78,20 @@ module ConsoleKit
       Output.print_warning(format(INCOMPLETE_VERIFICATION, tenant: state.tenant_key, backends: dropped.join(', ')))
     end
 
+    def unwind_after(state, previous)
+      completed = false
+      yield.tap { completed = true }
+    ensure
+      unwind_scope(state, previous, completed ? nil : $ERROR_INFO)
+    end
+
     # A rollback failure raised from an `ensure` would replace the exception the
     # block was already raising, and that exception is the root cause the operator
     # needs; while one is in flight the rollback failure goes to Output instead.
     def unwind_scope(state, previous, in_flight)
       TenantSwitch.unwind(state, previous)
     rescue RollbackError => e
-      raise e if in_flight.nil?
+      raise e unless in_flight
 
       Output.print_error("#{e.message}\nThis rollback failure did not replace the in-flight " \
                          "#{in_flight.class}: #{in_flight.message}")

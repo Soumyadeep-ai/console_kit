@@ -12,20 +12,15 @@ module ConsoleKit
       THREAD_KEY = :console_kit_elasticsearch_prefix
       REPORTED_KEY = :console_kit_elasticsearch_prefix_conflict
 
-      UPPERCASE = /[[:upper:]]/
-      LEADING = /\A[_\-+]/
-      WHITESPACE = /\s/
-      ILLEGAL = %r{[\\/*?"<>|,#]}
-
       class << self
         # nil or a blank prefix means "use the default" and is always valid.
         def prefix_error(prefix)
-          return if prefix.nil?
-          return 'must be lowercase' if prefix.match?(UPPERCASE)
-          return 'must not begin with _, - or +' if prefix.match?(LEADING)
-          return 'must not contain whitespace' if prefix.match?(WHITESPACE)
+          return unless prefix
+          return 'must be lowercase' if prefix.match?(/[[:upper:]]/)
+          return 'must not begin with _, - or +' if prefix.match?(/\A[_\-+]/)
+          return 'must not contain whitespace' if prefix.match?(/\s/)
 
-          'must not contain \\ / * ? " < > | , or #' if prefix.match?(ILLEGAL)
+          'must not contain \\ / * ? " < > | , or #' if prefix.match?(%r{[\\/*?"<>|,#]})
         end
 
         def model = defined?(Elasticsearch::Model) ? Elasticsearch::Model : nil
@@ -47,11 +42,7 @@ module ConsoleKit
         end
 
         def record(prefix)
-          synchronize do
-            prune
-            prefix.nil? ? entries.delete(Thread.current) : (entries[Thread.current] = prefix)
-            Thread.current[THREAD_KEY] = prefix
-          end
+          synchronize { store(Thread.current, prefix) }
         end
 
         def conflicts(prefix)
@@ -63,20 +54,26 @@ module ConsoleKit
 
         # So repeated switches against an unchanged set of threads report once.
         def unreported_conflicts(prefix)
+          thread = Thread.current
           others = conflicts(prefix)
-          signature = [prefix, others]
-          return [] if others.empty? || Thread.current[REPORTED_KEY] == signature
+          return [] if others.empty? || thread[REPORTED_KEY] == [prefix, others]
 
-          Thread.current[REPORTED_KEY] = signature
+          thread[REPORTED_KEY] = [prefix, others]
           others
         end
 
         private
 
+        def store(thread, prefix)
+          prune
+          prefix ? (entries[thread] = prefix) : entries.delete(thread)
+          thread[THREAD_KEY] = prefix
+        end
+
         def entries = @entries ||= {}
         def mutex = @mutex ||= Mutex.new
         def synchronize(&) = mutex.synchronize(&)
-        def prune = entries.select! { |thread, _| thread.alive? }
+        def prune = entries.select! { |thread, _prefix| thread.alive? }
       end
     end
   end

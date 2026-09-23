@@ -66,23 +66,6 @@ RSpec.describe ConsoleKit::TenantConfigurator::ContextWrapper do
     end
   end
 
-  describe '#reset' do
-    before do
-      ctx.tenant_shard = 'some_shard'
-      ctx.partner_identifier = 'ACME'
-    end
-
-    it 'clears all tracked attributes' do
-      wrapper.reset
-      expect(ctx.tenant_shard).to be_nil
-    end
-
-    it 'clears partner_identifier' do
-      wrapper.reset
-      expect(ctx.partner_identifier).to be_nil
-    end
-  end
-
   describe '#any_set?' do
     it 'returns false when no attributes set' do
       expect(wrapper).not_to be_any_set

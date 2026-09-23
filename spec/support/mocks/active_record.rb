@@ -14,11 +14,6 @@ module ActiveRecordMock
 
   DbConfig = Struct.new(:env_name, :name, :adapter, keyword_init: true)
 
-  # Rails 6.0 and earlier named this attribute `spec_name`; 6.1 renamed it to
-  # `name`. Only the reader differs, which is the difference SqlStrategy
-  # feature-detects.
-  LegacyDbConfig = Struct.new(:env_name, :spec_name, :adapter, keyword_init: true)
-
   # Adapter connection stand-in. Records every statement it is asked to run so
   # specs can prove that a code path performed no query.
   class Connection
@@ -195,18 +190,6 @@ module ActiveRecordMock
     def unconnected_sharded_base(configs:, env: 'test', owner: 'ApplicationRecord')
       klass = Class.new(Base)
       prepare(klass, configs, env, owner)
-      klass
-    end
-
-    # Builds a base class whose database configuration predates the Rails 6.1
-    # `spec_name` -> `name` rename. The pool is registered directly, because
-    # `establish_connection` resolves configurations by the new name.
-    def legacy_config_base(spec_name:, env: 'test', owner: 'ApplicationRecord')
-      config = LegacyDbConfig.new(env_name: env, spec_name: spec_name, adapter: 'postgresql')
-      klass = Class.new(Base)
-      prepare(klass, [], env, owner)
-      klass.configurations = Configurations.new([config])
-      klass.connection_handler.register(owner, config, role: :writing, shard: :default)
       klass
     end
 

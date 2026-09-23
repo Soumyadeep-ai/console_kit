@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe ConsoleKit::Prompt do
   before do
-    allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('acme')
+    allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return('acme')
   end
 
   describe '.apply' do
@@ -63,7 +63,7 @@ RSpec.describe ConsoleKit::Prompt do
         end
         stub_const('IRB', irb_module)
         allow(IRB).to receive(:conf).and_return(irb_conf)
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+        allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return(nil)
       end
 
       it 'shows the no-tenant label instead of an empty one' do

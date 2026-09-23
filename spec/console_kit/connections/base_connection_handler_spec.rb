@@ -140,13 +140,14 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
-  describe '#connect' do
+  describe '#connect!' do
     it 'raises NotImplementedError' do
-      expect { handler.connect }.to raise_error(NotImplementedError)
+      expect { handler.connect!(nil) }.to raise_error(NotImplementedError)
     end
 
     it 'includes the class name in the error message' do
-      expect { handler.connect }.to raise_error(NotImplementedError, /BaseConnectionHandler must implement #connect/)
+      expect { handler.connect!(nil) }
+        .to raise_error(NotImplementedError, /BaseConnectionHandler must implement #connect!/)
     end
   end
 
@@ -221,9 +222,16 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
     end
   end
 
+  # The template lives on the base class, so the NotImplementedError the manager
+  # reads as a half-implemented handler now comes from the level it would call.
   describe '#diagnostics' do
-    it 'raises NotImplementedError' do
-      expect { handler.diagnostics }.to raise_error(NotImplementedError, /must implement #diagnostics/)
+    it 'raises NotImplementedError when the handler cannot even say whether it is available' do
+      expect { handler.diagnostics }.to raise_error(NotImplementedError, /must implement #available?/)
+    end
+
+    it 'raises NotImplementedError when the handler implements no diagnostic level' do
+      available = Class.new(described_class) { def available? = true }.new(context)
+      expect { available.diagnostics }.to raise_error(NotImplementedError, /must implement #basic_diagnostics/)
     end
   end
 
@@ -235,8 +243,6 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
       end)
     end
     let(:safe_handler) { handler_class.new(context) }
-
-    after { ConsoleKit::Diagnostics::Runner.shutdown! }
 
     it 'returns the handler row' do
       expect(safe_handler.safe_diagnostics[:status]).to eq(:connected)
@@ -252,11 +258,6 @@ RSpec.describe ConsoleKit::Connections::BaseConnectionHandler do
 
     it 'rejects an unknown level' do
       expect { safe_handler.safe_diagnostics(level: :deep) }.to raise_error(ConsoleKit::ConfigurationError)
-    end
-
-    it 'starts no thread for the basic level' do
-      safe_handler.safe_diagnostics
-      expect(ConsoleKit::Diagnostics::Runner.live_thread_count).to eq(0)
     end
   end
 

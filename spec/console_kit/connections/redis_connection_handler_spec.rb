@@ -377,7 +377,7 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
       end
 
       it 'scrubs the Redis URL out of the failure message' do
-        expect(failure.message).to include('[redis-url]')
+        expect(failure.message).to include('[redacted]')
       end
 
       it 'never leaks the password from the client error' do
@@ -421,9 +421,9 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
     end
   end
 
-  describe '#connect' do
+  describe '#connect! with the context target' do
     it 'applies the DB index resolved from the context' do
-      handler.connect
+      handler.connect!(handler.target)
       expect(client.selects).to eq([2])
     end
   end
@@ -738,6 +738,10 @@ RSpec.describe ConsoleKit::Connections::RedisConnectionHandler do
 
       it 'includes the error message in details' do
         expect(handler.diagnostics(level: :full)[:details][:error]).to include('ECONNREFUSED')
+      end
+
+      it 'replaces the connection URL with a placeholder' do
+        expect(handler.diagnostics(level: :full)[:details][:error]).to include('[redacted]')
       end
 
       it 'never leaks the credentials from the error message' do

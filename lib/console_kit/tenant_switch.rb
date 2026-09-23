@@ -15,7 +15,7 @@ module ConsoleKit
     EVENT = 'console_kit.tenant_switch'
 
     class << self
-      def call(tenant_key, context: nil) = new(tenant_key, context: context).call
+      def call(tenant_key) = new(tenant_key).call
 
       def clear(context: nil) = new(nil, context: context).call
 
@@ -36,7 +36,9 @@ module ConsoleKit
     def initialize(tenant_key, context: nil)
       @tenant_key = tenant_key
       @context = context || ConsoleKit.configuration.context_class
-      @rollback_failures = []
+      @failing_handler = nil
+      @dropped_backends = []
+      @handlers = []
     end
 
     def call
@@ -49,68 +51,56 @@ module ConsoleKit
 
     def perform
       plan = TenantPlan.new(tenant_key)
-      @dropped_backends = []
-      handlers = Connections::ConnectionManager.available_handlers(context, @dropped_backends)
-      targets = plan.targets_for(handlers)
-      prepare_all(handlers, targets)
-      transact(handlers, targets, plan.constants)
+      @handlers = Connections::ConnectionManager.available_handlers(context, @dropped_backends)
+      targets = plan.targets_for(@handlers)
+      prepare_all(targets)
+      run_transaction(plan.constants, targets, snapshot_state)
     end
 
-    def prepare_all(handlers, targets)
-      handlers.each { |handler| handler.prepare(targets[handler.backend_key]) }
-    end
-
-    def transact(handlers, targets, constants)
-      run_transaction(handlers, targets, constants, snapshot_state(handlers))
+    def prepare_all(targets)
+      @handlers.each { |handler| handler.prepare(targets[handler.backend_key]) }
     end
 
     # Nothing has been applied yet, so a failure here needs no rollback - but it
     # must still surface as a TenantSwitchError carrying its cause.
-    def snapshot_state(handlers)
-      capture_undo(handlers)
-    rescue StandardError, NotImplementedError => e
-      raise switch_error(e)
-    end
-
-    def run_transaction(handlers, targets, constants, undo)
-      attempted = []
-      apply(handlers, targets, constants, undo, attempted)
-    rescue StandardError, NotImplementedError => e
-      @rollback_failures = rollback(undo, attempted)
-      raise switch_error(e)
-    end
-
-    def apply(handlers, targets, constants, undo, attempted)
-      context_values = apply_context(constants)
-      connect_all(handlers, targets, attempted)
-      verify_all(attempted, targets)
-      commit(constants, context_values, undo)
-    end
-
-    def capture_undo(handlers)
-      snapshots = handlers.to_h { |handler| [handler.backend_key, handler.snapshot] }
+    def snapshot_state
+      snapshots = @handlers.to_h { |handler| [handler.backend_key, handler.snapshot] }
       TenantState.undo_bundle(context: context_wrapper.current_values, backends: snapshots,
                               dropped: @dropped_backends, context_object: context)
+    rescue StandardError, NotImplementedError => e
+      raise switch_error(e)
     end
 
-    def apply_context(constants)
+    def run_transaction(constants, targets, undo)
+      attempted = []
+      apply(constants, targets, attempted)
+      commit(constants, undo)
+    rescue StandardError, NotImplementedError => e
+      raise switch_error(e, TenantRollback.new(undo, context_wrapper).call(attempted))
+    end
+
+    def apply(constants, targets, attempted)
       context_wrapper.assign(constants, TenantConfigurator.context_mapping)
+      connect_all(targets, attempted)
+      verify_all(attempted, targets)
     end
 
-    def connect_all(handlers, targets, attempted)
-      handlers.each do |handler|
+    def connect_all(targets, attempted)
+      @handlers.each do |handler|
         attempted << handler
         instrument_backend('console_kit.backend_connect', handler) { handler.connect!(targets[handler.backend_key]) }
       end
     end
 
     def verify_all(handlers, targets)
-      handlers.each do |handler|
-        instrument_backend('console_kit.backend_verify', handler) { handler.verify!(targets[handler.backend_key]) }
-      rescue ConnectionVerificationError => e
-        Instrumentation.increment('console_kit.verification_failure')
-        raise e
-      end
+      handlers.each { |handler| verify_one(handler, targets[handler.backend_key]) }
+    end
+
+    def verify_one(handler, target)
+      instrument_backend('console_kit.backend_verify', handler) { handler.verify!(target) }
+    rescue ConnectionVerificationError => e
+      Instrumentation.increment('console_kit.verification_failure')
+      raise e
     end
 
     # Remembers the handler in flight, so a raw backend error - one the handler did
@@ -123,19 +113,15 @@ module ConsoleKit
     # A clear is a completed switch that commits no tenant: reporting it as
     # configured left `configured?` true with no tenant key, so `verify_tenant!`
     # cheerfully "verified" the default state.
-    def commit(constants, context_values, undo)
+    def commit(constants, undo)
       StateStore.current = TenantState.new(tenant_key: tenant_key, constants: constants, undo: undo,
-                                           context_values: context_values, configured: !tenant_key.nil?)
+                                           configured: !tenant_key.nil?)
     end
 
-    def rollback(undo, handlers)
-      TenantRollback.new(undo, context_wrapper).call(handlers)
-    end
-
-    def switch_error(error)
+    def switch_error(error, rollback_failures = [])
       TenantSwitchError.new(
         from_tenant: StateStore.tenant_key, to_tenant: tenant_key, original_error: error,
-        backend: error.try(:backend) || @failing_handler&.display_name, rollback_failures: @rollback_failures
+        backend: error.try(:backend) || @failing_handler&.display_name, rollback_failures: rollback_failures
       )
     end
 

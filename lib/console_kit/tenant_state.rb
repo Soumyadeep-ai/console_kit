@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'connections/diagnostic_helpers'
-
 module ConsoleKit
   # Immutable description of one fully-applied tenant state. Carries everything
   # needed to undo itself, plus the backends it could not drive at all - the one
@@ -10,7 +8,7 @@ module ConsoleKit
     NO_DROPPED = [].freeze
     EMPTY_UNDO = { context: {}.freeze, backends: {}.freeze, dropped: NO_DROPPED, context_object: nil }.freeze
 
-    attr_reader :tenant_key, :constants, :context_values, :undo, :captured_at
+    attr_reader :tenant_key, :constants, :undo
 
     # Containers are copied and then frozen: a copy because the constants a switch
     # is handed belong to the application's configuration, and freezing that in
@@ -38,17 +36,13 @@ module ConsoleKit
       end
     end
 
-    def initialize(tenant_key: nil, constants: {}, context_values: {}, undo: EMPTY_UNDO, configured: false)
+    def initialize(tenant_key: nil, constants: {}, undo: EMPTY_UNDO, configured: false)
       @tenant_key = tenant_key
       @configured = configured
       @constants = OwnCopy.call(constants)
-      @context_values = OwnCopy.call(context_values)
       @undo = undo
-      @captured_at = Connections::DiagnosticHelpers.clock_time
       freeze
     end
-
-    def active? = !@tenant_key.nil?
 
     # The tenant was applied through a completed, verified TenantSwitch.
     def configured? = @configured
@@ -68,8 +62,6 @@ module ConsoleKit
     # unloaded since the switch answers `available?` false with no reason, which
     # nothing outside this record can tell apart from a gem nobody installed.
     def backends_missing_from(live) = @undo[:backends].keys - live
-
-    def age_ms = ((Connections::DiagnosticHelpers.clock_time - @captured_at) * 1000).round(1)
 
     def inspect = "#<ConsoleKit::TenantState #{@tenant_key.inspect} backends=#{@undo[:backends].keys.inspect}>"
   end
@@ -95,7 +87,6 @@ module ConsoleKit
       end
 
       def tenant_key = current.tenant_key
-      def active? = current.active?
       def configured? = current.configured?
 
       def clear!

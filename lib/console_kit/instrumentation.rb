@@ -12,10 +12,6 @@ module ConsoleKit
         block
       end
 
-      def unsubscribe(handle)
-        mutex.synchronize { subscribers.delete(handle) }
-      end
-
       def clear!
         mutex.synchronize do
           subscribers.clear
@@ -27,26 +23,27 @@ module ConsoleKit
 
       def counts = mutex.synchronize { counters.dup }
 
-      def increment(name, by = 1)
-        mutex.synchronize { counters[name] += by }
+      def increment(name)
+        mutex.synchronize { counters[name] += 1 }
       end
 
       def instrument(name, payload = {})
         start = Connections::DiagnosticHelpers.clock_time
-        result = yield
-        publish(name, elapsed_ms(start), payload.merge(status: :ok))
-        result
+        yield.tap { publish(name, start, payload.merge(status: :ok)) }
+      # Publishing the failure must not swallow it, so the exception still in
+      # flight is re-raised once the event is out.
       rescue StandardError, NotImplementedError => e
-        publish(name, elapsed_ms(start), payload.merge(status: :error, error: e.class.name))
+        publish(name, start, payload.merge(error: e.class.name, status: :error))
         raise
       end
 
-      def publish(name, duration_ms, payload)
+      private
+
+      def publish(name, start, payload)
         increment(name)
+        duration_ms = elapsed_ms(start)
         each_subscriber { |sub| sub.call(name, duration_ms, payload) }
       end
-
-      private
 
       def each_subscriber
         mutex.synchronize { subscribers.dup }.each do |sub|

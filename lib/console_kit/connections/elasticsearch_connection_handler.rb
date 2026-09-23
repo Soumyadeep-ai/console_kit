@@ -55,8 +55,9 @@ module ConsoleKit
       # all is left alone, because then nothing is written.
       def prepare(target)
         validate_target!(target)
-        raise UnsupportedBackendError, UNSUPPORTED unless registry.settable? || normalize(target).nil?
-        return unless registry.settable?
+        settable = registry.settable?
+        raise UnsupportedBackendError, UNSUPPORTED if normalize(target) && !settable
+        return unless settable
 
         raise UnsupportedBackendError, UNVERIFIABLE unless registry.readable?
       end
@@ -91,16 +92,6 @@ module ConsoleKit
       # rather than assumed.
       def diagnostic_identity = effective_prefix
 
-      def diagnostics(level: :basic)
-        return unavailable_diagnostics unless available?
-
-        level == :full ? full_diagnostics : basic_diagnostics
-      rescue StandardError => e
-        raise e if ConsoleKit.programming_error?(e)
-
-        error_diagnostics(display_name, e)
-      end
-
       private
 
       def registry = ElasticsearchPrefixRegistry
@@ -133,7 +124,7 @@ module ConsoleKit
       end
 
       def apply_global(prefix)
-        raise UnsupportedBackendError, UNSUPPORTED unless registry.settable? || prefix.nil?
+        raise UnsupportedBackendError, UNSUPPORTED if prefix && !registry.settable?
 
         registry.global = prefix
       end

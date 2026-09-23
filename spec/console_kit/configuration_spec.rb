@@ -101,20 +101,6 @@ RSpec.describe ConsoleKit::Configuration do
       config.context_class = 'Something'
       expect { config.validate! }.to raise_error(ConsoleKit::ConfigurationError, /missing a `:constants`/)
     end
-
-    describe '#validate' do
-      it 'returns true for a fully valid configuration' do
-        config.tenants = valid_tenants
-        config.context_class = 'Something'
-        expect(config.validate).to be true
-      end
-
-      it 'returns false for a broken configuration instead of raising' do
-        config.tenants = { acme: {} }
-        config.context_class = 'Something'
-        expect(config.validate).to be false
-      end
-    end
   end
 
   describe 'pretty_output=' do
@@ -145,22 +131,6 @@ RSpec.describe ConsoleKit::Configuration do
   end
 
   describe 'direct delegation' do
-    it 'delegates tenants to configuration' do
-      ConsoleKit.tenants = { 'delegated' => {} }
-      expect(ConsoleKit.configuration.tenants).to eq({ 'delegated' => {} })
-    end
-
-    it 'delegates context_class to configuration' do
-      klass = Class.new
-      ConsoleKit.context_class = klass
-      expect(ConsoleKit.configuration.context_class).to eq(klass)
-    end
-
-    it 'delegates pretty_output to configuration' do
-      ConsoleKit.pretty_output = false
-      expect(ConsoleKit.configuration.pretty_output).to be false
-    end
-
     it 'allows direct access to configuration object' do
       expect(ConsoleKit.configuration).to be_a(described_class)
     end

@@ -23,7 +23,7 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
   describe '#tenant_info' do
     context 'when a tenant is configured' do
       before do
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('acme')
+        allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return('acme')
         allow(ConsoleKit.configuration).to receive(:tenants).and_return(
           'acme' => { constants: { partner_code: 'ACME', shard: 'shard_1', mongo_db: 'acme_db' } }
         )
@@ -61,7 +61,7 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
     # points at it. Reporting on that tenant must degrade, not raise.
     context 'when the current tenant is no longer in the configuration' do
       before do
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return('ghost')
+        allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return('ghost')
         allow(ConsoleKit.configuration).to receive(:tenants).and_return('acme' => { constants: {} })
       end
 
@@ -78,7 +78,7 @@ RSpec.describe ConsoleKit::ConsoleHelpers do
 
     context 'when no tenant is configured' do
       before do
-        allow(ConsoleKit::Setup).to receive(:current_tenant).and_return(nil)
+        allow(ConsoleKit::StateStore).to receive(:tenant_key).and_return(nil)
       end
 
       it 'prints a warning' do

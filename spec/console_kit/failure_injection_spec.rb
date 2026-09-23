@@ -410,7 +410,7 @@ RSpec.describe FailureInjection do
     it_behaves_like 'a fully rolled back switch'
 
     it 'replaces the connection URL with a placeholder' do
-      expect(error.message).to include('[redis-url]')
+      expect(error.message).to include('[redacted]')
     end
 
     it 'never leaks the password out of the client error' do

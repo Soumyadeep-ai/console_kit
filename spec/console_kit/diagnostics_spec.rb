@@ -30,10 +30,7 @@ end
 RSpec.describe ConsoleKit::Diagnostics do
   before { described_class.clear_cache! }
 
-  after do
-    described_class::Runner.shutdown!
-    described_class.clear_cache!
-  end
+  after { described_class.clear_cache! }
 
   def failing_handler(key, error)
     DiagnosticsSpecHandler.new(key) { raise error }
@@ -124,12 +121,8 @@ RSpec.describe ConsoleKit::Diagnostics do
 
   describe 'the threads a check uses' do
     it 'holds no diagnostics thread of its own' do
-      described_class::Runner.call(fast_handler(:threadless_backend), level: :full)
-      expect(described_class::Runner.live_thread_count).to eq(0)
-    end
-
-    it 'winds down without anything to stop' do
-      expect(described_class::Runner.shutdown!).to eq(0)
+      expect { described_class::Runner.call(fast_handler(:threadless_backend), level: :full) }
+        .not_to(change { Thread.list.size })
     end
   end
 
@@ -193,13 +186,6 @@ RSpec.describe ConsoleKit::Diagnostics do
       expect(counter.first).to eq(2)
     end
 
-    it 'does not cache a :timeout row, so a recovered backend is asked again' do
-      rows = [{ name: 'x', status: :timeout, latency_ms: nil, details: {} }, connected_row].each
-      counter = [0]
-      2.times { counting_fetch(:uncacheable_timeout_backend, counter, -> { rows.next }) }
-      expect(counter.first).to eq(2)
-    end
-
     it 'does not cache an :error row, so a recovered backend is asked again' do
       rows = [{ name: 'x', status: :error, latency_ms: nil, details: {} }, connected_row].each
       counter = [0]
@@ -225,60 +211,20 @@ RSpec.describe ConsoleKit::Diagnostics do
     end
   end
 
-  describe 'the bounded LRU cache' do
-    before { ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme') }
+  describe 'an expired entry' do
+    let(:clock) { [1_000_000.0] }
 
-    def store_size
-      described_class::Cache.send(:store).size
+    before do
+      ConsoleKit::StateStore.current = ConsoleKit::TenantState.new(tenant_key: 'acme')
+      allow(ConsoleKit::Connections::DiagnosticHelpers).to receive(:clock_time) { clock.first }
     end
 
-    it 'never grows past its capacity, however many distinct keys are cached' do
-      (described_class::Cache::CAPACITY + 10).times { |i| counting_fetch(:"lru_cap_backend#{i}", [0]) }
-      expect(store_size).to eq(described_class::Cache::CAPACITY)
-    end
-
-    it 'evicts the least-recently-used entry first when capacity is exceeded' do
-      described_class::Cache::CAPACITY.times { |i| counting_fetch(:"lru_order_backend#{i}", [0]) }
-      counting_fetch(:lru_order_overflow_backend, [0])
+    it 'is re-fetched from the backend rather than served stale once expired' do
+      counting_fetch(:expired_reread_backend, [0])
+      clock[0] += described_class::CACHE_TTL_SECONDS + 1
       counter = [0]
-      counting_fetch(:lru_order_backend0, counter)
+      counting_fetch(:expired_reread_backend, counter)
       expect(counter.first).to eq(1)
-    end
-
-    context 'when an entry is touched before capacity is exceeded' do
-      let(:counter) { [0] }
-
-      before do
-        described_class::Cache::CAPACITY.times { |i| counting_fetch(:"lru_touch_backend#{i}", [0]) }
-        counting_fetch(:lru_touch_backend0, [0]) # promotes backend0 ahead of backend1
-        counting_fetch(:lru_touch_overflow_backend, [0]) # evicts the new LRU, backend1
-        counting_fetch(:lru_touch_backend0, counter)
-      end
-
-      it 'keeps the touched entry over one merely inserted earlier' do
-        expect(counter.first).to eq(0)
-      end
-    end
-
-    context 'when an entry has expired' do
-      let(:clock) { [1_000_000.0] }
-
-      before { allow(ConsoleKit::Connections::DiagnosticHelpers).to receive(:clock_time) { clock.first } }
-
-      it 'does not occupy a capacity slot after it expires' do
-        counting_fetch(:lru_expired_backend, [0])
-        clock[0] += described_class::CACHE_TTL_SECONDS + 1
-        (described_class::Cache::CAPACITY - 1).times { |i| counting_fetch(:"lru_expired_filler_#{i}", [0]) }
-        expect(store_size).to eq(described_class::Cache::CAPACITY - 1)
-      end
-
-      it 'is re-fetched from the backend rather than served stale once expired' do
-        counting_fetch(:lru_expired_reread_backend, [0])
-        clock[0] += described_class::CACHE_TTL_SECONDS + 1
-        counter = [0]
-        counting_fetch(:lru_expired_reread_backend, counter)
-        expect(counter.first).to eq(1)
-      end
     end
   end
 
@@ -448,13 +394,13 @@ RSpec.describe ConsoleKit::Diagnostics do
       expect { described_class::Runner.call(handler, level: :basic) }.to raise_error(NoMethodError)
     end
 
-    describe '.programming_error?' do
-      it 'treats NoMethodError as a programming error' do
-        expect(described_class.programming_error?(NoMethodError.new)).to be(true)
+    describe 'ConsoleKit.programming_error?' do
+      it 'treats NoMethodError as a programming error, through NameError' do
+        expect(ConsoleKit.programming_error?(NoMethodError.new)).to be(true)
       end
 
       it 'does not treat a plain StandardError as a programming error' do
-        expect(described_class.programming_error?(StandardError.new)).to be(false)
+        expect(ConsoleKit.programming_error?(StandardError.new)).to be(false)
       end
     end
   end

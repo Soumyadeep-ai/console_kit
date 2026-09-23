@@ -33,8 +33,6 @@ module ConsoleKit
               "ConsoleKit: unknown diagnostics level #{level.inspect}. Expected one of #{LEVELS.inspect}."
       end
 
-      def programming_error?(error) = ConsoleKit.programming_error?(error)
-
       private
 
       def available_handlers
@@ -55,10 +53,6 @@ module ConsoleKit
     module Cache
       STORE_KEY = :console_kit_diagnostics_cache
       CACHED_LEVEL = :full
-      UNCACHEABLE = %i[error timeout].freeze
-      # 8 tenants x 4 backends: headroom without letting a long-lived console
-      # accumulate one entry per tenant ever visited.
-      CAPACITY = 32
 
       class << self
         def fetch_row(handler, level)
@@ -78,8 +72,8 @@ module ConsoleKit
         # A thread variable, not `Thread.current[]`: an entry is keyed on the
         # thread's TenantState, so it has to be read back in that same scope.
         def store
-          Thread.current.thread_variable_get(STORE_KEY) ||
-            Thread.current.thread_variable_set(STORE_KEY, {})
+          thread = Thread.current
+          thread.thread_variable_get(STORE_KEY) || thread.thread_variable_set(STORE_KEY, {})
         end
 
         def read(key, identity)
@@ -91,42 +85,29 @@ module ConsoleKit
             return nil
           end
 
-          touch(key, entry)
           entry[:row]
         end
 
         def write(key, identity, row)
-          return row if UNCACHEABLE.include?(row[:status])
+          return row if row[:status] == :error
 
           purge_expired!
-          touch(key, row: row, expires_at: now + CACHE_TTL_SECONDS, state: state, identity: identity)
-          evict_to_capacity!
+          store[key] = { row: row, expires_at: now + CACHE_TTL_SECONDS, state: state, identity: identity }
           row
         end
 
         def identity_of(handler)
           handler.diagnostic_identity
         rescue StandardError => e
-          raise e if Diagnostics.programming_error?(e)
+          raise e if ConsoleKit.programming_error?(e)
 
           # Equal to nothing, including itself: an identity ConsoleKit could not
           # read is not evidence that a row is still true.
           Object.new
         end
 
-        # Ruby Hashes preserve insertion order, so delete-then-reinsert moves a key
-        # to the end and makes `each_key.first` the least-recently-used key.
-        def touch(key, entry)
-          store.delete(key)
-          store[key] = entry
-        end
-
         def purge_expired!
-          store.delete_if { |_, entry| !fresh?(entry) }
-        end
-
-        def evict_to_capacity!
-          store.delete(store.each_key.first) while store.size > CAPACITY
+          store.delete_if { |_key, entry| !fresh?(entry) }
         end
 
         def fresh?(entry) = entry[:expires_at] > now && entry[:state].equal?(state)
@@ -170,11 +151,6 @@ module ConsoleKit
           e
         end
 
-        # Diagnostics own no thread now, so there is nothing to wind down and
-        # nothing that can leak; both are kept for a host console's exit hook.
-        def live_thread_count = 0
-        def shutdown!(**) = 0
-
         private
 
         def resolve(handler, outcome) = outcome.is_a?(Hash) ? outcome : failed_row(handler, outcome)
@@ -188,7 +164,7 @@ module ConsoleKit
         end
 
         def failed_row(handler, error)
-          raise error if Diagnostics.programming_error?(error)
+          raise error if ConsoleKit.programming_error?(error)
 
           Connections::DiagnosticHelpers.error_diagnostics(handler.display_name, error)
         end

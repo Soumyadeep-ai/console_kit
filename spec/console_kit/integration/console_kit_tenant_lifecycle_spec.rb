@@ -234,14 +234,14 @@ RSpec.describe ConsoleKit do
     end
 
     describe 'auto-select with single tenant' do
-      before { ConsoleKit::Setup.setup }
+      before { ConsoleKit::TenantOrchestrator.run }
 
       it 'auto-selects the only tenant' do
-        expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+        expect(ConsoleKit::TenantOrchestrator.current_tenant).to eq('acme')
       end
 
       it 'reports the setup as successful' do
-        expect(ConsoleKit::Setup.tenant_setup_successful?).to be true
+        expect(ConsoleKit::TenantOrchestrator.send(:tenant_setup_successful?)).to be true
       end
 
       it 'sets partner_identifier from the tenant constants' do
@@ -253,7 +253,7 @@ RSpec.describe ConsoleKit do
       end
 
       it 'is idempotent — second call is a no-op' do
-        ConsoleKit::Setup.setup
+        ConsoleKit::TenantOrchestrator.run
 
         expect(ApplicationRecord).to have_received(:establish_connection).once
       end
@@ -264,8 +264,8 @@ RSpec.describe ConsoleKit do
     # the shard being asked for, so re-applying no longer churns the pool.
     describe 'reapply silently re-applies current tenant' do
       let(:reapply_output) do
-        ConsoleKit::Setup.setup
-        capture_all_output { ConsoleKit::Setup.reapply }
+        ConsoleKit::TenantOrchestrator.run
+        capture_all_output { ConsoleKit::TenantOrchestrator.reapply }
       end
 
       it 'produces no output' do
@@ -370,7 +370,7 @@ RSpec.describe ConsoleKit do
     context 'when tenant has an elasticsearch prefix' do
       before do
         context_class.tenant_elasticsearch_prefix = 'acme_idx'
-        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).then { |h| h.connect!(h.target) }
       end
 
       it 'sets thread-local prefix when tenant is configured' do
@@ -379,7 +379,7 @@ RSpec.describe ConsoleKit do
 
       it 'clears thread-local prefix when tenant is cleared' do
         context_class.tenant_elasticsearch_prefix = nil
-        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).then { |h| h.connect!(h.target) }
 
         expect(Thread.current[:console_kit_elasticsearch_prefix]).to be_nil
       end
@@ -397,7 +397,7 @@ RSpec.describe ConsoleKit do
       before do
         stub_const('Elasticsearch::Model', es_model)
         context_class.tenant_elasticsearch_prefix = 'acme_idx'
-        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).connect
+        ConsoleKit::Connections::ElasticsearchConnectionHandler.new(context_class).then { |h| h.connect!(h.target) }
       end
 
       it 'sets Elasticsearch::Model.index_name_prefix' do

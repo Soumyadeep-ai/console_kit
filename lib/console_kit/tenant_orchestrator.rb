@@ -1,28 +1,38 @@
 # frozen_string_literal: true
 
+require_relative 'tenant_state'
+require_relative 'tenant_selector'
+require_relative 'tenant_configurator'
+require_relative 'output'
+require_relative 'setup_ui'
+
 module ConsoleKit
   # Orchestrates tenant lifecycle, selection, and configuration
   class TenantOrchestrator
+    NO_TENANT_SELECTED = 'No tenant selected. Loading without tenant configuration.'
+
     class << self
       def auto_select? = (tenants.size == 1) || !$stdin.tty?
 
-      def current_tenant = Setup.current_tenant
+      def current_tenant = StateStore.tenant_key
 
+      # Declares the current tenant key without touching connections. Re-assigning
+      # the key that is already current preserves the fully-configured state.
       def current_tenant=(val)
-        Setup.current_tenant = val
+        return if StateStore.tenant_key == val
+
+        val.nil? ? StateStore.clear! : StateStore.current = TenantState.new(tenant_key: val)
       end
 
       def reapply
         key = current_tenant
-        return unless tenant_setup_successful?
-
-        Output.silence { TenantSwitch.call(key) }
+        Output.silence { TenantSwitch.call(key) } if tenant_setup_successful?
       rescue StandardError => e
         Output.print_error("Failed to reapply tenant '#{key}': #{scrub(e.message)}")
       end
 
       def reset
-        return warn_no_tenants unless tenants?
+        return Output.print_warning('Cannot reset tenant: No tenants configured.') unless tenants?
 
         perform_reset
       end
@@ -38,9 +48,6 @@ module ConsoleKit
       def tenants = ConsoleKit.configuration.tenants
       def tenants? = tenants&.any?
       def select_tenant_key = auto_select? ? tenants.keys.first : TenantSelector.select
-      def warn_no_tenants = Output.print_warning('Cannot reset tenant: No tenants configured.')
-      def cancel_switch = Output.print_warning('Tenant switch cancelled.')
-      def skip_tenant_message = Output.print_info('No tenant selected. Loading without tenant configuration.')
 
       private
 
@@ -48,11 +55,15 @@ module ConsoleKit
 
       def perform_reset
         key = select_tenant_key
-        return cancel_switch if key == :abort || key.blank?
-        return already_on_tenant?(key) if key == current_tenant
+        return Output.print_warning('Tenant switch cancelled.') if key == :abort || key.blank?
+        return Output.print_info("Already using tenant: #{key}. No changes made.") if key == current_tenant
 
+        apply_reset(key)
+      end
+
+      def apply_reset(key)
         clear_current_tenant
-        return skip_tenant_message if %i[exit none].include?(key)
+        return Output.print_info(NO_TENANT_SELECTED) if %i[exit none].include?(key)
 
         configure(key)
       end
@@ -68,7 +79,7 @@ module ConsoleKit
       def handle_selection_result(key)
         exit_on_key if %i[exit abort].include?(key)
 
-        skip_tenant_message if key == :none
+        Output.print_info(NO_TENANT_SELECTED) if key == :none
         Output.print_error('Tenant selection failed. Loading without tenant configuration.') if key.blank?
       end
 
@@ -81,14 +92,9 @@ module ConsoleKit
         TenantConfigurator.configure_tenant(key)
         return unless TenantConfigurator.configuration_success
 
-        Setup.current_tenant = key
+        self.current_tenant = key
         Prompt.apply
         SetupUI.print_tenant_banner(key, ConsoleKit.configuration)
-      end
-
-      def already_on_tenant?(key)
-        Output.print_info("Already using tenant: #{key}. No changes made.")
-        true
       end
 
       def clear_current_tenant

@@ -28,17 +28,15 @@ module Mongoid
     def command(*); end
   end
 
-  # Mock for Mongoid Client
+  # Mock for Mongoid Client. Mirrors Mongo::Client, which exposes no name.
   class Client
-    attr_reader :name
-
     def initialize(name, database_name = name)
       @name = name.to_s
       @database_name = database_name.to_s
     end
 
     def use(database_name)
-      self.class.new(name, database_name)
+      self.class.new(@name, database_name)
     end
 
     def database

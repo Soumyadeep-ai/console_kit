@@ -10,6 +10,7 @@ module ConsoleKit
       # read would silently destroy it, so the attribute is skipped on restore and
       # reported as a rollback failure instead.
       UNREADABLE = :'#<console_kit unreadable>'
+      UNREADABLE_MESSAGE = 'Previous value of %s could not be read, so it was left as the new tenant set it.'
 
       attr_reader :ctx, :attributes
 
@@ -22,11 +23,8 @@ module ConsoleKit
 
         def detect_attributes(ctx)
           methods = ctx.public_methods
-          partner_attrs(methods) + handler_attrs(methods)
-        end
-
-        def partner_attrs(methods)
-          methods.include?(:partner_identifier=) ? [:partner_identifier] : []
+          partner = methods.include?(:partner_identifier=) ? [:partner_identifier] : []
+          partner + handler_attrs(methods)
         end
 
         def handler_attrs(methods)
@@ -57,43 +55,35 @@ module ConsoleKit
 
       def current_values = attributes.to_h { |attr| [attr, safe_read(attr)] }
 
-      def reset
-        restore(attributes.to_h { |attr| [attr, nil] })
-      end
-
       # Verbatim write-back for rollback, so it must not warn or transform. Every
       # attribute is attempted even when an earlier one raises.
       def restore(values)
-        unreadable, writable = values.partition { |_attr, value| value == UNREADABLE }
-        failures = write_back(writable) + unreadable.map { |attr, _| [attr, unreadable_error(attr)] }
+        failures = values.filter_map { |attr, value| restore_attribute(attr, value) }
         raise_restore_failure(failures) if failures.any?
 
         values
       end
 
       def assign(constant, mapping)
-        attributes.to_h do |attr|
-          existing = safe_read(attr)
-          new_value = constant[mapping[attr]]
-          ctx.public_send(:"#{attr}=", new_value)
-          warn_case_mismatch(attr, existing, new_value) if case_mismatch?(existing, new_value)
-          [attr, new_value]
-        end
+        attributes.to_h { |attr| [attr, write_attribute(attr, constant[mapping[attr]])] }
       end
 
       private
 
-      def write_back(pairs)
-        pairs.filter_map do |attr, value|
-          ctx.public_send(:"#{attr}=", value)
-          nil
-        rescue StandardError, NotImplementedError => e
-          [attr, e]
-        end
+      def restore_attribute(attr, value)
+        return [attr, Error.new(format(UNREADABLE_MESSAGE, attr))] if value == UNREADABLE
+
+        ctx.public_send(:"#{attr}=", value)
+        nil
+      rescue StandardError, NotImplementedError => e
+        [attr, e]
       end
 
-      def unreadable_error(attr)
-        Error.new("Previous value of #{attr} could not be read, so it was left as the new tenant set it.")
+      def write_attribute(attr, new_value)
+        existing = safe_read(attr)
+        ctx.public_send(:"#{attr}=", new_value)
+        warn_case_mismatch(attr, existing, new_value)
+        new_value
       end
 
       def raise_restore_failure(failures)
@@ -102,12 +92,12 @@ module ConsoleKit
                      'Those attributes are still set to the tenant the switch failed to reach.'
       end
 
-      def case_mismatch?(existing, new_value)
-        existing.is_a?(String) && new_value.is_a?(String) &&
-          existing != new_value && existing.casecmp(new_value).zero?
-      end
-
+      # A tenant whose value differs from the context's only by case is almost
+      # always a configuration typo, not two distinct tenants.
       def warn_case_mismatch(attr, existing, configured)
+        return unless existing.is_a?(String) && configured.is_a?(String) &&
+                      existing != configured && existing.casecmp(configured).zero?
+
         Output.print_warning(
           "#{attr} case mismatch: context had '#{existing}', config set '#{configured}'. " \
           'Check your ConsoleKit tenant configuration.'

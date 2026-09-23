@@ -69,9 +69,9 @@ RSpec.describe ConsoleKit::TenantConfigurator do
         expect(Mongoid).to have_received(:override_client).with('acme_db')
       end
 
-      it 'prints success message' do
+      it 'leaves the success line to the setup banner, so a switch reports once' do
         configure
-        expect(ConsoleKit::Output).to have_received(:print_success).with("Tenant set to: #{tenant_key}")
+        expect(ConsoleKit::Output).not_to have_received(:print_success)
       end
 
       it 'sets tenant_shard correctly' do

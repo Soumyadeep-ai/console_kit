@@ -123,20 +123,6 @@ RSpec.describe ConsoleKit::Connections::SqlStrategy do
     end
   end
 
-  # Rails 6.0 and earlier called this attribute `spec_name`; 6.1 renamed it to
-  # `name`. The strategy feature-detects instead of version-sniffing.
-  describe 'a database configuration from before the Rails 6.1 spec_name rename' do
-    let(:base_class) { ActiveRecordMock.legacy_config_base(spec_name: 'primary') }
-
-    it 'reads the live identity through spec_name' do
-      expect(strategy.snapshot[:db_config_name]).to eq('primary')
-    end
-
-    it 'reports that identity to the dashboard' do
-      expect(strategy.pool_details[:config]).to eq('primary')
-    end
-  end
-
   # The native path is chosen by feature detection, never by Rails version, and
   # it needs EVERY method it is about to call. A base class carrying only part
   # of the shard API - a version check would happily call this one "6.1+" - has

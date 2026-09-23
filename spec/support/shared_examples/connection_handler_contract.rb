@@ -124,6 +124,13 @@ RSpec.shared_examples 'a connection handler' do
       contract.handler.connect!(contract.target)
       expect(contract.unrelated_identities).to eq(others)
     end
+
+    it 'issues no query or health probe to switch and verify' do
+      calls = contract.network_calls
+      contract.handler.connect!(contract.target)
+      contract.handler.verify!(contract.target)
+      expect(contract.network_calls).to eq(calls)
+    end
   end
 
   describe '#restore' do

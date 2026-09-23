@@ -25,7 +25,7 @@ module ConsoleKit
         def sql_version(conn)
           conn.select_value('SELECT version()')
         rescue StandardError => e
-          raise e if SqlStrategy.programming_error?(e)
+          raise e if ConsoleKit.programming_error?(e)
 
           nil
         end
@@ -79,16 +79,6 @@ module ConsoleKit
       # the whole process, so the resolved pool is what a cached diagnostic row
       # has to stay true for.
       def diagnostic_identity = strategy.pool_details
-
-      def diagnostics(level: :basic)
-        return unavailable_diagnostics unless available?
-
-        level == :full ? full_diagnostics : basic_diagnostics
-      rescue StandardError => e
-        raise e if ConsoleKit.programming_error?(e)
-
-        error_diagnostics(display_name, e)
-      end
 
       private
 

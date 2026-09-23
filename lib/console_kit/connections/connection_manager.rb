@@ -41,7 +41,7 @@ module ConsoleKit
         end
 
         def drop(klass, dropped, reason)
-          return nil if reason.nil?
+          return nil unless reason
 
           report_dropped(klass, reason)
           dropped << klass.backend_key if dropped

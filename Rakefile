@@ -19,7 +19,6 @@ task :benchmark do
   files.each do |file|
     heading = "benchmark/#{File.basename(file)}"
     puts "\n#{'=' * 88}\n#{heading}\n#{'=' * 88}"
-    system({ 'BUNDLE_GEMFILE' => ENV.fetch('BUNDLE_GEMFILE', File.expand_path('Gemfile', __dir__)) },
-           Gem.ruby, '-Ilib', file) || abort("Benchmark failed: #{heading}")
+    ruby '-Ilib', file
   end
 end

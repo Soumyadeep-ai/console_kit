@@ -98,12 +98,11 @@ module TenantBackends
       end
     end
 
-    # Mongo client stand-in exposing the effective client and database names.
+    # Mongo client stand-in. Like Mongo::Client it exposes a database and no name.
     class Client
-      attr_reader :name, :database
+      attr_reader :database
 
-      def initialize(name, database_name)
-        @name = name.to_s
+      def initialize(_name, database_name)
         @database = Database.new(database_name.to_s)
       end
     end

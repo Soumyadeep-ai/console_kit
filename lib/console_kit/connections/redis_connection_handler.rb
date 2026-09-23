@@ -66,26 +66,16 @@ module ConsoleKit
       def verify!(target)
         expected = coerce_db(target)
         actual = adapter.current_db
-        return true if verified?(expected, actual)
+        return true if (actual || DEFAULT_REDIS_DB) == expected
 
         raise verification_error(expected, actual)
       end
 
       def restore(state)
         db = state && state[:db]
-        return if db.nil? || adapter.current_db == db
+        return unless db && adapter.current_db != db
 
         apply(db)
-      end
-
-      def diagnostics(level: :basic)
-        return unavailable_diagnostics unless available?
-
-        level == :full ? full_diagnostics : basic_diagnostics
-      rescue StandardError => e
-        raise e if ConsoleKit.programming_error?(e)
-
-        error_diagnostics(display_name, sanitized(e))
       end
 
       private
@@ -100,10 +90,13 @@ module ConsoleKit
 
       def full_diagnostics
         redis = adapter.client
-        return basic_diagnostics if redis.nil?
+        return basic_diagnostics unless redis
 
         latency = measure_latency { redis.ping }
-        info = redis.info
+        connected_diagnostics(latency, redis.info)
+      end
+
+      def connected_diagnostics(latency, info)
         {
           name: display_name, status: :connected, latency_ms: latency,
           details: { db: resolved_db, version: info['redis_version'], memory: info['used_memory_human'] }
@@ -115,30 +108,26 @@ module ConsoleKit
       rescue ConsoleKit::Error
         raise
       rescue StandardError => e
-        raise ConnectionError.new("#{display_name} SELECT #{db} failed: #{RedisClientAdapter.scrub(e.message)}",
+        raise ConnectionError.new("#{display_name} SELECT #{db} failed: #{scrub(e.message)}",
                                   backend: display_name, operation: :connect)
-      end
-
-      def verified?(expected, actual)
-        actual == expected || (actual.nil? && expected == DEFAULT_REDIS_DB)
       end
 
       def warn_process_global
         return unless isolation_model == :process_global
-        return if self.class.isolation_warned
 
-        self.class.isolation_warned = true
+        handler_class = self.class
+        return if handler_class.isolation_warned
+
+        handler_class.isolation_warned = true
         Output.print_warning(PROCESS_GLOBAL_WARNING)
       end
 
       def coerce_db(target)
         return DEFAULT_REDIS_DB if target.nil?
 
-        normalize(target) ||
+        RedisClientAdapter.db_index(target) ||
           raise(ConfigurationError, "ConsoleKit: Redis DB #{scrub(target.inspect)} is not a non-negative integer.")
       end
-
-      def normalize(target) = RedisClientAdapter.db_index(target)
 
       def unsupported_message(db)
         "#{display_name} DB #{db} was requested but this client exposes no connection that can be selected and " \
@@ -151,7 +140,6 @@ module ConsoleKit
       end
 
       def resolved_db = adapter.current_db || coerce_db(target)
-      def sanitized(error) = StandardError.new(RedisClientAdapter.scrub(error.message))
       def adapter = @adapter ||= RedisClientAdapter.new
     end
   end

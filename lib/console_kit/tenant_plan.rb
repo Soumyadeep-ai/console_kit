@@ -21,7 +21,7 @@ module ConsoleKit
 
     # { backend_key => target_value_or_nil }
     def targets_for(handlers)
-      handlers.to_h { |handler| [handler.backend_key, target_for(handler, constants)] }
+      handlers.to_h { |handler| [handler.backend_key, target_for(handler)] }
     end
 
     private
@@ -30,24 +30,32 @@ module ConsoleKit
     # through the merged context mapping let one handler repoint another backend,
     # and normalising the value here made the switch judge it differently from
     # Configuration#validate!.
-    def target_for(handler, constants) = constants[handler.class.constants_key]
+    def target_for(handler) = constants[handler.class.constants_key]
 
     def resolve_constants
       return {} if tenant_key.nil?
 
       found = lookup_constants
-      raise TenantNotFoundError, "No configuration found for tenant: #{tenant_key}" unless found
+      raise TenantNotFoundError, not_found_message unless found
 
       validate!(found)
       found
     end
 
+    def not_found_message
+      tenants = ConsoleKit.configuration.tenants
+      keys = tenants.is_a?(Hash) ? tenants.keys : []
+      known = keys.any? ? "Configured tenants: #{keys.map(&:inspect).join(', ')}." : 'No tenants are configured.'
+      "No configuration found for tenant: #{tenant_key.inspect}. #{known}"
+    end
+
     def lookup_constants
       tenants = ConsoleKit.configuration.tenants
-      return nil unless tenants.is_a?(Hash)
+      entry = tenants.is_a?(Hash) ? tenants[tenant_key] : nil
+      constants_from(entry) unless entry.nil?
+    end
 
-      entry = tenants[tenant_key]
-      return nil if entry.nil?
+    def constants_from(entry)
       raise ConfigurationError, "Tenant #{tenant_key.inspect} configuration must be a Hash, got #{entry.class}." \
         unless entry.is_a?(Hash)
 
@@ -57,14 +65,15 @@ module ConsoleKit
     # A direct `switch_tenant` need not have run `Configuration#validate!`, so the
     # shape is checked here: a String `:constants` raised a bare NoMethodError.
     def validate!(constants)
+      tenant = tenant_key.inspect
       unless constants.is_a?(Hash)
-        raise ConfigurationError, "Tenant #{tenant_key.inspect} `:constants` must be a Hash, got #{constants.class}."
+        raise ConfigurationError, "Tenant #{tenant} `:constants` must be a Hash, got #{constants.class}."
       end
 
       missing = REQUIRED_KEYS - constants.keys
       return if missing.empty?
 
-      raise ConfigurationError, "Tenant #{tenant_key.inspect} constants missing keys: #{missing.join(', ')}"
+      raise ConfigurationError, "Tenant #{tenant} constants missing keys: #{missing.join(', ')}"
     end
   end
 end
