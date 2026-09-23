@@ -13,7 +13,6 @@ RSpec.describe ConsoleKit::TenantConfigurator do
   end
 
   before do
-    # Stub configuration accessor
     allow(ConsoleKit.configuration).to receive_messages(tenants: tenants, context_class: context_class)
   end
 
@@ -33,17 +32,22 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
+  shared_context 'with live backends' do
+    before do
+      allow(ApplicationRecord).to receive(:establish_connection).and_call_original
+      allow(Mongoid).to receive(:override_database).and_call_original
+      allow(Mongoid).to receive(:override_client).and_call_original
+      allow(Mongoid::Config).to receive(:clients).and_return({})
+    end
+  end
+
   describe '.configure_tenant' do
     subject(:configure) { described_class.configure_tenant(tenant_key) }
 
     context 'with valid tenant key' do
-      before do
-        allow(ApplicationRecord).to receive(:establish_connection)
-        allow(Mongoid).to receive(:override_database)
-        allow(Mongoid).to receive(:override_client)
-        allow(Mongoid::Config).to receive(:clients).and_return({})
-        allow(ConsoleKit::Output).to receive(:print_success)
-      end
+      include_context 'with live backends'
+
+      before { allow(ConsoleKit::Output).to receive(:print_success) }
 
       it 'establishes ActiveRecord connection with correct shard' do
         configure
@@ -61,9 +65,9 @@ RSpec.describe ConsoleKit::TenantConfigurator do
         expect(Mongoid).to have_received(:override_client).with('acme_db')
       end
 
-      it 'prints success message' do
+      it 'leaves the success line to the setup banner, so a switch reports once' do
         configure
-        expect(ConsoleKit::Output).to have_received(:print_success).with("Tenant set to: #{tenant_key}")
+        expect(ConsoleKit::Output).not_to have_received(:print_success)
       end
 
       it 'sets tenant_shard correctly' do
@@ -101,12 +105,10 @@ RSpec.describe ConsoleKit::TenantConfigurator do
         { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'acme', redis_db: 1, elasticsearch_prefix: 'acme' }
       end
 
+      include_context 'with live backends'
+
       before do
         context_class.partner_identifier = 'ACME'
-        allow(ApplicationRecord).to receive(:establish_connection)
-        allow(Mongoid).to receive(:override_database)
-        allow(Mongoid).to receive(:override_client)
-        allow(Mongoid::Config).to receive(:clients).and_return({})
         allow(ConsoleKit::Output).to receive(:print_success)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
@@ -134,12 +136,10 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
 
     context 'with partner_identifier matching exactly' do
+      include_context 'with live backends'
+
       before do
         context_class.partner_identifier = 'ACME'
-        allow(ApplicationRecord).to receive(:establish_connection)
-        allow(Mongoid).to receive(:override_database)
-        allow(Mongoid).to receive(:override_client)
-        allow(Mongoid::Config).to receive(:clients).and_return({})
         allow(ConsoleKit::Output).to receive(:print_success)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
@@ -200,15 +200,22 @@ RSpec.describe ConsoleKit::TenantConfigurator do
         mongo_class = Class.new
         allow(mongo_class).to receive(:respond_to?).with(:override_database).and_return(false)
         stub_const('Mongoid', mongo_class)
+        allow(ConsoleKit::Output).to receive(:print_error)
+        allow(ConsoleKit::Output).to receive(:print_backtrace)
       end
 
-      it 'skips Mongoid override without error' do
-        expect { configure }.not_to raise_error
+      it 'reports the unsupported backend instead of skipping it' do
+        configure
+        expect(ConsoleKit::Output).to have_received(:print_error)
+          .with(a_string_including('Mongoid.override_database, which this target needs, is not available'))
+      end
+
+      it 'refuses to report success' do
+        expect(configure).to be(false)
       end
     end
 
     context 'with partial constants missing' do
-      # missing partner_code
       before do
         allow(ConsoleKit.configuration).to receive(:tenants)
           .and_return({ tenant_key => { constants: { shard: 'shard_acme' } } })
@@ -244,16 +251,15 @@ RSpec.describe ConsoleKit::TenantConfigurator do
   end
 
   describe '.clear' do
+    include_context 'with live backends'
+
     before do
       allow(ConsoleKit.configuration).to receive(:context_class).and_return(context_class)
       context_class.tenant_shard = 'some_shard'
       context_class.tenant_mongo_db = 'some_db'
       context_class.partner_identifier = 'some_partner'
       allow(ConsoleKit::Output).to receive(:print_info)
-      allow(ApplicationRecord).to receive(:establish_connection)
-      allow(Mongoid).to receive(:override_database)
-      allow(Mongoid).to receive(:override_client)
-      allow(Mongoid::Config).to receive(:clients).and_return({})
+      ApplicationRecord.establish_connection(:shard_acme)
     end
 
     it 'prints info about clearing' do
@@ -315,16 +321,23 @@ RSpec.describe ConsoleKit::TenantConfigurator do
     end
   end
 
-  describe '.validate_constants!' do
-    it 'raises error if any required constant is missing' do
-      constants = { mongo_db: 'db' } # missing shard, partner_code
-      expect { described_class.send(:validate_constants!, constants) }
-        .to raise_error(ConsoleKit::Error, /missing keys: shard, partner_code/)
+  describe 'required constant validation' do
+    subject(:constants) { ConsoleKit::TenantPlan.new(tenant_key).constants }
+
+    context 'when a required constant is missing' do
+      let(:valid_constants) { { mongo_db: 'db' } }
+
+      it 'raises before anything is applied' do
+        expect { constants }.to raise_error(ConsoleKit::Error, /missing keys: shard, partner_code/)
+      end
     end
 
-    it 'does not raise error if all required constants are present' do
-      constants = { shard: 'shard', mongo_db: 'db', partner_code: 'code' }
-      expect { described_class.send(:validate_constants!, constants) }.not_to raise_error
+    context 'when all required constants are present' do
+      let(:valid_constants) { { shard: 'shard', mongo_db: 'db', partner_code: 'code' } }
+
+      it 'resolves the tenant constants' do
+        expect(constants).to eq(valid_constants)
+      end
     end
   end
 

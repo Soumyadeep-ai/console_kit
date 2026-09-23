@@ -1,69 +1,105 @@
 # frozen_string_literal: true
 
 require_relative 'base_connection_handler'
+require_relative 'sql_strategy'
 
 module ConsoleKit
   module Connections
-    # Handles SQL connections
     class SqlConnectionHandler < BaseConnectionHandler
+      backend :sql,
+              display_name: 'SQL',
+              context_attribute: :tenant_shard,
+              constants_key: :shard,
+              detail_label: 'Shard'
+
+      DEFAULT_BASE_CLASS = 'ApplicationRecord'
+      MISSING_BASE_CLASS = 'the configured sql_base_class %<name>s could not be resolved. Check the class name and ' \
+                           'that the class is loaded'
+
       class << self
+        def target_error(value) = identifier_error(value)
+
         def sql_version(conn)
           conn.select_value('SELECT version()')
-        rescue StandardError
+        rescue StandardError => e
+          raise e if ConsoleKit.programming_error?(e)
+
           nil
         end
 
         def base_class_name = ConsoleKit.configuration.sql_base_class
       end
 
-      def connect
-        shard = context_attribute(:tenant_shard).presence&.to_sym
+      def available? = resolved_base_class.present?
+
+      def unavailable_reason
+        name = self.class.base_class_name
+        return nil if name.to_s == DEFAULT_BASE_CLASS || resolved_base_class.present?
+
+        format(MISSING_BASE_CLASS, name: name.inspect)
+      end
+
+      def prepare(target)
+        validate_target!(target)
+        unless strategy.switchable?
+          raise UnsupportedBackendError, "#{display_name} base class #{base_class} cannot switch connections."
+        end
+        return if strategy.resolvable?(normalize(target))
+
+        raise ConfigurationError,
+              "ConsoleKit: SQL shard #{scrub(target.inspect)} is not a registered shard or database configuration."
+      end
+
+      def snapshot = strategy.snapshot
+
+      def connect!(target)
+        shard = normalize(target)
         Output.print_info("#{connection_message(shard)} via #{base_class}")
-        disconnect_existing_pool
-        shard ? base_class.establish_connection(shard) : base_class.establish_connection
+        strategy.apply(shard)
       end
 
-      def available? = self.class.base_class_name.to_s.safe_constantize.present?
+      def verify!(target)
+        expected, actual = strategy.identity(normalize(target))
+        return true if expected.to_s == actual.to_s
 
-      def diagnostics
-        return unavailable_diagnostics('SQL') unless available?
-
-        perform_diagnostics
-      rescue StandardError => e
-        error_diagnostics('SQL', e)
+        raise verification_error(expected, actual)
       end
+
+      def restore(state) = strategy.restore(state)
+
+      def diagnostic_identity = strategy.pool_details
 
       private
 
-      def perform_diagnostics
+      def basic_diagnostics
+        details = strategy.pool_details
+        { name: display_name, status: details.empty? ? :unknown : :connected, latency_ms: nil, details: details }
+      end
+
+      def full_diagnostics
         conn = base_class.connection
         latency = measure_latency { conn.execute('SELECT 1') }
-        build_sql_diagnostics(conn, latency)
+        { name: display_name, status: :connected, latency_ms: latency, details: full_details(conn) }
       end
 
-      def disconnect_existing_pool
-        pool = base_class.try(:connection_pool)
-        pool&.disconnect!
-      end
-
-      def build_sql_diagnostics(conn, latency)
+      def full_details(conn)
         {
-          name: 'SQL',
-          status: :connected,
-          latency_ms: latency,
-          details: {
-            adapter: conn.adapter_name,
-            pool_size: base_class.connection_pool.size,
-            version: self.class.sql_version(conn).to_s.truncate(50)
-          }
+          adapter: conn.adapter_name,
+          pool_size: base_class.connection_pool.size,
+          version: self.class.sql_version(conn).to_s.truncate(50)
         }
       end
+
+      def strategy = @strategy ||= SqlStrategy.new(base_class)
+      def normalize(target) = target.presence&.to_sym
+
+      def resolved_base_class = self.class.base_class_name.to_s.safe_constantize
 
       def base_class
         @base_class ||= begin
           name = self.class.base_class_name
           klass = name.to_s.safe_constantize
-          klass || raise(Error, "ConsoleKit: sql_base_class '#{name}' could not be found.")
+          klass || raise(ConfigurationError, "ConsoleKit: sql_base_class '#{name}' could not be found.")
         end
       end
 

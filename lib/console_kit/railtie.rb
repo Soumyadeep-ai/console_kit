@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Railtie for integrating ConsoleKit with Rails console.
   class Railtie < Rails::Railtie
     console do
-      ConsoleKit::Setup.setup
+      ConsoleKit::TenantOrchestrator.run
       ConsoleKit::Prompt.apply
       if defined?(IRB::ExtendCommandBundle) && !defined?(Pry)
         IRB::ExtendCommandBundle.include(ConsoleKit::ConsoleHelpers)
@@ -13,6 +12,6 @@ module ConsoleKit
       end
     end
 
-    config.to_prepare { ConsoleKit::Setup.reapply if defined?(Rails::Console) }
+    config.to_prepare { ConsoleKit::TenantOrchestrator.reapply if defined?(Rails::Console) }
   end
 end

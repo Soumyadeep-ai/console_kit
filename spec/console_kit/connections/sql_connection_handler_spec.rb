@@ -2,7 +2,6 @@
 
 require 'spec_helper'
 
-# Dummy context object for connection handler specs
 class DummyContext
   attr_reader :tenant_shard
 
@@ -12,256 +11,615 @@ class DummyContext
 end
 
 RSpec.describe ConsoleKit::Connections::SqlConnectionHandler do
-  let(:pool_class) do
-    Class.new do
-      def disconnect!; end
-    end
-  end
-  let(:context) { instance_double(DummyContext, tenant_shard: 'shard_foo') }
-  let(:handler) { described_class.new(context) }
-  let(:connection_pool) { instance_double(pool_class, disconnect!: true) }
+  subject(:handler) { described_class.new(context) }
+
+  let(:base_class) { ActiveRecordMock.sharded_base(configs: config_names, shards: %w[shard_one shard_two]) }
+  let(:shard) { 'shard_one' }
+  let(:context) { instance_double(DummyContext, tenant_shard: shard) }
+
+  def config_names = %w[primary shard_one shard_two legacy_db]
+  def pool_handler = base_class.connection_handler
 
   before do
-    stub_const('ApplicationRecord', Class.new do
-      def self.establish_connection(*); end
-      def self.connection_pool; end
-    end)
-    allow(ApplicationRecord).to receive(:establish_connection)
-    allow(ApplicationRecord).to receive(:connection_pool).and_return(connection_pool)
-  end
-
-  describe '#connect' do
-    it 'calls establish_connection with correct shard' do
-      handler.connect
-      expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_foo)
-    end
-
-    it 'disconnects the old connection pool before establishing a new one' do
-      handler.connect
-      expect(connection_pool).to have_received(:disconnect!)
-    end
-
-    # rubocop:disable RSpec/MultipleExpectations, RSpec/MessageSpies
-    it 'disconnects before establishing a new connection' do
-      expect(connection_pool).to receive(:disconnect!).ordered
-      expect(ApplicationRecord).to receive(:establish_connection).with(:shard_foo).ordered
-      handler.connect
-    end
-    # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
-
-    context 'with a custom base class' do
-      let(:custom_pool) { instance_double(pool_class, disconnect!: true) }
-
-      before do
-        stub_const('MyBaseRecord', Class.new do
-          def self.establish_connection(*); end
-          def self.connection_pool; end
-        end)
-        allow(MyBaseRecord).to receive(:establish_connection)
-        allow(MyBaseRecord).to receive(:connection_pool).and_return(custom_pool)
-        ConsoleKit.configuration.sql_base_class = 'MyBaseRecord'
-      end
-
-      after { ConsoleKit.configuration.sql_base_class = 'ApplicationRecord' }
-
-      it 'calls establish_connection on the custom base class' do
-        handler.connect
-        expect(MyBaseRecord).to have_received(:establish_connection).with(:shard_foo)
-      end
-
-      it 'disconnects the custom base class pool' do
-        handler.connect
-        expect(custom_pool).to have_received(:disconnect!)
-      end
-
-      it 'does not call establish_connection on ApplicationRecord' do
-        handler.connect
-        expect(ApplicationRecord).not_to have_received(:establish_connection)
-      end
-    end
-
-    context 'when tenant_shard is nil' do
-      let(:context) { instance_double(DummyContext, tenant_shard: nil) }
-
-      it 'calls establish_connection with no arguments' do
-        handler.connect
-        expect(ApplicationRecord).to have_received(:establish_connection).with(no_args)
-      end
-
-      it 'still disconnects the old pool' do
-        handler.connect
-        expect(connection_pool).to have_received(:disconnect!)
-      end
-    end
-
-    context 'when connection_pool is not available' do
-      before do
-        allow(ApplicationRecord).to receive(:respond_to?).and_call_original
-        allow(ApplicationRecord).to receive(:respond_to?).with(:connection_pool).and_return(false)
-      end
-
-      it 'skips disconnect and still establishes connection' do
-        handler.connect
-        expect(ApplicationRecord).to have_received(:establish_connection).with(:shard_foo)
-      end
-    end
-
-    it 'raises errors to be handled upstream' do
-      allow(ApplicationRecord).to receive(:establish_connection).and_raise('SQL ERROR')
-      expect { handler.connect }.to raise_error('SQL ERROR')
-    end
-
-    it 'raises a ConsoleKit::Error if base class is not found during connect' do
-      ConsoleKit.configuration.sql_base_class = 'NonExistent'
-      expect { handler.connect }.to raise_error(ConsoleKit::Error, /could not be found/)
-    ensure
-      ConsoleKit.configuration.sql_base_class = 'ApplicationRecord'
-    end
+    stub_const('ApplicationRecord', base_class)
+    ConsoleKit::Output.silent = true
   end
 
   describe '#available?' do
-    it 'returns true when ApplicationRecord is defined' do
+    it 'is true when the configured base class exists' do
       expect(handler).to be_available
     end
 
-    it 'returns true when custom base class is defined' do
-      stub_const('MyBaseRecord', Class.new)
-      ConsoleKit.configuration.sql_base_class = 'MyBaseRecord'
-      expect(handler).to be_available
-    ensure
-      ConsoleKit.configuration.sql_base_class = 'ApplicationRecord'
-    end
-
-    it 'returns false when base class is not defined' do
-      ConsoleKit.configuration.sql_base_class = 'NonExistent'
+    it 'is false when the configured base class does not exist' do
+      ConsoleKit.configuration.sql_base_class = 'NotARealRecord'
       expect(handler).not_to be_available
-    ensure
-      ConsoleKit.configuration.sql_base_class = 'ApplicationRecord'
+    end
+
+    it 'raises a ConfigurationError when a missing base class is actually used' do
+      ConsoleKit.configuration.sql_base_class = 'NotARealRecord'
+      expect { handler.connect!('shard_one') }.to raise_error(ConsoleKit::ConfigurationError, /could not be found/)
     end
   end
 
-  describe '#diagnostics' do
-    context 'when SQL is available' do
-      before do
-        stub_const('ApplicationRecord', Class.new do
-          def self.establish_connection(*); end
-          def self.connection; end
-          def self.connection_pool; end
-        end)
-        allow(ApplicationRecord).to receive_messages(
-          connection: double(adapter_name: 'PostgreSQL', execute: true, select_value: 'PostgreSQL 14.0'),
-          connection_pool: double(size: 5)
-        )
+  describe '#unavailable_reason' do
+    before { allow(ConsoleKit::Output).to receive(:print_warning) }
+
+    context 'when the operator configured the class name explicitly' do
+      before { ConsoleKit.configuration.sql_base_class = 'Legacy::NotARealRecord' }
+
+      it 'names the class that could not be resolved' do
+        expect(handler.unavailable_reason).to include('Legacy::NotARealRecord')
       end
 
-      it 'returns a hash with name SQL' do
-        result = handler.diagnostics
-        expect(result[:name]).to eq('SQL')
+      it 'still answers false rather than raising out of the switch' do
+        expect(handler).not_to be_available
       end
 
-      it 'returns status :connected' do
-        result = handler.diagnostics
+      it 'prints nothing itself, so a repeated dashboard render cannot bury the table' do
+        handler.available?
+        expect(ConsoleKit::Output).not_to have_received(:print_warning)
+      end
+    end
+
+    context 'when the application simply has no ActiveRecord' do
+      before { hide_const('ApplicationRecord') }
+
+      it 'gives no reason, because the default base class is allowed to be absent' do
+        expect(handler.unavailable_reason).to be_nil
+      end
+
+      it 'answers false' do
+        expect(handler).not_to be_available
+      end
+    end
+
+    context 'when the base class resolves' do
+      it 'gives no reason' do
+        expect(handler.unavailable_reason).to be_nil
+      end
+    end
+  end
+
+  describe '#prepare' do
+    it 'accepts a natively registered shard' do
+      expect { handler.prepare('shard_one') }.not_to raise_error
+    end
+
+    it 'accepts a plain database configuration name' do
+      expect { handler.prepare('legacy_db') }.not_to raise_error
+    end
+
+    it 'accepts a nil target' do
+      expect { handler.prepare(nil) }.not_to raise_error
+    end
+
+    it 'raises ConfigurationError for a shard that resolves to nothing' do
+      expect { handler.prepare('nowhere') }.to raise_error(ConsoleKit::ConfigurationError, /not a registered shard/)
+    end
+
+    it 'leaves the current shard untouched' do
+      handler.prepare('shard_one')
+      expect(base_class.current_shard).to eq(:default)
+    end
+
+    it 'establishes no connection' do
+      handler.prepare('shard_one')
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'mutates nothing when it raises' do
+      prepare_ignoring_errors('nowhere')
+      expect(base_class.connection_pool.db_config.name).to eq('primary')
+    end
+
+    def prepare_ignoring_errors(target)
+      handler.prepare(target)
+    rescue ConsoleKit::ConfigurationError
+      nil
+    end
+
+    context 'with an unresolved shard that carries a credential' do
+      let(:uri) { 'postgres://app:s3cr3t@db.internal:5432/acme' }
+      let(:message) do
+        handler.prepare(uri)
+        nil
+      rescue ConsoleKit::ConfigurationError => e
+        e.message
+      end
+
+      it 'redacts the value out of the rejection' do
+        expect(message).to include('[redacted]')
+      end
+
+      it 'never leaks the password' do
+        expect(message).not_to include('s3cr3t')
+      end
+    end
+
+    context 'when the base class cannot switch connections at all' do
+      let(:base_class) { Class.new }
+
+      it 'raises UnsupportedBackendError' do
+        expect { handler.prepare('shard_one') }.to raise_error(ConsoleKit::UnsupportedBackendError)
+      end
+    end
+  end
+
+  describe '#connect! on the native shard path' do
+    before { handler.connect!('shard_one') }
+
+    it 'points the base class at the requested shard' do
+      expect(base_class.current_shard).to eq(:shard_one)
+    end
+
+    it 'pushes exactly one entry onto the connected_to stack' do
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'preserves the current role' do
+      expect(base_class.current_role).to eq(:writing)
+    end
+
+    it 'never churns a connection pool' do
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'keeps the default pool connected' do
+      expect(pool_handler.retrieve_connection_pool('ApplicationRecord', role: :writing, shard: :default).disconnects)
+        .to eq(0)
+    end
+  end
+
+  describe '#connect! on the establish_connection fallback path' do
+    before { handler.connect!('legacy_db') }
+
+    it 'repoints the pool at the requested configuration' do
+      expect(base_class.connection_pool.db_config.name).to eq('legacy_db')
+    end
+
+    it 'replaces the previous pool exactly once' do
+      expect(pool_handler.disconnects).to eq(1)
+    end
+
+    it 'leaves the shard stack alone' do
+      expect(base_class.connected_to_stack).to be_empty
+    end
+  end
+
+  describe '#connect! repeated switching' do
+    it 'lands on the last requested shard' do
+      %w[shard_one shard_two shard_one shard_two].each { |name| handler.connect!(name) }
+      expect(base_class.current_shard).to eq(:shard_two)
+    end
+
+    it 'never churns pools while alternating between native shards' do
+      %w[shard_one shard_two shard_one shard_two].each { |name| handler.connect!(name) }
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'does not re-establish when asked for the same fallback configuration twice' do
+      3.times { handler.connect!('legacy_db') }
+      expect(pool_handler.disconnects).to eq(1)
+    end
+
+    it 'still resolves to the same configuration after repeated fallback switches' do
+      3.times { handler.connect!('legacy_db') }
+      expect(base_class.connection_pool.db_config.name).to eq('legacy_db')
+    end
+
+    it 'does not touch the pool when the default is already live' do
+      handler.connect!(nil)
+      expect(pool_handler.disconnects).to eq(0)
+    end
+  end
+
+  describe '#connect! stack growth' do
+    it 'holds the stack at one frame across five successive switches' do
+      %w[shard_one shard_two shard_one shard_two shard_one].each { |name| handler.connect!(name) }
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'holds the stack at one frame when the same shard is applied four times' do
+      4.times { handler.connect!('shard_one') }
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'still churns no pool while the same shard is re-applied' do
+      4.times { handler.connect!('shard_one') }
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'does not grow the stack when resetting to the default' do
+      handler.connect!('shard_one')
+      handler.connect!(nil)
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'lands on the default shard after a reset' do
+      handler.connect!('shard_one')
+      handler.connect!(nil)
+      expect(base_class.current_shard).to eq(:default)
+    end
+
+    it 'leaves a frame the application pushed itself alone' do
+      base_class.connecting_to(shard: :shard_two, role: :writing)
+      handler.connect!('shard_one')
+      expect(base_class.connected_to_stack.size).to eq(2)
+    end
+
+    it 'restores the enclosing shard without growing the stack' do
+      handler.connect!('shard_one')
+      state = handler.snapshot
+      handler.connect!('shard_two')
+      handler.restore(state)
+      expect(base_class.connected_to_stack.size).to eq(1)
+    end
+
+    it 'restores the exact depth after a failed switch is rolled back' do
+      state = handler.snapshot
+      handler.connect!('shard_one')
+      handler.restore(state)
+      expect(base_class.connected_to_stack.size).to eq(state[:stack_depth])
+    end
+  end
+
+  describe '#connect! with the context target' do
+    it 'applies the shard resolved from the context' do
+      handler.connect!(handler.target)
+      expect(base_class.current_shard).to eq(:shard_one)
+    end
+
+    context 'when the context carries no shard' do
+      let(:shard) { nil }
+
+      it 'leaves the connection on the default configuration' do
+        handler.connect!(handler.target)
+        expect(base_class.connection_pool.db_config.name).to eq('primary')
+      end
+    end
+  end
+
+  describe '#snapshot and #restore' do
+    it 'captures the live shard' do
+      expect(handler.snapshot[:shard]).to eq(:default)
+    end
+
+    it 'captures the live database configuration name' do
+      expect(handler.snapshot[:db_config_name]).to eq('primary')
+    end
+
+    it 'mutates nothing' do
+      handler.snapshot
+      expect(pool_handler.disconnects).to eq(0)
+    end
+
+    it 'round-trips the native path back to the original shard' do
+      state = handler.snapshot
+      handler.connect!('shard_one')
+      handler.restore(state)
+      expect(base_class.current_shard).to eq(:default)
+    end
+
+    it 'leaves no stack residue after restoring the native path' do
+      state = handler.snapshot
+      handler.connect!('shard_one')
+      handler.restore(state)
+      expect(base_class.connected_to_stack).to be_empty
+    end
+
+    it 'round-trips the fallback path back to the original configuration' do
+      state = handler.snapshot
+      handler.connect!('legacy_db')
+      handler.restore(state)
+      expect(base_class.connection_pool.db_config.name).to eq('primary')
+    end
+
+    it 'restores from a nested native switch back to the enclosing shard' do
+      handler.connect!('shard_one')
+      state = handler.snapshot
+      handler.connect!('shard_two')
+      handler.restore(state)
+      expect(base_class.current_shard).to eq(:shard_one)
+    end
+
+    it 'restores cleanly when there was no previous shard' do
+      state = handler.snapshot
+      handler.connect!('shard_one')
+      handler.restore(state)
+      expect(handler.snapshot).to eq(state)
+    end
+
+    it 'is a no-op when nothing was applied' do
+      handler.restore(handler.snapshot)
+      expect(pool_handler.disconnects).to eq(0)
+    end
+  end
+
+  describe '#verify!' do
+    it 'passes when the live shard matches the native target' do
+      handler.connect!('shard_one')
+      expect(handler.verify!('shard_one')).to be(true)
+    end
+
+    it 'passes when the live configuration matches the fallback target' do
+      handler.connect!('legacy_db')
+      expect(handler.verify!('legacy_db')).to be(true)
+    end
+
+    it 'passes for a nil target on an untouched connection' do
+      expect(handler.verify!(nil)).to be(true)
+    end
+
+    it 'raises ConnectionVerificationError when the live shard is another shard' do
+      handler.connect!('shard_one')
+      expect { handler.verify!('shard_two') }.to raise_error(ConsoleKit::ConnectionVerificationError)
+    end
+
+    it 'reports the shard it expected' do
+      handler.connect!('shard_one')
+      expect { handler.verify!('shard_two') }.to raise_error(/Expected :shard_two/)
+    end
+
+    it 'reports the shard it actually found' do
+      handler.connect!('shard_one')
+      expect { handler.verify!('shard_two') }.to raise_error(/got :shard_one/)
+    end
+
+    it 'raises when the live configuration is another database configuration' do
+      handler.connect!('legacy_db')
+      expect { handler.verify!('primary') }.to raise_error(ConsoleKit::ConnectionVerificationError)
+    end
+  end
+
+  describe '#connect! failure handling' do
+    let(:state) { handler.snapshot }
+
+    before do
+      state
+      allow(base_class).to receive(:connecting_to).and_raise(StandardError, 'shard registry exploded')
+    end
+
+    it 'lets the failure surface' do
+      expect { handler.connect!('shard_one') }.to raise_error(StandardError, 'shard registry exploded')
+    end
+
+    it 'leaves the handler restorable to the captured shard' do
+      attempt_failing_connect
+      handler.restore(state)
+      expect(base_class.current_shard).to eq(:default)
+    end
+
+    it 'leaves the handler restorable to the captured configuration' do
+      attempt_failing_connect
+      handler.restore(state)
+      expect(base_class.connection_pool.db_config.name).to eq('primary')
+    end
+
+    def attempt_failing_connect
+      handler.connect!('shard_one')
+    rescue StandardError
+      nil
+    end
+  end
+
+  describe '#diagnostics with level: :basic' do
+    subject(:result) { handler.diagnostics(level: :basic) }
+
+    before { allow(base_class).to receive(:connection).and_call_original }
+
+    it 'never asks the base class for a connection' do
+      result
+      expect(base_class).not_to have_received(:connection)
+    end
+
+    it 'runs no statement against the database' do
+      result
+      expect(base_class.connection.statements).to be_empty
+    end
+
+    it 'is named SQL' do
+      expect(result[:name]).to eq('SQL')
+    end
+
+    it 'reports the connection as connected' do
+      expect(result[:status]).to eq(:connected)
+    end
+
+    it 'reports no latency' do
+      expect(result[:latency_ms]).to be_nil
+    end
+
+    it 'reports the resolved adapter' do
+      expect(result[:details][:adapter]).to eq('postgresql')
+    end
+
+    it 'reports the pool size' do
+      expect(result[:details][:pool_size]).to eq(5)
+    end
+
+    it 'reports the resolved configuration name' do
+      expect(result[:details][:config]).to eq('primary')
+    end
+
+    it 'reports the resolved shard' do
+      expect(result[:details][:shard]).to eq(:default)
+    end
+
+    it 'follows a native switch' do
+      handler.connect!('shard_one')
+      expect(result[:details][:shard]).to eq(:shard_one)
+    end
+  end
+
+  describe '#diagnostics with level: :full' do
+    subject(:result) { handler.diagnostics(level: :full) }
+
+    it 'is named SQL' do
+      expect(result[:name]).to eq('SQL')
+    end
+
+    it 'reports the connection as connected' do
+      expect(result[:status]).to eq(:connected)
+    end
+
+    it 'measures a latency' do
+      expect(result[:latency_ms]).to be_a(Numeric)
+    end
+
+    it 'exposes the adapter, pool size and version details' do
+      expect(result[:details]).to include(:adapter, :pool_size, :version)
+    end
+
+    it 'reports the adapter name' do
+      expect(result[:details][:adapter]).to eq('PostgreSQL')
+    end
+
+    it 'reports the pool size' do
+      expect(result[:details][:pool_size]).to eq(5)
+    end
+
+    it 'reports the server version' do
+      expect(result[:details][:version]).to eq('PostgreSQL 16.1 on aarch64')
+    end
+
+    it 'issues the availability probe' do
+      result
+      expect(base_class.connection.statements).to include('SELECT 1')
+    end
+  end
+
+  describe '#diagnostics when unavailable' do
+    subject(:result) { handler.diagnostics }
+
+    before { ConsoleKit.configuration.sql_base_class = 'NotARealRecord' }
+
+    it 'is named SQL' do
+      expect(result[:name]).to eq('SQL')
+    end
+
+    it 'reports the backend as unavailable' do
+      expect(result[:status]).to eq(:unavailable)
+    end
+
+    it 'reports no latency' do
+      expect(result[:latency_ms]).to be_nil
+    end
+
+    it 'reports no details' do
+      expect(result[:details]).to eq({})
+    end
+  end
+
+  describe '#diagnostics when the connection fails' do
+    subject(:result) { handler.diagnostics(level: :full) }
+
+    before { allow(base_class).to receive(:connection).and_raise(StandardError, 'connection refused') }
+
+    it 'reports an error status' do
+      expect(result[:status]).to eq(:error)
+    end
+
+    it 'is still named SQL' do
+      expect(result[:name]).to eq('SQL')
+    end
+
+    it 'reports no latency' do
+      expect(result[:latency_ms]).to be_nil
+    end
+
+    it 'includes the failure message' do
+      expect(result[:details][:error]).to include('connection refused')
+    end
+  end
+
+  describe 'a base class without native shard APIs' do
+    let(:base_class) { ActiveRecordMock.plain_base(configs: config_names) }
+
+    it 'falls back to establish_connection' do
+      handler.connect!('legacy_db')
+      expect(base_class.connection_pool.db_config.name).to eq('legacy_db')
+    end
+
+    it 'verifies through the pool configuration name' do
+      handler.connect!('legacy_db')
+      expect(handler.verify!('legacy_db')).to be(true)
+    end
+
+    it 'raises on a mismatch' do
+      handler.connect!('legacy_db')
+      expect { handler.verify!('shard_one') }.to raise_error(ConsoleKit::ConnectionVerificationError)
+    end
+
+    it 'does not re-establish when the configuration is unchanged' do
+      handler.connect!('legacy_db')
+      pool = base_class.connection_pool
+      handler.connect!('legacy_db')
+      expect(base_class.connection_pool).to be(pool)
+    end
+
+    it 'restores the previous configuration' do
+      state = handler.snapshot
+      handler.connect!('legacy_db')
+      handler.restore(state)
+      expect(base_class.connection_pool.db_config.name).to eq('primary')
+    end
+  end
+
+  describe 'a base class that has not connected to anything yet' do
+    let(:base_class) { ActiveRecordMock.unconnected_sharded_base(configs: config_names) }
+
+    it 'accepts a real shard instead of rejecting it as unregistered' do
+      expect { handler.prepare('shard_one') }.not_to raise_error
+    end
+
+    it 'lands the first switch on the requested configuration' do
+      handler.connect!('shard_one')
+      expect(base_class.connection_pool.db_config.name).to eq('shard_one')
+    end
+
+    it 'verifies that first switch' do
+      handler.connect!('shard_one')
+      expect(handler.verify!('shard_one')).to be(true)
+    end
+
+    it 'reports the connection as :unknown on the dashboard rather than as an error' do
+      expect(handler.diagnostics(level: :basic)[:status]).to eq(:unknown)
+    end
+
+    it 'reports no details, because none can be read without a pool' do
+      expect(handler.diagnostics(level: :basic)[:details]).to eq({})
+    end
+  end
+
+  describe '#diagnostics when the version query fails' do
+    subject(:result) { handler.diagnostics(level: :full) }
+
+    let(:conn) { base_class.connection }
+
+    context 'when the database refuses the query' do
+      before { allow(conn).to receive(:select_value).and_raise(StandardError, 'function version() does not exist') }
+
+      it 'still reports the connection as connected' do
         expect(result[:status]).to eq(:connected)
       end
 
-      it 'returns a numeric latency_ms' do
-        result = handler.diagnostics
-        expect(result[:latency_ms]).to be_a(Numeric)
-      end
-
-      it 'returns details with adapter, pool_size, and version keys' do
-        result = handler.diagnostics
-        expect(result[:details]).to include(:adapter, :pool_size, :version)
-      end
-
-      it 'includes the adapter name in details' do
-        result = handler.diagnostics
-        expect(result[:details][:adapter]).to eq('PostgreSQL')
-      end
-
-      it 'includes the pool size in details' do
-        result = handler.diagnostics
-        expect(result[:details][:pool_size]).to eq(5)
+      it 'reports an empty version rather than failing the whole probe' do
+        expect(result[:details][:version]).to eq('')
       end
     end
 
-    context 'when SQL is unavailable' do
-      before do
-        ConsoleKit.configuration.sql_base_class = 'NonExistent'
-      end
+    context 'when the failure is a bug rather than a database refusal' do
+      before { allow(conn).to receive(:select_value).and_raise(NameError, 'undefined local variable sql') }
 
-      after { ConsoleKit.configuration.sql_base_class = 'ApplicationRecord' }
-
-      it 'returns status :unavailable' do
-        expect(handler.diagnostics[:status]).to eq(:unavailable)
-      end
-
-      it 'returns name SQL' do
-        expect(handler.diagnostics[:name]).to eq('SQL')
-      end
-
-      it 'returns nil latency_ms' do
-        expect(handler.diagnostics[:latency_ms]).to be_nil
-      end
-
-      it 'returns empty details' do
-        expect(handler.diagnostics[:details]).to eq({})
+      it 'surfaces the bug instead of laundering it into an error row' do
+        expect { result }.to raise_error(NameError)
       end
     end
+  end
 
-    context 'when the connection raises an error' do
-      before do
-        stub_const('ApplicationRecord', Class.new do
-          def self.establish_connection(*); end
-          def self.connection; end
-          def self.connection_pool; end
-        end)
-        allow(ApplicationRecord).to receive(:connection).and_raise(StandardError, 'connection refused')
-      end
+  describe 'the shared connection handler contract' do
+    include_context 'with the SQL handler contract'
 
-      it 'returns status :error' do
-        expect(handler.diagnostics[:status]).to eq(:error)
-      end
-
-      it 'returns name SQL' do
-        expect(handler.diagnostics[:name]).to eq('SQL')
-      end
-
-      it 'returns nil latency_ms' do
-        expect(handler.diagnostics[:latency_ms]).to be_nil
-      end
-
-      it 'includes the error message in details' do
-        expect(handler.diagnostics[:details][:error]).to include('connection refused')
-      end
-
-      it 'returns status :error when connection_pool access fails' do
-        pool = double
-        conn = double(adapter_name: 'PostgreSQL', execute: true)
-        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
-        allow(pool).to receive(:size).and_raise(StandardError, 'pool error')
-        expect(handler.diagnostics[:status]).to eq(:error)
-      end
-
-      it 'includes the pool error message in details' do
-        pool = double
-        conn = double(adapter_name: 'PostgreSQL', execute: true)
-        allow(ApplicationRecord).to receive_messages(connection: conn, connection_pool: pool)
-        allow(pool).to receive(:size).and_raise(StandardError, 'pool error')
-        expect(handler.diagnostics[:details][:error]).to include('pool error')
-      end
-
-      it 'returns status :error when execute fails during latency measurement' do
-        allow(ApplicationRecord).to receive(:connection).and_return(double)
-        allow(ApplicationRecord.connection).to receive(:execute).and_raise(StandardError, 'query failed')
-        expect(handler.diagnostics[:status]).to eq(:error)
-      end
-
-      it 'includes the execute error message in details' do
-        allow(ApplicationRecord).to receive(:connection).and_return(double)
-        allow(ApplicationRecord.connection).to receive(:execute).and_raise(StandardError, 'query failed')
-        expect(handler.diagnostics[:details][:error]).to include('query failed')
-      end
-    end
+    it_behaves_like 'a connection handler'
   end
 end

@@ -1,0 +1,294 @@
+# frozen_string_literal: true
+
+RSpec.describe ConsoleKit::TenantSwitch do
+  let(:handler_class) do
+    Class.new do
+      class << self
+        attr_accessor :constants_key
+      end
+
+      attr_reader :identity, :restored, :backend_key
+
+      def initialize(backend_key, failure: nil)
+        @backend_key = backend_key
+        @failure = failure
+        @identity = nil
+      end
+
+      def display_name = @backend_key.to_s.upcase
+      def available? = true
+      def prepare(_target) = nil
+      def snapshot = { identity: @identity }
+      def verify!(_target) = nil
+
+      def connect!(target)
+        raise @failure if @failure
+
+        @identity = target
+      end
+
+      def restore(snapshot)
+        @restored = true
+        @identity = snapshot[:identity]
+      end
+    end
+  end
+
+  let(:context_class) do
+    Class.new do
+      class << self
+        attr_accessor :partner_identifier, :tenant_shard, :tenant_mongo_db,
+                      :tenant_redis_db, :tenant_elasticsearch_prefix
+      end
+    end
+  end
+
+  let(:healthy) { build_handler(:sql, :shard) }
+  let(:broken) { build_handler(:mongo, :mongo_db, failure: NotImplementedError.new('no connect!')) }
+
+  def build_handler(key, constants_key, failure: nil)
+    klass = Class.new(handler_class)
+    klass.constants_key = constants_key
+    klass.new(key, failure: failure)
+  end
+
+  before do
+    ConsoleKit.configure do |config|
+      config.context_class = context_class
+      config.tenants = {
+        acme: { constants: { partner_code: 'ACME', shard: 'shard_acme', mongo_db: 'acme_db' } },
+        globex: { constants: { partner_code: 'GLOBEX', shard: 'shard_globex', mongo_db: 'globex_db' } }
+      }
+    end
+    allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy, broken])
+  end
+
+  describe 'a handler that does not implement the contract' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    it 'raises TenantSwitchError rather than letting the raw error escape' do
+      expect { switch }.to raise_error(ConsoleKit::TenantSwitchError)
+    end
+
+    it 'preserves the root cause' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.original_error).to be_a(NotImplementedError)
+    end
+
+    it 'reports that rollback succeeded' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e).to be_rollback_succeeded
+    end
+
+    it 'rolls the already-connected backend back' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(healthy.identity).to be_nil
+    end
+
+    it 'restores the context' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(context_class.tenant_shard).to be_nil
+    end
+
+    it 'leaves no tenant marked as current' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(ConsoleKit::StateStore.tenant_key).to be_nil
+    end
+
+    it 'attributes the raw failure to the backend that raised it' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.backend).to eq('MONGO')
+    end
+
+    it 'names that backend in the headline' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('(MONGO)')
+    end
+  end
+
+  describe 'a handler that wrapped its own failure' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:wrapped) { ConsoleKit::ConnectionError.new(backend: 'Redis', tenant: 'acme', operation: :connect) }
+
+    before { allow(broken).to receive(:connect!).and_raise(wrapped) }
+
+    it 'keeps the backend the handler named rather than the one being applied' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.backend).to eq('Redis')
+    end
+  end
+
+  describe 'rollback that itself fails' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    before do
+      allow(healthy).to receive(:restore).and_raise(IOError, 'socket gone')
+    end
+
+    it 'still reports the original failure as the root cause' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.original_error).to be_a(NotImplementedError)
+    end
+
+    it 'reports that rollback did not succeed' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e).not_to be_rollback_succeeded
+    end
+
+    it 'names the backend that could not be rolled back' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.rollback_failures.map { |f| f[:backend] }).to include('SQL')
+    end
+
+    it 'mentions the rollback failure in the message' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('rollback did not fully succeed')
+    end
+  end
+
+  describe 'a snapshot that fails before anything is applied' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    before { allow(healthy).to receive(:snapshot).and_raise(ArgumentError, 'snapshot boom') }
+
+    it 'raises TenantSwitchError rather than a NoMethodError from the rollback path' do
+      expect { switch }.to raise_error(ConsoleKit::TenantSwitchError)
+    end
+
+    it 'preserves the root cause instead of replacing it with a rollback error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.original_error).to be_a(ArgumentError)
+    end
+
+    it 'leaves the context untouched, because nothing was applied' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(context_class.tenant_shard).to be_nil
+    end
+
+    it 'never connects a backend' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(healthy.identity).to be_nil
+    end
+  end
+
+  describe 'a root cause carrying credentials' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:uri) { 'postgres://deploy:sup3rs3cret@db.internal:5432/acme' }
+
+    before { allow(broken).to receive(:connect!).and_raise(RuntimeError, "auth failed for #{uri}") }
+
+    it 'does not echo the password into the switch error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).not_to include('sup3rs3cret')
+    end
+
+    it 'does not echo the credential-bearing URI into the switch error' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).not_to include(uri)
+    end
+
+    it 'still reports that the switch failed' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('Failed to switch tenant')
+    end
+  end
+
+  describe 'a context writer that fails during rollback' do
+    subject(:switch) { ConsoleKit::Output.silence { described_class.call(:acme) } }
+
+    let(:context_class) do
+      Class.new do
+        class << self
+          attr_accessor :tenant_shard, :tenant_mongo_db, :tenant_redis_db, :tenant_elasticsearch_prefix
+          attr_reader :partner_identifier
+
+          def partner_identifier=(value)
+            raise IOError, 'partner writer offline' if value.nil?
+
+            @partner_identifier = value
+          end
+        end
+      end
+    end
+
+    it 'still restores the attributes it could write' do
+      switch
+    rescue ConsoleKit::TenantSwitchError
+      expect(context_class.tenant_shard).to be_nil
+    end
+
+    it 'reports that rollback did not fully succeed' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e).not_to be_rollback_succeeded
+    end
+
+    it 'names the attributes left on the tenant the switch failed to reach' do
+      switch
+    rescue ConsoleKit::TenantSwitchError => e
+      expect(e.message).to include('partner_identifier')
+    end
+  end
+
+  describe '.verify_current! before any tenant has been configured' do
+    it 'raises ConfigurationError rather than verifying nothing' do
+      expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
+    end
+  end
+
+  describe '.clear' do
+    before do
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
+      ConsoleKit::Output.silence { described_class.call(:acme) }
+      ConsoleKit::Output.silence { described_class.clear(context: context_class) }
+    end
+
+    it 'leaves no tenant configured' do
+      expect(ConsoleKit::StateStore).not_to be_configured
+    end
+
+    it 'leaves nothing for verify_tenant! to verify' do
+      expect { ConsoleKit.verify_tenant! }.to raise_error(ConsoleKit::ConfigurationError, /No tenant/)
+    end
+
+    it 'still forgets the tenant it cleared' do
+      expect(ConsoleKit.current_tenant).to be_nil
+    end
+  end
+
+  describe 'verifying after the configuration has drifted' do
+    before do
+      allow(ConsoleKit::Connections::ConnectionManager).to receive(:available_handlers).and_return([healthy])
+      ConsoleKit::Output.silence { described_class.call(:acme) }
+      ConsoleKit.configuration.tenants = { globex: { constants: { shard: 's', partner_code: 'G' } } }
+    end
+
+    it 'still verifies the tenant it actually committed' do
+      expect { ConsoleKit.verify_tenant! }.not_to raise_error
+    end
+
+    it 'keeps reporting that tenant as current' do
+      expect(ConsoleKit.current_tenant).to eq(:acme)
+    end
+  end
+end

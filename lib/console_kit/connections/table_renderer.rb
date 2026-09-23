@@ -1,43 +1,53 @@
 # frozen_string_literal: true
 
-require_relative 'table_formatter'
-
 module ConsoleKit
   module Connections
-    # Renders diagnostic data into a Unicode box-drawing table
     module TableRenderer
+      HEADERS = %w[Service Status Latency Details].freeze
+      STATUS = {
+        connected: "\u2713 Connected",
+        error: "\u2717 Error",
+        unavailable: "\u2014 N/A"
+      }.freeze
+
       class << self
         def render(rows)
-          headers = %w[Service Status Latency Details]
-          table_rows = rows.map { |row| TableFormatter.format_row(row) }
-          widths = calculate_widths(headers, table_rows)
+          table_rows = rows.map { |row| format_row(row) }
+          widths = ([HEADERS] + table_rows).transpose.map { |column| column.map(&:length).max }
 
-          build_table(headers, table_rows, widths)
+          build_table(table_rows, widths)
         end
 
         private
 
-        def calculate_widths(headers, rows)
-          all_rows = [headers] + rows
-          headers.each_index.map do |index|
-            column_max_width(all_rows, index)
-          end
+        def format_row(diag)
+          latency = diag[:latency_ms]
+          [
+            diag[:name],
+            STATUS.fetch(diag[:status], '? Unknown'),
+            latency ? "#{latency}ms" : "\u2014",
+            format_details(diag[:details])
+          ]
         end
 
-        def column_max_width(rows, index)
-          rows.map { |row| row[index].length }.max
+        def format_details(details)
+          return '' unless details&.any?
+
+          details.compact.map { |key, value| "#{key}: #{value}" }.join(', ')
         end
 
-        def build_table(headers, rows, widths)
-          lines = [table_top(widths), table_line(headers, widths), table_mid(widths)]
+        def build_table(rows, widths)
+          lines = [rule(widths, "\u250C\u252C\u2510"), table_line(HEADERS, widths),
+                   rule(widths, "\u251C\u253C\u2524")]
           rows.each { |row| lines << table_line(row, widths) }
-          lines << table_bottom(widths)
+          lines << rule(widths, "\u2514\u2534\u2518")
           lines.join("\n")
         end
 
-        def table_top(widths) = "\u250C#{widths.map { |width| "\u2500" * (width + 2) }.join("\u252C")}\u2510"
-        def table_mid(widths) = "\u251C#{widths.map { |width| "\u2500" * (width + 2) }.join("\u253C")}\u2524"
-        def table_bottom(widths) = "\u2514#{widths.map { |width| "\u2500" * (width + 2) }.join("\u2534")}\u2518"
+        def rule(widths, corners)
+          left, join, right = corners.chars
+          "#{left}#{widths.map { |width| "\u2500" * (width + 2) }.join(join)}#{right}"
+        end
 
         def table_line(cells, widths)
           content = cells.each_with_index.map { |cell, index| " #{cell.ljust(widths[index])} " }.join("\u2502")

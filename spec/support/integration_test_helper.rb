@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Helper module for integration tests
 module IntegrationTestHelper
   def capture_all_output
     original_stdout = $stdout

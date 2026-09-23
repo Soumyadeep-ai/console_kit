@@ -5,6 +5,13 @@ require 'spec_helper'
 RSpec.describe ConsoleKit::Configuration do
   subject(:config) { described_class.new }
 
+  let(:valid_constants) do
+    { shard: :shard1, partner_code: 'acme', mongo_db: 'acme_db', redis_db: 1, elasticsearch_prefix: 'acme' }
+  end
+  let(:valid_tenants) { { acme: { constants: valid_constants } } }
+
+  before { allow(ConsoleKit::Output).to receive(:print_warning) }
+
   describe '#initialize' do
     it 'sets default pretty_output to true' do
       expect(config.pretty_output).to be true
@@ -57,6 +64,8 @@ RSpec.describe ConsoleKit::Configuration do
   end
 
   describe '#validate!' do
+    before { stub_const('Something', Class.new) }
+
     it 'raises error if tenants is nil' do
       config.tenants = nil
       config.context_class = 'Something'
@@ -81,10 +90,16 @@ RSpec.describe ConsoleKit::Configuration do
       expect { config.validate! }.to raise_error(ConsoleKit::Error, /context_class.*not configured/)
     end
 
-    it 'does not raise error when both are set' do
-      config.tenants = { 'a' => {} }
+    it 'does not raise error when both are set to a fully valid configuration' do
+      config.tenants = valid_tenants
       config.context_class = 'Something'
       expect { config.validate! }.not_to raise_error
+    end
+
+    it 'delegates deep validation to ConfigurationValidator, raising on a broken tenant map' do
+      config.tenants = { acme: {} }
+      config.context_class = 'Something'
+      expect { config.validate! }.to raise_error(ConsoleKit::ConfigurationError, /missing a `:constants`/)
     end
   end
 
@@ -116,22 +131,6 @@ RSpec.describe ConsoleKit::Configuration do
   end
 
   describe 'direct delegation' do
-    it 'delegates tenants to configuration' do
-      ConsoleKit.tenants = { 'delegated' => {} }
-      expect(ConsoleKit.configuration.tenants).to eq({ 'delegated' => {} })
-    end
-
-    it 'delegates context_class to configuration' do
-      klass = Class.new
-      ConsoleKit.context_class = klass
-      expect(ConsoleKit.configuration.context_class).to eq(klass)
-    end
-
-    it 'delegates pretty_output to configuration' do
-      ConsoleKit.pretty_output = false
-      expect(ConsoleKit.configuration.pretty_output).to be false
-    end
-
     it 'allows direct access to configuration object' do
       expect(ConsoleKit.configuration).to be_a(described_class)
     end

@@ -13,7 +13,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
   before do
     allow(config).to receive_messages(tenants: tenants, context_class: Object, validate!: true)
-    ConsoleKit::Setup.current_tenant = nil
+    described_class.current_tenant = nil
   end
 
   describe '.run' do
@@ -38,11 +38,11 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.run
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      expect(described_class.current_tenant).to eq('acme')
     end
 
     it 'does nothing if already configured' do
-      ConsoleKit::Setup.current_tenant = 'acme'
+      described_class.current_tenant = 'acme'
 
       described_class.run
 
@@ -52,17 +52,24 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
   describe '.reset' do
     before do
-      ConsoleKit::Setup.current_tenant = 'acme'
+      described_class.current_tenant = 'acme'
       allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
       allow(ConsoleKit::TenantConfigurator).to receive(:clear)
       allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
       allow(described_class).to receive(:auto_select?).and_return(false)
-      allow(ConsoleKit::Prompt).to receive(:apply)
       allow(ConsoleKit::SetupUI).to receive(:print_tenant_banner)
     end
 
-    it 'clears the configurator when switching' do
+    it 'does not clear the configurator when switching to another tenant' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+
+      described_class.reset
+
+      expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+    end
+
+    it 'clears the configurator when choosing no tenant' do
+      allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:none)
 
       described_class.reset
 
@@ -84,7 +91,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.reset
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('globex')
+      expect(described_class.current_tenant).to eq('globex')
     end
 
     it 'aborts if selection returns :abort' do
@@ -100,18 +107,37 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       described_class.reset
 
-      expect(ConsoleKit::Setup.current_tenant).to eq('acme')
+      expect(described_class.current_tenant).to eq('acme')
+    end
+
+    context 'when no tenant was configured before the switch' do
+      before do
+        described_class.current_tenant = nil
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+      end
+
+      it 'clears nothing, because there is nothing to clear' do
+        described_class.reset
+
+        expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+      end
+
+      it 'still configures the selected tenant' do
+        described_class.reset
+
+        expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('globex')
+      end
     end
   end
 
   describe '.reapply' do
-    it 're-configures the current tenant' do
-      ConsoleKit::Setup.current_tenant = 'acme'
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+    it 're-applies the current tenant via TenantSwitch' do
+      described_class.current_tenant = 'acme'
+      allow(ConsoleKit::TenantSwitch).to receive(:call)
 
       described_class.reapply
 
-      expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('acme')
+      expect(ConsoleKit::TenantSwitch).to have_received(:call).with('acme')
     end
   end
 end

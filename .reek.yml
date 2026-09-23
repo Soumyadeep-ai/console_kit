@@ -1,5 +1,0 @@
----
-detectors:
-  UncommunicativeVariableName:
-    accept:
-      - e

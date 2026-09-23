@@ -1,46 +1,33 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # Sets the console prompt to show the current tenant
   module Prompt
+    module IrbLabel
+      def prompt_i = Prompt.labelled(super)
+      def prompt_s = Prompt.labelled(super)
+      def prompt_c = Prompt.labelled(super)
+    end
+
     class << self
       def apply
-        apply_irb_prompt if defined?(IRB)
-        apply_pry_prompt if defined?(Pry)
+        IRB::Context.prepend(IrbLabel) if defined?(IRB::Context) && !IRB::Context.include?(IrbLabel)
+        Pry.config.prompt = pry_prompt if defined?(Pry)
+      end
+
+      def labelled(prompt) = prompt && "#{label.gsub('%', '%%')} #{prompt}"
+
+      def label
+        tenant = StateStore.tenant_key
+        tenant ? "[#{tenant}]" : '[no-tenant]'
       end
 
       private
 
-      def tenant_label
-        tenant = ConsoleKit::Setup.current_tenant
-        tenant ? "[#{tenant}]" : '[no-tenant]'
-      end
-
-      def apply_irb_prompt
-        conf = IRB.conf
-        prompt = conf[:PROMPT] ||= {}
-        prompt[:CONSOLE_KIT] = {
-          PROMPT_I: "#{tenant_label} %N(%m):%03n> ",
-          PROMPT_S: "#{tenant_label} %N(%m):%03n%l ",
-          PROMPT_C: "#{tenant_label} %N(%m):%03n* ",
-          RETURN: "=> %s\n"
-        }
-        conf[:PROMPT_MODE] = :CONSOLE_KIT
-      end
-
-      def apply_pry_prompt
-        procs = pry_prompt_procs(tenant_label)
-        Pry.config.prompt = build_pry_prompt(procs)
-      end
-
-      def pry_prompt_procs(label)
-        [
-          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}> " },
-          proc { |obj, nest, _| "#{label} (#{obj}):#{nest}* " }
+      def pry_prompt
+        procs = [
+          proc { |obj, nest, _| "#{ConsoleKit::Prompt.label} (#{obj}):#{nest}> " },
+          proc { |obj, nest, _| "#{ConsoleKit::Prompt.label} (#{obj}):#{nest}* " }
         ]
-      end
-
-      def build_pry_prompt(procs)
         return procs unless defined?(Pry::Prompt)
 
         Pry::Prompt.try(:new, 'console_kit', 'ConsoleKit tenant prompt', procs) || procs

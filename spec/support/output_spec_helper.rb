@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Helper module to capture standard output for tests
 module OutputSpecHelper
   module_function
 
-  # Captures and returns the output sent to stdout during the block execution
   def capture_stdout
     original_stdout = $stdout
     $stdout = StringIO.new

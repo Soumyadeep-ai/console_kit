@@ -3,7 +3,6 @@
 require_relative 'output'
 
 module ConsoleKit
-  # For tenant selection
   module TenantSelector
     RETRY_LIMIT = 3
     DEFAULT_SELECTION = '1'
@@ -37,12 +36,10 @@ module ConsoleKit
       end
 
       def menu_items
-        tenants = ConsoleKit.tenants.keys
-        items = ['0. Skip (load without tenant configuration)']
-        tenants.each_with_index.map do |key, index|
-          items << "#{index + 1}. #{key} (partner: #{tenant_partner(key)})"
+        numbered = ConsoleKit.tenants.keys.map.with_index(1) do |key, index|
+          "#{index}. #{key} (partner: #{tenant_partner(key)})"
         end
-        items
+        ['0. Skip (load without tenant configuration)'] + numbered
       end
 
       def tenant_partner(key) = ConsoleKit.tenants.dig(key, :constants, :partner_code) || 'N/A'

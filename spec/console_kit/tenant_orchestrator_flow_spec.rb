@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.describe ConsoleKit::Setup do
+RSpec.describe ConsoleKit::TenantOrchestrator do
   let(:tenants) do
     {
       'acme' => { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } },
@@ -33,7 +33,7 @@ RSpec.describe ConsoleKit::Setup do
   shared_examples 'a successful tenant setup' do |tenant|
     it "sets current_tenant to #{tenant}" do
       stub_successful_setup(tenant)
-      described_class.setup
+      described_class.run
       expect(described_class.current_tenant).to eq(tenant)
     end
   end
@@ -47,25 +47,25 @@ RSpec.describe ConsoleKit::Setup do
     allow(ConsoleKit::Output).to receive(:print_success)
   end
 
-  describe '.tenant_setup_successful?' do
+  describe 'tenant_setup_successful? helper' do
     it 'returns true if current_tenant is set' do
       described_class.current_tenant = 'acme'
-      expect(described_class.tenant_setup_successful?).to be true
+      expect(described_class.send(:tenant_setup_successful?)).to be true
     end
 
     it 'returns false if current_tenant is nil' do
       described_class.current_tenant = nil
-      expect(described_class.tenant_setup_successful?).to be false
+      expect(described_class.send(:tenant_setup_successful?)).to be false
     end
   end
 
-  describe '.setup' do
+  describe '.run' do
     it_behaves_like 'a successful tenant setup', 'acme'
 
     context 'with successful tenant setup' do
       it 'sets current_tenant correctly' do
         stub_successful_setup('acme')
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to eq('acme')
       end
     end
@@ -75,7 +75,7 @@ RSpec.describe ConsoleKit::Setup do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(false)
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to be_nil
       end
     end
@@ -84,14 +84,14 @@ RSpec.describe ConsoleKit::Setup do
       it 'prints an error when tenants are nil' do
         ConsoleKit.configure { |c| c.tenants = nil }
         allow(ConsoleKit::Output).to receive(:print_error)
-        described_class.setup
+        described_class.run
         expect(ConsoleKit::Output).to have_received(:print_error).with(/tenants.*not configured/)
       end
 
       it 'prints an error when tenants are empty' do
         ConsoleKit.configure { |c| c.tenants = {} }
         allow(ConsoleKit::Output).to receive(:print_error)
-        described_class.setup
+        described_class.run
         expect(ConsoleKit::Output).to have_received(:print_error).with(/tenants.*not configured/)
       end
     end
@@ -105,19 +105,19 @@ RSpec.describe ConsoleKit::Setup do
 
       it 'calls Kernel.exit if tenant selection returns :exit' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:exit)
-        described_class.setup
+        described_class.run
         expect(Kernel).to have_received(:exit)
       end
 
       it 'prints info if tenant selection returns :none' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:none)
-        described_class.setup
+        described_class.run
         expect(ConsoleKit::Output).to have_received(:print_info).with(/No tenant selected/)
       end
 
       it 'calls Kernel.exit if tenant selection returns :abort' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:abort)
-        described_class.setup
+        described_class.run
         expect(Kernel).to have_received(:exit)
       end
     end
@@ -130,13 +130,13 @@ RSpec.describe ConsoleKit::Setup do
 
       it 'prints error if tenant selection returns nil' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(nil)
-        described_class.setup
+        described_class.run
         expect(ConsoleKit::Output).to have_received(:print_error).with(/Tenant selection failed/)
       end
 
       it 'prints error if tenant selection returns empty string' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('')
-        described_class.setup
+        described_class.run
         expect(ConsoleKit::Output).to have_received(:print_error).with(/Tenant selection failed/)
       end
     end
@@ -147,7 +147,7 @@ RSpec.describe ConsoleKit::Setup do
         allow(ConsoleKit::Output).to receive(:print_backtrace)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(StandardError, 'Boom')
-        described_class.setup
+        described_class.run
       end
 
       it 'prints the error message' do
@@ -165,7 +165,7 @@ RSpec.describe ConsoleKit::Setup do
         allow(ConsoleKit::Output).to receive(:print_backtrace)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_raise(RuntimeError, 'Unexpected error')
-        described_class.setup
+        described_class.run
       end
 
       it 'prints the error message' do
@@ -184,7 +184,7 @@ RSpec.describe ConsoleKit::Setup do
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to eq('only_one')
       end
 
@@ -192,7 +192,7 @@ RSpec.describe ConsoleKit::Setup do
         allow($stdin).to receive(:tty?).and_return(false)
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to eq('only_one')
       end
     end
@@ -207,7 +207,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'auto-selects the first tenant' do
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to eq('acme')
       end
     end
@@ -254,7 +254,7 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'sets up tenant with symbol keys' do
-        described_class.setup
+        described_class.run
         expect(described_class.current_tenant).to eq(:acme)
       end
     end
@@ -321,15 +321,14 @@ RSpec.describe ConsoleKit::Setup do
   end
 
   describe '.reapply' do
-    context 'when a tenant is already setup' do
-      before do
-        described_class.current_tenant = 'acme'
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('acme')
-      end
+    before { allow(ConsoleKit::TenantSwitch).to receive(:call) }
 
-      it 're-calls configuration for the current tenant' do
+    context 'when a tenant is already setup' do
+      before { described_class.current_tenant = 'acme' }
+
+      it 're-applies the current tenant through a transactional switch' do
         described_class.reapply
-        expect(ConsoleKit::TenantConfigurator).to have_received(:configure_tenant).with('acme')
+        expect(ConsoleKit::TenantSwitch).to have_received(:call).with('acme')
       end
 
       it 'silences the output during re-application' do
@@ -340,19 +339,16 @@ RSpec.describe ConsoleKit::Setup do
     end
 
     context 'when no tenant is setup' do
-      before do
-        described_class.current_tenant = nil
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
-      end
+      before { described_class.current_tenant = nil }
 
-      it 'does not call configuration' do
+      it 'does not switch' do
         described_class.reapply
-        expect(ConsoleKit::TenantConfigurator).not_to have_received(:configure_tenant)
+        expect(ConsoleKit::TenantSwitch).not_to have_received(:call)
       end
     end
   end
 
-  describe '.reset_current_tenant' do
+  describe '.reset' do
     context 'when no tenants are configured' do
       before do
         allow($stdin).to receive(:tty?).and_return(true)
@@ -361,43 +357,42 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'prints a warning' do
-        described_class.reset_current_tenant
+        described_class.reset
         expect(ConsoleKit::Output).to have_received(:print_warning).with(/Cannot reset tenant/)
       end
 
       it 'returns nil' do
-        expect(described_class.reset_current_tenant).to be_nil
+        expect(described_class.reset).to be_nil
       end
     end
 
     context 'when a tenant is already set' do
+      let(:calls) { [] }
+
       before do
         described_class.current_tenant = 'acme'
         allow($stdin).to receive(:tty?).and_return(true)
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-        allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex')
+        allow(ConsoleKit::TenantConfigurator).to receive(:clear) { calls << :clear }
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant) { |key| calls << [:configure, key] }
         allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
 
-      it 'prints a reset warning' do
-        described_class.reset_current_tenant
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(/Resetting tenant: acme/)
+      it 'switches without announcing a reset, since nothing is reset' do
+        described_class.reset
+        expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/Resetting tenant/)
       end
 
       it 'sets current_tenant to the new tenant' do
-        described_class.reset_current_tenant
+        described_class.reset
         expect(described_class.current_tenant).to eq('globex')
       end
 
-      # rubocop:disable RSpec/MultipleExpectations, RSpec/MessageSpies
-      it 'clears the old tenant configuration before setting the new one' do
-        expect(ConsoleKit::TenantConfigurator).to receive(:clear).ordered
-        expect(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('globex').ordered
-        described_class.reset_current_tenant
+      it 'switches straight to the new tenant, so a failure can roll back to the old one' do
+        described_class.reset
+        expect(calls).to eq([[:configure, 'globex']])
       end
-      # rubocop:enable RSpec/MultipleExpectations, RSpec/MessageSpies
     end
 
     context 'when user presses Ctrl+C during switch_tenant' do
@@ -409,18 +404,18 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'keeps the current tenant' do
-        described_class.reset_current_tenant
+        described_class.reset
         expect(described_class.current_tenant).to eq('acme')
       end
 
       it 'prints a cancellation warning' do
-        described_class.reset_current_tenant
+        described_class.reset
         expect(ConsoleKit::Output).to have_received(:print_warning).with(/Tenant switch cancelled/)
       end
 
       it 'does not clear tenant configuration' do
         allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-        described_class.reset_current_tenant
+        described_class.reset
         expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
       end
     end
@@ -436,12 +431,12 @@ RSpec.describe ConsoleKit::Setup do
       end
 
       it 'clears current_tenant when selection returns :none' do
-        described_class.reset_current_tenant
+        described_class.reset
         expect(described_class.current_tenant).to be_nil
       end
 
       it 'returns nil if tenant selection returns :none' do
-        result = described_class.reset_current_tenant
+        result = described_class.reset
         expect(result).to be_nil
       end
     end
@@ -494,6 +489,34 @@ RSpec.describe ConsoleKit::Setup do
       it 'ensures output is not silent after failure' do
         expect(ConsoleKit::Output.silent).to be_falsey
       end
+    end
+  end
+
+  describe 'an interactive switch that fails' do
+    before do
+      described_class.current_tenant = 'acme'
+      allow(described_class).to receive(:auto_select?).and_return(false)
+      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+      allow(ConsoleKit::TenantConfigurator).to receive(:clear)
+      allow(ConsoleKit::TenantConfigurator).to receive_messages(configure_tenant: false, configuration_success: false)
+      described_class.reset
+    end
+
+    it 'stays on the previous tenant rather than landing on none' do
+      expect(described_class.current_tenant).to eq('acme')
+    end
+
+    it 'does not clear the previous tenant before switching' do
+      expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+    end
+  end
+
+  describe 'the active connections banner' do
+    before { allow(ConsoleKit::Output).to receive(:print_info) }
+
+    it 'names backends the way their handlers name themselves' do
+      ConsoleKit::SetupUI.send(:print_active_connections)
+      expect(ConsoleKit::Output).to have_received(:print_info).with(a_string_including('SQL', 'MongoDB'))
     end
   end
 end

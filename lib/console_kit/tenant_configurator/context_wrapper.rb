@@ -2,14 +2,9 @@
 
 module ConsoleKit
   module TenantConfigurator
-    # Encapsulates context and attributes to resolve DataClump smells
     class ContextWrapper
-      HANDLER_ATTRIBUTES = {
-        Connections::SqlConnectionHandler => :tenant_shard,
-        Connections::MongoConnectionHandler => :tenant_mongo_db,
-        Connections::RedisConnectionHandler => :tenant_redis_db,
-        Connections::ElasticsearchConnectionHandler => :tenant_elasticsearch_prefix
-      }.freeze
+      UNREADABLE = :'#<console_kit unreadable>'
+      UNREADABLE_MESSAGE = 'Previous value of %s could not be read, so it was left as the new tenant set it.'
 
       attr_reader :ctx, :attributes
 
@@ -22,15 +17,13 @@ module ConsoleKit
 
         def detect_attributes(ctx)
           methods = ctx.public_methods
-          partner_attrs(methods) + handler_attrs(methods)
-        end
-
-        def partner_attrs(methods)
-          methods.include?(:partner_identifier=) ? [:partner_identifier] : []
+          partner = methods.include?(:partner_identifier=) ? [:partner_identifier] : []
+          partner + handler_attrs(methods)
         end
 
         def handler_attrs(methods)
-          HANDLER_ATTRIBUTES.each_with_object([]) do |(handler, attr), list|
+          Connections::BaseConnectionHandler.registry.each_with_object([]) do |handler, list|
+            attr = handler.context_attribute
             next unless methods.include?(:"#{attr}=")
             next unless handler_available?(handler)
 
@@ -54,25 +47,60 @@ module ConsoleKit
         attributes.any? { |attr| ctx.public_send(attr).present? }
       end
 
-      def reset
-        attributes.each { |attr| ctx.public_send("#{attr}=", nil) }
+      def current_values = attributes.to_h { |attr| [attr, safe_read(attr)] }
+
+      def restore(values)
+        failures = values.filter_map { |attr, value| restore_attribute(attr, value) }
+        raise_restore_failure(failures) if failures.any?
+
+        values
       end
 
       def assign(constant, mapping)
-        attributes.map do |attr|
-          existing = safe_read(attr)
-          new_value = constant[mapping[attr]]
-          ctx.public_send("#{attr}=", new_value)
-          [attr, existing, new_value]
-        end
+        attributes.to_h { |attr| [attr, write_attribute(attr, constant[mapping[attr]])] }
       end
 
       private
 
+      def restore_attribute(attr, value)
+        return [attr, Error.new(format(UNREADABLE_MESSAGE, attr))] if value == UNREADABLE
+
+        ctx.public_send(:"#{attr}=", value)
+        nil
+      rescue StandardError, NotImplementedError => e
+        [attr, e]
+      end
+
+      def write_attribute(attr, new_value)
+        existing = safe_read(attr)
+        ctx.public_send(:"#{attr}=", new_value)
+        warn_case_mismatch(attr, existing, new_value)
+        new_value
+      end
+
+      def raise_restore_failure(failures)
+        detail = failures.map { |attr, error| "#{attr} (#{error.class})" }.join(', ')
+        raise Error, "Could not restore context attributes: #{detail}. " \
+                     'Those attributes are still set to the tenant the switch failed to reach.'
+      end
+
+      def warn_case_mismatch(attr, existing, configured)
+        return unless existing.is_a?(String) && configured.is_a?(String) &&
+                      existing != configured && existing.casecmp(configured).zero?
+
+        Output.print_warning(
+          "#{attr} case mismatch: context had '#{existing}', config set '#{configured}'. " \
+          'Check your ConsoleKit tenant configuration.'
+        )
+      end
+
       def safe_read(attr)
         ctx.public_send(attr)
-      rescue StandardError
-        nil
+      rescue StandardError, NotImplementedError => e
+        Output.print_warning(
+          "Could not read context attribute #{attr}: #{e.class}. Rollback will not be able to restore it."
+        )
+        UNREADABLE
       end
     end
   end

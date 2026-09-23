@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module ConsoleKit
-  # UI helpers for Setup
   module SetupUI
     ENVIRONMENT_WARNINGS = {
       'production' => -> { Output.print_error('!!! CAUTION: YOU ARE IN PRODUCTION ENVIRONMENT !!!') },
@@ -26,9 +25,7 @@ module ConsoleKit
 
       def print_active_connections
         ctx = ConsoleKit.configuration.context_class
-        active = Connections::ConnectionManager.available_handlers(ctx).map do |handler|
-          handler.class.name.demodulize.delete_suffix('ConnectionHandler')
-        end
+        active = Connections::ConnectionManager.available_handlers(ctx).map(&:display_name)
 
         Output.print_info("Active connections: #{active.join(', ')}") if active.any?
       end

@@ -4,7 +4,6 @@ require 'spec_helper'
 
 RSpec.describe 'ConsoleKit::Railtie' do
   before do
-    # Mock Rails and Railtie
     stub_const('Rails', Module.new)
     stub_const('Rails::Railtie', Class.new do
       def self.config
@@ -28,7 +27,6 @@ RSpec.describe 'ConsoleKit::Railtie' do
       end
     end)
 
-    # Use stub_const to manage ConsoleKit::Railtie
     stub_const('ConsoleKit::Railtie', Class.new(Rails::Railtie))
     load File.expand_path('../../lib/console_kit/railtie.rb', __dir__)
   end
@@ -46,17 +44,17 @@ RSpec.describe 'ConsoleKit::Railtie' do
       expect(ConsoleKit::Railtie.console_block).to be_a(Proc)
     end
 
-    it 'calls Setup.setup when the console block is executed' do
-      allow(ConsoleKit::Setup).to receive(:setup)
+    it 'calls TenantOrchestrator.run when the console block is executed' do
+      allow(ConsoleKit::TenantOrchestrator).to receive(:run)
       ConsoleKit::Railtie.console_block.call
-      expect(ConsoleKit::Setup).to have_received(:setup)
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:run)
     end
 
     context 'when IRB::ExtendCommandBundle is defined' do
       before do
         stub_const('IRB::ExtendCommandBundle', Module.new)
         hide_const('Pry') if defined?(Pry)
-        allow(ConsoleKit::Setup).to receive(:setup)
+        allow(ConsoleKit::TenantOrchestrator).to receive(:run)
         allow(ConsoleKit::Prompt).to receive(:apply)
         allow(IRB::ExtendCommandBundle).to receive(:include)
       end
@@ -69,23 +67,22 @@ RSpec.describe 'ConsoleKit::Railtie' do
   end
 
   describe 'to_prepare hook' do
-    it 'calls Setup.reapply if in a console session' do
+    it 'calls TenantOrchestrator.reapply if in a console session' do
       stub_const('Rails::Console', Class.new)
-      allow(ConsoleKit::Setup).to receive(:reapply)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:reapply)
 
-      # Manually trigger the to_prepare blocks
       ConsoleKit::Railtie.config.to_prepare_blocks.each(&:call)
 
-      expect(ConsoleKit::Setup).to have_received(:reapply)
+      expect(ConsoleKit::TenantOrchestrator).to have_received(:reapply)
     end
 
-    it 'does not call Setup.reapply if not in a console session' do
+    it 'does not call TenantOrchestrator.reapply if not in a console session' do
       hide_const('Rails::Console')
-      allow(ConsoleKit::Setup).to receive(:reapply)
+      allow(ConsoleKit::TenantOrchestrator).to receive(:reapply)
 
       ConsoleKit::Railtie.config.to_prepare_blocks.each(&:call)
 
-      expect(ConsoleKit::Setup).not_to have_received(:reapply)
+      expect(ConsoleKit::TenantOrchestrator).not_to have_received(:reapply)
     end
   end
 end

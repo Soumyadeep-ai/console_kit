@@ -5,7 +5,6 @@ require 'generators/console_kit/install_generator'
 require 'pathname'
 require 'fileutils'
 
-# Stub Rails.root because this is not a Rails app
 module Rails
   def self.root
     Pathname.new(Dir.pwd)
@@ -35,9 +34,9 @@ RSpec.describe ConsoleKit::Generators::InstallGenerator, type: :generator do
       expect(content).to include('ConsoleKit.configure')
     end
 
-    it 'prints created message' do
+    it 'prints a create status' do
       output = run_generator
-      expect(output).to include('created')
+      expect(output).to include('create')
     end
 
     it 'prints setup complete message' do
@@ -79,8 +78,9 @@ RSpec.describe ConsoleKit::Generators::InstallGenerator, type: :generator do
     end
 
     it 'overwrites the file with --force option' do
+      File.write(full_path, 'old content')
       output = run_generator %w[--force]
-      expect(output).to include('created')
+      expect(output).to include('force')
     end
 
     it 'includes new content with --force' do
