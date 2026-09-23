@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.5.0] - 2026-09-12
+## [1.5.0] - 2026-09-23
 
 Hardening release. Tenant switching is now transactional: a switch either
 completes fully or leaves the previous tenant exactly as it was.
