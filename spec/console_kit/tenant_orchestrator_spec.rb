@@ -57,12 +57,19 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       allow(ConsoleKit::TenantConfigurator).to receive(:clear)
       allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
       allow(described_class).to receive(:auto_select?).and_return(false)
-      allow(ConsoleKit::Prompt).to receive(:apply)
       allow(ConsoleKit::SetupUI).to receive(:print_tenant_banner)
     end
 
-    it 'clears the configurator when switching' do
+    it 'does not clear the configurator when switching to another tenant' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+
+      described_class.reset
+
+      expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+    end
+
+    it 'clears the configurator when choosing no tenant' do
+      allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:none)
 
       described_class.reset
 

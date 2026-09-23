@@ -379,9 +379,9 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
 
-      it 'prints a reset warning' do
+      it 'switches without announcing a reset, since nothing is reset' do
         described_class.reset
-        expect(ConsoleKit::Output).to have_received(:print_warning).with(/Resetting tenant: acme/)
+        expect(ConsoleKit::Output).not_to have_received(:print_warning).with(/Resetting tenant/)
       end
 
       it 'sets current_tenant to the new tenant' do
@@ -389,9 +389,9 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
         expect(described_class.current_tenant).to eq('globex')
       end
 
-      it 'clears the old tenant configuration before setting the new one' do
+      it 'switches straight to the new tenant, so a failure can roll back to the old one' do
         described_class.reset
-        expect(calls).to eq([:clear, [:configure, 'globex']])
+        expect(calls).to eq([[:configure, 'globex']])
       end
     end
 
@@ -489,6 +489,34 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       it 'ensures output is not silent after failure' do
         expect(ConsoleKit::Output.silent).to be_falsey
       end
+    end
+  end
+
+  describe 'an interactive switch that fails' do
+    before do
+      described_class.current_tenant = 'acme'
+      allow(described_class).to receive(:auto_select?).and_return(false)
+      allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+      allow(ConsoleKit::TenantConfigurator).to receive(:clear)
+      allow(ConsoleKit::TenantConfigurator).to receive_messages(configure_tenant: false, configuration_success: false)
+      described_class.reset
+    end
+
+    it 'stays on the previous tenant rather than landing on none' do
+      expect(described_class.current_tenant).to eq('acme')
+    end
+
+    it 'does not clear the previous tenant before switching' do
+      expect(ConsoleKit::TenantConfigurator).not_to have_received(:clear)
+    end
+  end
+
+  describe 'the active connections banner' do
+    before { allow(ConsoleKit::Output).to receive(:print_info) }
+
+    it 'names backends the way their handlers name themselves' do
+      ConsoleKit::SetupUI.send(:print_active_connections)
+      expect(ConsoleKit::Output).to have_received(:print_info).with(a_string_including('SQL', 'MongoDB'))
     end
   end
 end

@@ -59,10 +59,10 @@ module ConsoleKit
       end
 
       def apply_reset(key)
-        clear_current_tenant
-        return Output.print_info(NO_TENANT_SELECTED) if %i[exit none].include?(key)
+        return configure(key) unless %i[exit none].include?(key)
 
-        configure(key)
+        clear_current_tenant
+        Output.print_info(NO_TENANT_SELECTED)
       end
 
       def perform_setup
@@ -90,7 +90,6 @@ module ConsoleKit
         return unless TenantConfigurator.configuration_success
 
         self.current_tenant = key
-        Prompt.apply
         SetupUI.print_tenant_banner(key, ConsoleKit.configuration)
       end
 
