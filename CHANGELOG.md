@@ -269,6 +269,7 @@ Not part of the documented public surface, but visible to anyone who reached for
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.5.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.2.0
