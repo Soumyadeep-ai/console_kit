@@ -24,4 +24,8 @@ RSpec.describe StandaloneLoad do
   it 'has Time.current, which Output calls on every printed line' do
     expect(standalone('Time.respond_to?(:current)')).to eq('true')
   end
+
+  it 'labels the IRB prompt when applied before Rails has loaded IRB' do
+    expect(standalone('(ConsoleKit::Prompt.apply; IRB::Context.include?(ConsoleKit::Prompt::IrbLabel))')).to eq('true')
+  end
 end

@@ -10,6 +10,7 @@ module ConsoleKit
 
     class << self
       def apply
+        require 'irb' unless defined?(Pry)
         IRB::Context.prepend(IrbLabel) if defined?(IRB::Context) && !IRB::Context.include?(IrbLabel)
         Pry.config.prompt = pry_prompt if defined?(Pry)
       end
