@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.1] - 2026-09-24
+
+### Fixed
+- **The IRB prompt still did not name the tenant.** 1.5.0's live prompt label was never installed in a stock Rails console. Rails runs `console` blocks before it requires IRB, so `IRB::Context` was not yet defined when the label was applied and the step was silently skipped - the prompt stayed as the plain IRB prompt through every switch. It only worked in apps that happened to load IRB earlier, such as through `gem "irb"` in the Gemfile. ConsoleKit now loads IRB itself before labelling the prompt (Pry sessions are unaffected). Verified in a real Rails 7.2.1 console: selecting a tenant and running `switch_tenant` now shows `[beta] ... >` and then `[alpha] ... >`.
+
+---
+
 ## [1.5.0] - 2026-09-24
 
 Hardening release. Tenant switching is now transactional: a switch either
@@ -269,6 +276,7 @@ Not part of the documented public surface, but visible to anyone who reached for
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.5.1]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.5.1
 [1.5.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.3.0
