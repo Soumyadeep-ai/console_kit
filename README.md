@@ -429,6 +429,7 @@ config.show_dashboard = true
 ### Environment Warnings
 
 When a tenant has an `environment` key in its constants:
+
 - **production**: A red warning is displayed at setup time.
 - **staging**: A yellow warning is displayed at setup time.
 

@@ -44,11 +44,12 @@ StandardError
     ├── ConfigurationError
     │   └── TenantNotFoundError
     ├── UnsupportedBackendError
-    ├── ConnectionError                 #backend #tenant #operation
-    │   └── ConnectionVerificationError #expected #actual
-    ├── RollbackError                   #failures  => [{ backend:, error: }]
-    └── TenantSwitchError               #from_tenant #to_tenant #backend #original_error
-                                        #rollback_failures #rollback_succeeded?
+    ├── ConnectionError              #backend #tenant #operation
+    │   └── ConnectionVerificationError  #expected #actual
+    ├── RollbackError                #failures => [{ backend:, error: }]
+    └── TenantSwitchError            #from_tenant #to_tenant #backend
+                                     #original_error #rollback_failures
+                                     #rollback_succeeded?
 ```
 
 | Raised | When |

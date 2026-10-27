@@ -32,6 +32,7 @@ A `nil` target uses the native path when there is a `connected_to` stack to rese
 re-establishes the environment's first database config.
 
 **Refuses (in `prepare`):**
+
 - `UnsupportedBackendError` when the base class has neither `establish_connection` nor the native
   sharding API.
 - `ConfigurationError` when the shard is neither a registered native shard nor a `database.yml`
@@ -63,6 +64,7 @@ clears both overrides. The overrides live in `Mongoid::Threaded`, so they are pe
 name, `Mongoid.default_client.database.name == target`. For `nil`, both overrides must be unset.
 
 **Refuses (in `prepare`, `UnsupportedBackendError`):**
+
 - This Mongoid version lacks the setter the target needs (`override_client` or `override_database`).
 - The overrides cannot be read back (`Mongoid::Threaded.database_override`, plus `client_override`
   when `override_client` exists). Without them a switch can be neither verified nor rolled back.
@@ -119,6 +121,7 @@ wins.
 prefix.
 
 **Refuses (in `prepare`, `UnsupportedBackendError`):**
+
 - A prefix is requested but `index_name_prefix=` does not exist.
 - The setter exists but there is no `index_name_prefix` reader, so the switch could not be verified
   or rolled back.

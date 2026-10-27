@@ -48,6 +48,7 @@ completes fully or leaves the previous tenant exactly as it was.
 
 ### Deprecated
 Still working, each warning once per process; all are removed in 2.0.
+
 - `ConsoleKit::Setup.setup` -> `ConsoleKit::TenantOrchestrator.run`
 - `ConsoleKit::Setup.current_tenant` -> `ConsoleKit.current_tenant`
 - `ConsoleKit::Setup.current_tenant=` -> `ConsoleKit.switch_tenant`, which also switches the connections
@@ -115,6 +116,7 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 
 ### Internal API notes
 Not part of the documented public surface, but visible to anyone who reached for them:
+
 - `TenantConfigurator::CONTEXT_MAPPING` and `ContextWrapper::HANDLER_ATTRIBUTES` are gone; backends declare their own mapping.
 - `BaseConnectionHandler` gained `.backend`, `#diagnostic_identity`, and a keyed `HandlerRegistry` in place of `Class#descendants`.
 - `ConnectionManager.available_handlers` takes an optional collector for backends it had to drop, and returns handlers in declaration order.

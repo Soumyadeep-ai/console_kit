@@ -7,6 +7,12 @@ edit_uri: edit/master/docs/
 
 theme:
   name: material
+  custom_dir: docs/overrides
+  font:
+    text: Instrument Sans
+    code: JetBrains Mono
+  icon:
+    logo: material/console-line
   features:
     - navigation.sections
     - navigation.top
@@ -19,11 +25,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -67,5 +77,9 @@ nav:
       - Public API: api/public-api.md
   - Development: guides/development.md
   - Changelog: changelog.md
+extra_css:
+  - stylesheets/extra.css
+
 exclude_docs: |
   requirements.txt
+  overrides/
