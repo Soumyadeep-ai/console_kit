@@ -2,16 +2,16 @@
 
 ??? abstract "Relevant source files"
 
-    - [`Rakefile`](https://github.com/Soumyadeep-ai/console_kit/blob/master/Rakefile)
-    - [`.rubocop.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.rubocop.yml)
-    - [`spec/spec_helper.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/spec_helper.rb)
-    - [`.github/workflows/test_suite.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/test_suite.yml)
-    - [`.github/workflows/release.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/release.yml)
-    - [`.github/workflows/docs.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/docs.yml)
-    - [`benchmark/support/setup.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/benchmark/support/setup.rb)
-    - [`gemfiles/common.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/gemfiles/common.rb)
-    - [`console_kit.gemspec`](https://github.com/Soumyadeep-ai/console_kit/blob/master/console_kit.gemspec)
-    - [`mkdocs.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/mkdocs.yml)
+    - [<code>Rakefile</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/Rakefile)
+    - [<code>.rubocop.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.rubocop.yml)
+    - [<code>spec/<wbr>spec_helper.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/spec_helper.rb)
+    - [<code>.github/<wbr>workflows/<wbr>test_suite.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/test_suite.yml)
+    - [<code>.github/<wbr>workflows/<wbr>release.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/release.yml)
+    - [<code>.github/<wbr>workflows/<wbr>docs.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/docs.yml)
+    - [<code>benchmark/<wbr>support/<wbr>setup.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/benchmark/support/setup.rb)
+    - [<code>gemfiles/<wbr>common.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/gemfiles/common.rb)
+    - [<code>console_kit.gemspec</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/console_kit.gemspec)
+    - [<code>mkdocs.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/mkdocs.yml)
 
 ## Setup
 
@@ -65,8 +65,8 @@ Coverage is collected by SimpleCov with branch coverage, grouped as Core, Connec
 
 `.github/workflows/test_suite.yml` runs on pushes and pull requests to `master`:
 
-- **test:** `bundle exec rspec` on Rails 6.1–8.1 × Ruby 3.1–4.0, excluding Rails 8.0 and 8.1 on
-  Ruby 3.1. That is 28 jobs, with `fail-fast: false`.
+- **test:** `bundle exec rspec` on Rails 6.1–8.1 × Ruby 3.2–4.0. That is 24 jobs, with
+  `fail-fast: false`.
 - **rake:** `bundle exec rake` (spec and RuboCop) on Ruby 3.4.
 
 ## Release

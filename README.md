@@ -4,7 +4,7 @@
 ![Gem Downloads](https://img.shields.io/gem/dt/console_kit.svg)
 ![Build Status](https://github.com/Soumyadeep-ai/console_kit/actions/workflows/release.yml/badge.svg)
 ![License](https://img.shields.io/github/license/Soumyadeep-ai/console_kit)
-![Ruby](https://img.shields.io/badge/ruby-%3E=3.1.0-red)
+![Ruby](https://img.shields.io/badge/ruby-%3E=3.2.0-red)
 ![Rails](https://img.shields.io/badge/rails-6.1%20%E2%80%93%208.1-red)
 
 A simple and flexible multi-tenant console setup toolkit for Rails applications.
@@ -13,18 +13,18 @@ ConsoleKit helps you manage tenant-specific database connections (SQL, MongoDB, 
 
 ## Compatibility
 
-Every combination below is exercised by CI on each push - 28 cells, all of them required.
+Every combination below is exercised by CI on each push - 24 cells, all of them required.
 
 | Rails | Ruby |
 |---|---|
-| 6.1 | 3.1, 3.2, 3.3, 3.4, 4.0 |
-| 7.0 | 3.1, 3.2, 3.3, 3.4, 4.0 |
-| 7.1 | 3.1, 3.2, 3.3, 3.4, 4.0 |
-| 7.2 | 3.1, 3.2, 3.3, 3.4, 4.0 |
+| 6.1 | 3.2, 3.3, 3.4, 4.0 |
+| 7.0 | 3.2, 3.3, 3.4, 4.0 |
+| 7.1 | 3.2, 3.3, 3.4, 4.0 |
+| 7.2 | 3.2, 3.3, 3.4, 4.0 |
 | 8.0 | 3.2, 3.3, 3.4, 4.0 |
 | 8.1 | 3.2, 3.3, 3.4, 4.0 |
 
-The gem requires Ruby `>= 3.1` and Rails `>= 6.1`, with no upper bound on either.
+The gem requires Ruby `>= 3.2` and Rails `>= 6.1`, with no upper bound on either.
 
 ## Installation
 
