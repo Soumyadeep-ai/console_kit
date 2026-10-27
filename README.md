@@ -52,6 +52,7 @@ If bundler is not being used to manage dependencies, install the gem by executin
 gem install console_kit
 ```
 
+<!-- site:usage -->
 ## Usage
 
 After installing, generate the initializer and configuration files by running:
@@ -115,12 +116,13 @@ ConsoleKit automatically detects and manages connections for:
 Handlers are only activated when their corresponding gem is loaded. Verification is a local read on
 every backend - switching a tenant makes no diagnostic network calls.
 
+<!-- site:guarantees -->
 ## Tenant Switching Guarantees
 
 A tenant switch is transactional:
 
 ```
-validate -> snapshot -> prepare -> apply context -> connect -> verify -> commit
+validate -> prepare -> snapshot -> apply context -> connect -> verify -> commit
 ```
 
 Two invariants follow from that:
@@ -193,6 +195,7 @@ depth rather than a boundary: it errs toward redacting, and a client version emi
 not seen could still get through. Do not put secrets anywhere they could be logged in the first
 place.
 
+<!-- site:programmatic-api -->
 ## Programmatic API
 
 The console prompt is the usual entry point, but the same operations are available directly:
@@ -256,6 +259,7 @@ ConsoleKit.verify_tenant!.dropped_backends
 A backend whose gem simply is not installed is not "dropped" - that is a supported setup and is
 never reported.
 
+<!-- site:concurrency -->
 ## Concurrency and Isolation
 
 **Read this before using ConsoleKit anywhere other than a console.**
@@ -311,9 +315,12 @@ ConsoleKit::Instrumentation.counts
 # => { "console_kit.tenant_switch" => 3, "console_kit.rollback" => 1, ... }
 ```
 
-Events cover tenant switches, per-backend connect and verify, rollbacks, verification failures and
-diagnostics. Payloads carry tenant keys and backend names - never credentials.
+Subscribers receive timed events for tenant switches, per-backend connect and verify, and
+diagnostics. Rollbacks, verification failures, dropped handlers and similar conditions are counted in
+`counts` only. Payloads carry tenant keys and backend names - never credentials. The full list is in
+the [Public API reference](docs/api/public-api.md#instrumentation).
 
+<!-- site:console-usage -->
 ## Console Usage
 
 When launching the Rails console, ConsoleKit will prompt you to select a tenant (if multiple tenants are configured). On selection, a tenant banner is displayed showing the tenant name, environment safety warnings, and active connections.
@@ -425,15 +432,27 @@ When a tenant has an `environment` key in its constants:
 - **production**: A red warning is displayed at setup time.
 - **staging**: A yellow warning is displayed at setup time.
 
+<!-- site:end -->
+## Further Documentation
+
+Browse everything below as a site: **https://soumyadeep-ai.github.io/console_kit/**
+
+- [Architecture overview](docs/architecture/overview.md) - components and the tenant switch sequence
+- [Configuration and validation](docs/guides/configuration.md) - every setting and every `validate!` rule
+- [Backends](docs/guides/backends.md) - how each handler switches, verifies, restores and when it refuses
+- [Writing a backend handler](docs/guides/custom-backend-handler.md) - add your own backend
+- [Public API reference](docs/api/public-api.md) - methods, errors, instrumentation events
+- [Development, testing and release](docs/guides/development.md)
+
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run `bin/setup` to install dependencies. Then, run `bundle exec rake` to run the tests and RuboCop. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb` and `CHANGELOG.md`, merge to `master`, then push a `vX.Y.Z` tag - the release workflow builds the gem, creates the GitHub Release and publishes to [rubygems.org](https://rubygems.org). See [Development, testing and release](docs/guides/development.md#release).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at [Console Kit](https://github.com/Soumyadeep-ai/console_kit). This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at [Console Kit](https://github.com/Soumyadeep-ai/console_kit). This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/master/CODE_OF_CONDUCT.md).
 
 ## License
 
@@ -441,4 +460,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the ConsoleKit project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/main/CODE_OF_CONDUCT.md).
+Everyone interacting in the ConsoleKit project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/Soumyadeep-ai/console_kit/blob/master/CODE_OF_CONDUCT.md).

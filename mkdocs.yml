@@ -1,0 +1,71 @@
+site_name: ConsoleKit
+site_description: Transactional multi-tenant console toolkit for Rails
+site_url: https://soumyadeep-ai.github.io/console_kit/
+repo_url: https://github.com/Soumyadeep-ai/console_kit
+repo_name: Soumyadeep-ai/console_kit
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - include-markdown
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Overview: index.md
+  - Getting Started:
+      - Usage: usage.md
+      - Configuration: guides/configuration.md
+  - Tenant Switching Core:
+      - Guarantees and Concurrency: switching.md
+      - Architecture: architecture/overview.md
+  - Connection Handlers:
+      - Backends: guides/backends.md
+      - Writing a Handler: guides/custom-backend-handler.md
+  - Reference:
+      - Public API: api/public-api.md
+  - Development: guides/development.md
+  - Changelog: changelog.md
+exclude_docs: |
+  requirements.txt
