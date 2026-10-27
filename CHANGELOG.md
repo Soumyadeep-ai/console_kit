@@ -6,6 +6,35 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.6.0] - 2026-10-27
+
+### Fixed
+- **A failed `switch_tenant` announced the tenant it had failed to reach.** Switching from one tenant to another whose switch failed (an unregistered shard, or any connect or verify failure) printed the error, then `Tenant initialized: <new tenant>`, and labelled the prompt with the new tenant while every backend stayed on the previous one. `TenantOrchestrator` judged success by `configuration_success`, which still described the previous tenant, instead of by the result of the switch it had just attempted. It now uses `TenantConfigurator.configure_tenant`'s return value: a failed switch leaves the previous tenant current, configured and verifiable, with no banner. The first selection at boot was never affected, because there is no previous tenant there.
+
+### Added
+- **Documentation site** at https://soumyadeep-ai.github.io/console_kit/, built with MkDocs Material and deployed by a new `Docs` workflow that fails a pull request on any broken link or anchor. Its pages:
+  - Architecture
+  - Console boot and tenant selection
+  - Configuration and validation
+  - Backends
+  - Writing a backend handler
+  - Public API reference
+  - Development
+  - Glossary
+  - A **Try it** page with an in-browser console that simulates boot, tenant selection and the console helpers
+
+  The site includes the README and this changelog, so the two cannot drift. None of it ships in the gem. The gem's RubyGems page links to it through `documentation_uri`.
+
+### Changed
+- **Ruby 3.1 is no longer supported; the minimum is now Ruby 3.2.** Ruby 3.1 reached end of life on 2025-03-26 and CI runners no longer provide it. Rails 6.1-8.1 support is unchanged, and the CI matrix is now 24 cells (Rails 6.1-8.1 x Ruby 3.2-4.0).
+- **README corrections.**
+  - The switch pipeline is `validate -> prepare -> snapshot -> ...`; `prepare` runs before the snapshot.
+  - Releases are a `vX.Y.Z` tag push handled by the release workflow, not `rake release`.
+  - Instrumentation subscribers receive switch, connect, verify and diagnostics events; rollbacks and failures are counted only.
+  - The code-of-conduct and changelog links now point at `master`. They pointed at a `main` branch that does not exist.
+
+---
+
 ## [1.5.1] - 2026-09-24
 
 ### Fixed
@@ -48,6 +77,7 @@ completes fully or leaves the previous tenant exactly as it was.
 
 ### Deprecated
 Still working, each warning once per process; all are removed in 2.0.
+
 - `ConsoleKit::Setup.setup` -> `ConsoleKit::TenantOrchestrator.run`
 - `ConsoleKit::Setup.current_tenant` -> `ConsoleKit.current_tenant`
 - `ConsoleKit::Setup.current_tenant=` -> `ConsoleKit.switch_tenant`, which also switches the connections
@@ -115,6 +145,7 @@ Measured, not asserted. `bundle exec rake benchmark` runs entirely against fakes
 
 ### Internal API notes
 Not part of the documented public surface, but visible to anyone who reached for them:
+
 - `TenantConfigurator::CONTEXT_MAPPING` and `ContextWrapper::HANDLER_ATTRIBUTES` are gone; backends declare their own mapping.
 - `BaseConnectionHandler` gained `.backend`, `#diagnostic_identity`, and a keyed `HandlerRegistry` in place of `Class#descendants`.
 - `ConnectionManager.available_handlers` takes an optional collector for backends it had to drop, and returns handlers in declaration order.
@@ -276,6 +307,7 @@ Not part of the documented public surface, but visible to anyone who reached for
   - Tenant-specific database configuration.
   - Colorized console output for improved UX.
 
+[1.6.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.6.0
 [1.5.1]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.5.1
 [1.5.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.5.0
 [1.4.0]: https://github.com/Soumyadeep-ai/console_kit/releases/tag/v1.4.0

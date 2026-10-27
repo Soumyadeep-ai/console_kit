@@ -1,0 +1,25 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="ck-home">
+  <section class="ck-hero" aria-labelledby="ck-hero-title">
+    <h1 class="ck-hero__title" id="ck-hero-title">Every backend switches tenant together, or none of them do.</h1>
+    <p class="ck-hero__lead">
+      ConsoleKit points SQL, MongoDB, Redis and Elasticsearch at one tenant inside your Rails console,
+      checks each backend really moved, and restores the previous tenant if any step fails.
+    </p>
+    <div class="ck-hero__actions">
+      <a class="md-button md-button--primary" href="{{ 'usage/' | url }}">Get started</a>
+      <a class="md-button" href="{{ 'architecture/overview/' | url }}">How a switch works</a>
+      <span class="ck-install"><code>bundle add console_kit</code></span>
+    </div>
+
+    <figure class="ck-term" aria-label="A Rails console session selecting the acme tenant">
+      <div class="ck-term__bar" aria-hidden="true">bin/rails console</div>
+      <pre><code><span class="ck-l ck-h" style="--i:0">[ConsoleKit]</span><span class="ck-l ck-h" style="--i:0">--- Multiple tenants detected. Please choose one: ---</span><span class="ck-l" style="--i:1">  0. Skip (load without tenant configuration)</span><span class="ck-l" style="--i:2">  1. acme (partner: acme)</span><span class="ck-l" style="--i:3">  2. globex (partner: globex)</span><span class="ck-l" style="--i:4"><span class="ck-k">[ConsoleKit]</span> Selection (number or name) [1]: <span class="ck-in">acme</span></span><span class="ck-l" style="--i:5"><span class="ck-k">[ConsoleKit]</span> Establishing SQL connection to shard: shard_acme via ApplicationRecord</span><span class="ck-l" style="--i:6"><span class="ck-k">[ConsoleKit]</span> Switching to Redis DB: 1</span><span class="ck-l" style="--i:7"><span class="ck-k">[ConsoleKit]</span> Setting Elasticsearch index prefix: acme</span><span class="ck-l" style="--i:8"><span class="ck-k">[ConsoleKit]</span> <span class="ck-ok">[✓] Tenant initialized: acme</span></span><span class="ck-l" style="--i:9"><span class="ck-k">[ConsoleKit]</span> <span class="ck-err">[✗] !!! CAUTION: YOU ARE IN PRODUCTION ENVIRONMENT !!!</span></span><span class="ck-l" style="--i:10"><span class="ck-k">[ConsoleKit]</span> Active connections: SQL, MongoDB, Redis, Elasticsearch</span><span class="ck-l" style="--i:11"><span class="ck-tenant">[acme]</span> main:001&gt; <span class="ck-in">Order.count</span></span><span class="ck-l" style="--i:12">=&gt; 1842</span></code></pre>
+    </figure>
+  </section>
+
+  {{ super() }}
+</div>
+{% endblock %}

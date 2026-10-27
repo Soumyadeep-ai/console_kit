@@ -12,13 +12,14 @@ Gem::Specification.new do |spec|
   spec.description = 'Adds tenant selection to Rails consoles'
   spec.homepage = 'https://github.com/Soumyadeep-ai/console_kit'
   spec.license = 'MIT'
-  spec.required_ruby_version = '>= 3.1.0'
+  spec.required_ruby_version = '>= 3.2.0'
 
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
   spec.metadata['source_code_uri'] = spec.homepage
+  spec.metadata['documentation_uri'] = 'https://soumyadeep-ai.github.io/console_kit/'
   spec.metadata['bug_tracker_uri'] = "#{spec.homepage}/issues"
-  spec.metadata['changelog_uri'] = 'https://github.com/Soumyadeep-ai/console_kit/blob/main/CHANGELOG.md'
+  spec.metadata['changelog_uri'] = 'https://github.com/Soumyadeep-ai/console_kit/blob/master/CHANGELOG.md'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
   spec.files = IO.popen(%w[git ls-files -z -- lib LICENSE.txt], chdir: __dir__, err: IO::NULL) do |ls|

@@ -1,0 +1,673 @@
+/* ConsoleKit docs theme on top of MkDocs Material.
+   Two token blocks (light, dark), then one mapping onto Material's variables. The mapping sits on
+   [data-md-color-scheme] - the element Material puts the scheme on - so it re-resolves per scheme
+   instead of freezing the light values at :root. */
+
+:root,
+[data-md-color-scheme="default"] {
+  --ck-paper: #fbfbfc;
+  --ck-sunken: #f1f3f6;
+  --ck-ink: #1d2330;
+  --ck-muted: #5b6577;
+  --ck-faint: #8a93a3;
+  --ck-line: #e3e6ec;
+  --ck-garnet: #a3213a;
+  --ck-garnet-strong: #861a2f;
+  --ck-button: #a3213a;
+  --ck-button-strong: #861a2f;
+  --ck-footer: #1d2330;
+
+  /* The console panel is dark in both schemes: code here is something you type into a terminal. */
+  --ck-term: #182030;
+  --ck-term-line: #2a3448;
+  --ck-term-fg: #d7dce6;
+  --ck-term-muted: #8a94a8;
+}
+
+[data-md-color-scheme="slate"] {
+  --ck-paper: #151a24;
+  --ck-sunken: #1c2230;
+  --ck-ink: #e6e9ef;
+  --ck-muted: #9aa3b2;
+  --ck-faint: #6f7889;
+  --ck-line: #2a3140;
+  /* Light garnet for text on dark; filled buttons keep a deep garnet with white text. */
+  --ck-garnet: #ec7489;
+  --ck-garnet-strong: #f4a0af;
+  --ck-button: #b3304a;
+  --ck-button-strong: #c63d58;
+  --ck-footer: #10141c;
+  --ck-term: #0d111a;
+  --ck-term-line: #2f3a52;
+  --md-hue: 222;
+}
+
+[data-md-color-scheme] {
+  --md-default-bg-color: var(--ck-paper);
+  --md-default-fg-color: var(--ck-ink);
+  --md-default-fg-color--light: var(--ck-muted);
+  --md-default-fg-color--lighter: var(--ck-faint);
+  --md-default-fg-color--lightest: var(--ck-line);
+  --md-primary-fg-color: var(--ck-garnet);
+  --md-primary-fg-color--light: var(--ck-garnet);
+  --md-primary-fg-color--dark: var(--ck-garnet-strong);
+  --md-primary-bg-color: #ffffff;
+  --md-accent-fg-color: var(--ck-garnet-strong);
+  --md-typeset-a-color: var(--ck-garnet);
+  --md-code-bg-color: var(--ck-sunken);
+  --md-code-fg-color: var(--ck-ink);
+  --md-footer-bg-color: var(--ck-footer);
+  --md-footer-bg-color--dark: var(--ck-footer);
+
+  --md-mermaid-font-family: var(--md-text-font-family), sans-serif;
+  --md-mermaid-edge-color: var(--ck-muted);
+  --md-mermaid-node-bg-color: var(--ck-sunken);
+  --md-mermaid-node-fg-color: var(--ck-ink);
+  --md-mermaid-label-bg-color: var(--ck-paper);
+  --md-mermaid-label-fg-color: var(--ck-ink);
+  --md-mermaid-sequence-actor-bg-color: var(--ck-sunken);
+  --md-mermaid-sequence-actor-fg-color: var(--ck-ink);
+  --md-mermaid-sequence-actor-border-color: var(--ck-line);
+  --md-mermaid-sequence-actor-line-color: var(--ck-line);
+  --md-mermaid-sequence-message-fg-color: var(--ck-ink);
+  --md-mermaid-sequence-message-line-color: var(--ck-muted);
+}
+
+/* Type */
+
+.md-typeset {
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--ck-ink);
+  letter-spacing: -0.015em;
+}
+
+.md-typeset h1 {
+  font-size: 1.9em;
+  font-weight: 650;
+  margin-bottom: 0.9em;
+}
+
+/* A rule above each section: sections are the unit the right-hand contents list navigates by. */
+.md-typeset h2 {
+  font-size: 1.35em;
+  font-weight: 600;
+  margin-top: 2.4em;
+  padding-top: 1em;
+  border-top: 1px solid var(--ck-line);
+}
+
+.md-typeset h3 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.md-typeset p,
+.md-typeset ul,
+.md-typeset ol {
+  max-width: 75ch;
+}
+
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 0.18em;
+}
+
+.md-typeset a:hover {
+  text-decoration-color: currentColor;
+}
+
+.md-typeset .headerlink,
+.md-typeset .md-button {
+  text-decoration: none;
+}
+
+:where(a, button, input, label, summary):focus-visible {
+  outline: 2px solid var(--ck-garnet);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Header: quiet, separated by a hairline instead of a colour bar */
+
+.md-header {
+  background-color: var(--ck-paper);
+  color: var(--ck-ink);
+  border-bottom: 1px solid var(--ck-line);
+  box-shadow: none;
+}
+
+.md-header--shadow {
+  box-shadow: none;
+}
+
+.md-header__topic:first-child {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Search: the form is the field. Closed it is a bordered well; open it joins the results panel
+   above a scrim, and the focus state is the form's border rather than a second ring on the input. */
+@media screen and (min-width: 60em) {
+  .md-search__form {
+    background-color: var(--ck-sunken);
+    border: 1px solid var(--ck-line);
+    border-radius: 6px;
+    box-shadow: none;
+  }
+
+  .md-search__form:hover {
+    border-color: var(--ck-muted);
+  }
+
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+    background-color: var(--ck-paper);
+    border-color: var(--ck-garnet);
+    border-bottom-color: var(--ck-line);
+    border-radius: 6px 6px 0 0;
+  }
+
+  .md-search__output {
+    border: 1px solid var(--ck-garnet);
+    border-top: 0;
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+  }
+
+  .md-search__overlay {
+    background-color: color-mix(in srgb, var(--ck-ink) 40%, transparent);
+  }
+
+  [data-md-color-scheme="slate"] .md-search__overlay {
+    background-color: rgba(0, 0, 0, 0.55);
+  }
+}
+
+.md-search__input {
+  background-color: transparent;
+  color: var(--ck-ink);
+}
+
+.md-search__input:hover {
+  background-color: transparent;
+}
+
+.md-search__input::placeholder,
+.md-search__icon {
+  color: var(--ck-muted);
+}
+
+.md-search__input:focus-visible {
+  outline: none;
+}
+
+.md-search-result__meta {
+  background-color: var(--ck-sunken);
+  color: var(--ck-muted);
+}
+
+.md-search-result mark {
+  color: var(--ck-garnet);
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Navigation */
+
+.md-nav {
+  font-size: 0.72rem;
+}
+
+.md-nav__item--section > .md-nav__link {
+  color: var(--ck-ink);
+  font-weight: 600;
+}
+
+.md-nav__link--active {
+  color: var(--ck-garnet);
+  font-weight: 600;
+}
+
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary .md-nav__item .md-nav__link--active {
+    box-shadow: inset 2px 0 0 currentColor;
+    margin-left: -0.6rem;
+    padding-left: 0.6rem;
+  }
+}
+
+/* Inline code */
+
+.md-typeset :not(pre) > code {
+  background-color: var(--ck-sunken);
+  border: 1px solid var(--ck-line);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+  font-size: 0.82em;
+}
+
+/* Code blocks: console panels */
+
+.md-typeset pre {
+  --md-code-bg-color: var(--ck-term);
+  --md-code-fg-color: var(--ck-term-fg);
+  --md-code-hl-comment-color: var(--ck-term-muted);
+  --md-code-hl-keyword-color: #f08a9b;
+  --md-code-hl-string-color: #9fd8a8;
+  --md-code-hl-name-color: var(--ck-term-fg);
+  --md-code-hl-function-color: #8ab4f8;
+  --md-code-hl-number-color: #f5c37a;
+  --md-code-hl-constant-color: #c7a6f5;
+  --md-code-hl-special-color: #f5c37a;
+  --md-code-hl-variable-color: var(--ck-term-fg);
+  --md-code-hl-operator-color: var(--ck-term-muted);
+  --md-code-hl-punctuation-color: var(--ck-term-muted);
+  --md-code-hl-generic-color: var(--ck-term-muted);
+  --md-default-fg-color--lightest: var(--ck-term-muted);
+}
+
+.md-typeset pre > code {
+  border: 1px solid var(--ck-term-line);
+  border-radius: 8px;
+  font-size: 0.78em;
+  line-height: 1.7;
+}
+
+/* Tables */
+
+.md-typeset__table {
+  display: block;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+  min-width: 100%;
+  font-size: 0.74rem;
+  border: 1px solid var(--ck-line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: 0.6em 0.9em;
+}
+
+/* Identifiers wrap at spaces but never mid-word; anything still too wide scrolls inside the table frame. */
+.md-typeset table:not([class]) code {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--ck-sunken);
+  color: var(--ck-ink);
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) td {
+  border-top: 1px solid var(--ck-line);
+  vertical-align: top;
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background-color: color-mix(in srgb, var(--ck-sunken) 60%, transparent);
+  box-shadow: none;
+}
+
+/* Buttons */
+
+.md-typeset .md-button {
+  border-radius: 6px;
+  font-weight: 600;
+  padding: 0.5em 1.1em;
+  border-width: 1px;
+}
+
+.md-typeset .md-button--primary {
+  background-color: var(--ck-button);
+  border-color: var(--ck-button);
+  color: var(--md-primary-bg-color);
+}
+
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:focus-visible {
+  background-color: var(--ck-button-strong);
+  border-color: var(--ck-button-strong);
+  color: var(--md-primary-bg-color);
+}
+
+.md-typeset .md-button:not(.md-button--primary) {
+  color: var(--ck-ink);
+  border-color: var(--ck-line);
+}
+
+.md-typeset .md-button:not(.md-button--primary):hover {
+  border-color: var(--ck-ink);
+  background: transparent;
+  color: var(--ck-ink);
+}
+
+/* Home page */
+
+/* The hero carries the page title, so the README's own title and intro are hidden here. */
+.ck-home > .md-content__button,
+.ck-home > h1,
+.ck-home > h1 + p + p,
+.ck-home > h1 + p + p + p {
+  display: none;
+}
+
+.ck-hero {
+  padding: 0.4rem 0 2rem;
+  margin-bottom: 1.6rem;
+  border-bottom: 1px solid var(--ck-line);
+}
+
+.md-typeset .ck-hero__title {
+  font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.3rem);
+  line-height: 1.12;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  max-width: 21ch;
+  margin: 0 0 0.7rem;
+}
+
+.md-typeset .ck-hero__lead {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ck-muted);
+  max-width: 58ch;
+  margin: 0 0 1.2rem;
+}
+
+.ck-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.md-typeset .ck-hero__actions .md-button {
+  margin: 0;
+}
+
+.md-typeset .ck-install {
+  font-family: var(--md-code-font-family);
+  font-size: 0.68rem;
+  color: var(--ck-muted);
+}
+
+.md-typeset .ck-install code {
+  color: var(--ck-ink);
+}
+
+.md-typeset .ck-term {
+  display: block;
+  width: auto;
+  min-width: 0;
+  text-align: left;
+  max-width: none;
+  margin: 1.6rem 0 0;
+  background: var(--ck-term);
+  border: 1px solid var(--ck-term-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ck-term__bar {
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--ck-term-line);
+  color: var(--ck-term-muted);
+  font-family: var(--md-code-font-family);
+  font-size: 0.6rem;
+}
+
+.md-typeset .ck-term pre {
+  margin: 0;
+}
+
+.ck-term button,
+.ck-term .md-code__nav {
+  display: none;
+}
+
+.md-typeset .ck-term pre > code {
+  border: 0;
+  border-radius: 0;
+  padding: 0.9rem 1.1rem 1.1rem;
+  font-size: 0.64rem;
+  line-height: 1.75;
+  white-space: pre;
+}
+
+.ck-l {
+  display: block;
+  animation: ck-line 220ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 110ms);
+}
+
+.ck-k { color: var(--ck-term-muted); }
+.ck-h { color: #8ab4f8; }
+.ck-in { color: #ffffff; font-weight: 700; }
+.ck-ok { color: #7bd99a; }
+.ck-err { color: #ff8a94; font-weight: 700; }
+.ck-tenant { color: #f08a9b; font-weight: 700; }
+
+@keyframes ck-line {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ck-l { animation: none; }
+}
+
+/* Try-it console simulator (docs/try.md, docs/javascripts/console-sim.js) */
+
+.ck-sim {
+  margin: 1.4rem 0 2rem;
+  background: var(--ck-term);
+  border: 1px solid var(--ck-term-line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: var(--md-code-font-family);
+  font-size: 0.64rem;
+  color: var(--ck-term-fg);
+}
+
+.ck-sim__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.2rem;
+  padding: 0 0.9rem;
+  border-bottom: 1px solid var(--ck-term-line);
+  color: var(--ck-term-muted);
+  font-size: 0.6rem;
+}
+
+.ck-sim__restart {
+  font: inherit;
+  color: var(--ck-term-fg);
+  background: transparent;
+  border: 1px solid var(--ck-term-line);
+  border-radius: 5px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+.ck-sim__restart:hover {
+  border-color: var(--ck-term-muted);
+}
+
+.ck-sim__screen {
+  padding: 0.9rem 1.1rem 1rem;
+  cursor: text;
+}
+
+.ck-sim__log {
+  max-height: 26rem;
+  overflow: auto;
+}
+
+.ck-sim__line {
+  white-space: pre;
+  line-height: 1.7;
+  min-height: 1.7em;
+}
+
+.ck-sim__form {
+  display: flex;
+  align-items: baseline;
+  line-height: 1.7;
+}
+
+.ck-sim__form[hidden] {
+  display: none;
+}
+
+.ck-sim__label {
+  white-space: pre;
+  flex: none;
+}
+
+.ck-sim__input {
+  flex: 1;
+  min-width: 4ch;
+  font: inherit;
+  color: #ffffff;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  caret-color: #f08a9b;
+}
+
+.ck-sim__input:focus-visible {
+  outline: none;
+}
+
+.ck-sim:focus-within {
+  border-color: var(--ck-term-muted);
+}
+
+.ck-warn { color: #f5c37a; }
+.ck-p { color: #7fd4e0; }
+
+/* Terminals do not join `=>` or `!=` into ligatures; neither does this site. */
+.md-typeset code,
+.md-typeset kbd,
+.ck-sim {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* "Relevant source files": a quiet collapsible panel. One 40px gutter holds the icon; the title and
+   the file list both start at it, and the icon and arrow are centred on the title's line. */
+.md-typeset details.abstract {
+  --ck-panel-gutter: 2.4rem;
+  --ck-panel-line: 1.4rem;
+  margin: 1.2em 0 1.6em;
+  padding: 0;
+  border: 1px solid var(--ck-line);
+  border-radius: 8px;
+  background: var(--ck-sunken);
+  box-shadow: none;
+  font-size: 0.74rem;
+}
+
+.md-typeset details.abstract > summary {
+  margin: 0;
+  padding: 0.55rem 2.2rem 0.55rem var(--ck-panel-gutter);
+  line-height: var(--ck-panel-line);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ck-muted);
+  font-weight: 600;
+}
+
+.md-typeset details.abstract > summary:hover {
+  color: var(--ck-ink);
+}
+
+.md-typeset details.abstract > summary::before,
+.md-typeset details.abstract > summary::after {
+  top: calc(0.55rem + (var(--ck-panel-line) - 1rem) / 2);
+  width: 1rem;
+  height: 1rem;
+  color: inherit;
+}
+
+.md-typeset details.abstract > summary::before {
+  left: calc((var(--ck-panel-gutter) - 1rem) / 2);
+  background-color: currentColor;
+}
+
+.md-typeset details.abstract > summary::after {
+  right: 0.8rem;
+  background-color: currentColor;
+}
+
+.md-typeset details.abstract[open] > summary {
+  border-bottom: 1px solid var(--ck-line);
+  border-radius: 8px 8px 0 0;
+}
+
+.md-typeset details.abstract > ul {
+  margin: 0;
+  padding: 0.6rem 1rem 0.7rem var(--ck-panel-gutter);
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.md-typeset details.abstract > ul > li {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.md-typeset details.abstract > ul > li > a {
+  text-decoration: none;
+}
+
+/* Paths wrap after a "/" (a normal line-break opportunity), never mid-name unless one segment
+   cannot fit on a line at all. */
+.md-typeset details.abstract > ul > li > a > code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.95em;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset details.abstract > ul > li > a:hover > code {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Phones. Material runs code blocks edge to edge here, so drop their side borders and radius; and
+   give tables with three or more columns a readable minimum width - they scroll inside their own
+   frame - instead of squeezing the last column into a sliver. */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset > .highlight > pre > code,
+  .md-typeset > pre > code {
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .md-typeset table:not([class]):has(th:nth-child(3)) {
+    min-width: 36rem;
+  }
+}
