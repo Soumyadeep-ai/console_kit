@@ -4,6 +4,20 @@ How each built-in handler switches, verifies and restores its backend, and when 
 summary table and thread-isolation matrix, see [Supported Connections](../usage.md#supported-connections)
 and [Concurrency and Isolation](../switching.md#concurrency-and-isolation).
 
+??? abstract "Relevant source files"
+
+    - [`lib/console_kit/connections/sql_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
+    - [`lib/console_kit/connections/sql_strategy.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_strategy.rb)
+    - [`lib/console_kit/connections/mongo_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongo_connection_handler.rb)
+    - [`lib/console_kit/connections/mongoid_support.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongoid_support.rb)
+    - [`lib/console_kit/connections/redis_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_connection_handler.rb)
+    - [`lib/console_kit/connections/redis_client_adapter.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_client_adapter.rb)
+    - [`lib/console_kit/connections/elasticsearch_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_connection_handler.rb)
+    - [`lib/console_kit/connections/elasticsearch_prefix_registry.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_prefix_registry.rb)
+    - [`lib/console_kit/connections/base_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
+    - [`spec/support/shared_examples/connection_handler_contract.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
+
+
 Every handler follows the same lifecycle inside a switch (see
 [Architecture](../architecture/overview.md#tenant-switch-sequence)):
 

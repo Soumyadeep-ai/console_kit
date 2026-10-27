@@ -18,6 +18,11 @@
     ["Redis DB", "redis_db"], ["ES Prefix", "elasticsearch_prefix"], ["Environment", "environment"]];
   var MARKERS = { success: "[✓] ", error: "[✗] ", warning: "[!] " };
   var RETRY_LIMIT = 3;
+  var LEVELS = ["basic", "full"];
+  /* A Ruby literal the demo can read: a Symbol or a quoted String. */
+  var LITERAL = "(:\\w+|\"[^\"]*\"|'[^']*')";
+  /* Made-up Order.count per tenant, for the with_tenant block. */
+  var ORDER_COUNTS = { acme: 1284, globex: 342, initech: 57 };
 
   function Session(root) {
     this.root = root;
@@ -289,8 +294,8 @@
 
   /* IRB */
 
-  Session.prototype.raise = function (cls, message) {
-    this.plain("(irb):" + this.count + ":in '<main>': " + message + " (" + cls + ")", "ck-err");
+  Session.prototype.raise = function (cls, message, where) {
+    this.plain("(irb):" + this.count + ":in '" + (where || "<main>") + "': " + message + " (" + cls + ")", "ck-err");
   };
 
   Session.prototype.stateInspect = function () {
@@ -299,8 +304,12 @@
 
   Session.prototype.evaluate = function (code) {
     if (!code) { this.setPrompt("irb"); return; }
-    var programmatic = code.match(/^ConsoleKit\.switch_tenant\(\s*(:\w+|"[^"]*"|'[^']*')\s*\)$/);
-    var dashboard = code.match(/^dashboard(?:\(\s*level:\s*:(basic|full)\s*\))?$/);
+    /* Empty parens are the same call: tenants(), dashboard(), reload!() ... */
+    code = code.replace(/^(exit|quit|help|tenants|tenant_info|switch_tenant|dashboard|reload!)\(\s*\)$/, "$1");
+    var call = new RegExp("^ConsoleKit\\.switch_tenant(?:\\(\\s*" + LITERAL + "\\s*\\)|\\s+" + LITERAL + ")$");
+    var programmatic = code.match(call);
+    var dashboard = code.match(new RegExp("^dashboard(?:\\s*\\(\\s*level:\\s*" + LITERAL + "\\s*\\)|\\s+level:\\s*" + LITERAL + ")?$"));
+    var scoped = code.match(new RegExp("^ConsoleKit\\.with_tenant\\(\\s*" + LITERAL + "\\s*\\)\\s*(?:\\{(.*)\\}|do\\s(.*)\\send)$"));
 
     if (code === "exit" || code === "quit") { this.setPrompt("ended"); return; }
     if (code === "switch_tenant") { this.showMenu("menu-switch"); return; }
@@ -308,7 +317,8 @@
     if (code === "help") {
       this.plain("This demo understands:", "ck-k");
       ["switch_tenant", "tenant_info", "tenants", "dashboard", "dashboard(level: :full)",
-        "ConsoleKit.current_tenant", "ConsoleKit.switch_tenant(:globex)", "ConsoleKit.verify_tenant!", "exit"]
+        "ConsoleKit.current_tenant", "ConsoleKit.switch_tenant(:globex)",
+        "ConsoleKit.with_tenant(:globex) { Order.count }", "ConsoleKit.verify_tenant!", "reload!", "exit"]
         .forEach(function (cmd) { this.plain("  " + cmd, "ck-k"); }, this);
       this.result("nil");
     } else if (code === "tenants") {
@@ -318,21 +328,26 @@
     } else if (code === "tenant_info") {
       this.tenantInfo();
       this.result("nil");
+    } else if (code === "reload!") {
+      /* Rails prints "Reloading..." and returns true. config.to_prepare then runs
+         TenantOrchestrator.reapply, which re-switches to the current tenant under Output.silence. */
+      this.plain("Reloading...");
+      this.result("true");
     } else if (dashboard) {
-      this.dashboard(dashboard[1] || "basic");
-      this.result("main");
+      var level = dashboard[1] || dashboard[2];
+      if (level && !this.validLevel(level)) this.raise("ConsoleKit::ConfigurationError", this.levelError(level));
+      else { this.dashboard(level ? level.replace(/^:/, "") : "basic"); this.result("main"); }
     } else if (code === "ConsoleKit.current_tenant") {
       this.result(this.current ? ":" + this.current : "nil");
     } else if (code === "ConsoleKit.verify_tenant!") {
       if (this.current) this.result(this.stateInspect());
       else this.raise("ConsoleKit::ConfigurationError", "No tenant is currently configured.");
     } else if (programmatic) {
-      this.programmaticSwitch(programmatic[1]);
+      this.programmaticSwitch(programmatic[1] || programmatic[2]);
+    } else if (scoped) {
+      this.withTenant(scoped[1], (scoped[2] !== undefined ? scoped[2] : scoped[3]).trim());
     } else {
-      /* Ruby names the first undefined identifier: the bare argument in switch_tenant(acme). */
-      var bareArgument = code.match(/^ConsoleKit\.switch_tenant\(\s*([a-z_]\w*)\s*\)$/);
-      var word = bareArgument ? bareArgument[1] : code.split(/[\s.(]/)[0];
-      this.raise("NameError", "undefined local variable or method '" + word + "' for main");
+      this.undefinedName(code);
       this.plain("Simulation: type help for the commands this demo understands.", "ck-k");
     }
     this.count += 1;
@@ -341,13 +356,55 @@
 
   /* ConsoleKit.switch_tenant: raises, always runs the full transaction, prints no banner */
   Session.prototype.programmaticSwitch = function (literal) {
+    if (this.switchTo(literal)) this.result(this.stateInspect());
+  };
+
+  /* Returns false after printing the raised error; nothing has changed then. */
+  Session.prototype.switchTo = function (literal, where) {
     var key = literal.replace(/^:|^["']|["']$/g, "");
     var inspected = literal.charAt(0) === ":" ? literal : "\"" + key + "\"";
     var error = this.prepareError(key, inspected);
-    if (error) { this.raise(error.cls, error.message); return; }
+    if (error) { this.raise(error.cls, error.message, where); return false; }
     this.connect(TENANTS[key]);
     this.current = key;
-    this.result(this.stateInspect());
+    return true;
+  };
+
+  /* ConsoleKit.with_tenant (console_kit.rb): switch, yield, then TenantRollback.unwind restores the
+     previous tenant and backends. The restore handlers print nothing, so only the switch is visible. */
+  Session.prototype.withTenant = function (literal, body) {
+    var previous = { current: this.current, backends: this.backends };
+    if (!this.switchTo(literal)) return;
+    var value;
+    if (body === "") value = "nil";
+    else if (body === "Order.count") value = String(ORDER_COUNTS[this.current]);
+    else if (body === "ConsoleKit.current_tenant") value = ":" + this.current;
+    var failed = value === undefined;
+    if (failed) {
+      this.undefinedName(body, "block in <main>");
+      this.plain("Simulation: this demo evaluates only Order.count and ConsoleKit.current_tenant inside the block.", "ck-k");
+    }
+    this.current = previous.current;
+    this.backends = previous.backends;
+    if (!failed) this.result(value);
+  };
+
+  /* Ruby names the first undefined identifier: the bare argument in switch_tenant(acme). */
+  Session.prototype.undefinedName = function (code, where) {
+    var bareArgument = code.match(/^ConsoleKit\.switch_tenant(?:\(\s*|\s+)([a-z_]\w*)\s*\)?$/);
+    var word = bareArgument ? bareArgument[1] : code.split(/[\s.(]/)[0];
+    if (/^[A-Z]/.test(word)) this.raise("NameError", "uninitialized constant " + word, where);
+    else this.raise("NameError", "undefined local variable or method '" + word + "' for main", where);
+  };
+
+  /* Diagnostics.validate_level!, called by Dashboard.display before anything is printed. */
+  Session.prototype.validLevel = function (literal) {
+    return literal.charAt(0) === ":" && LEVELS.indexOf(literal.slice(1)) !== -1;
+  };
+
+  Session.prototype.levelError = function (literal) {
+    var inspected = literal.charAt(0) === ":" ? literal : "\"" + literal.slice(1, -1) + "\"";
+    return "ConsoleKit: unknown diagnostics level " + inspected + ". Expected one of [:basic, :full].";
   };
 
   Session.prototype.tenantInfo = function () {

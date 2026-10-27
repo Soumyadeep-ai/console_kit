@@ -39,7 +39,11 @@ Once you have a prompt:
 | `dashboard`, `dashboard(level: :full)` | The connection dashboard |
 | `ConsoleKit.switch_tenant(:globex)` | The programmatic switch: raises on failure, prints no banner |
 | `ConsoleKit.switch_tenant(:nope)` | `TenantNotFoundError` |
+| `ConsoleKit.with_tenant(:globex) { Order.count }` | Switches for the block, then restores your tenant. The restore prints nothing. |
+| `ConsoleKit.with_tenant(:umbrella) { Order.count }` | Raises like `switch_tenant` and never runs the block. Inside a block the demo runs only `Order.count` and `ConsoleKit.current_tenant`. |
 | `ConsoleKit.verify_tenant!` | Re-verification of the current tenant |
+| `reload!` | Rails prints `Reloading...`. ConsoleKit re-applies your tenant silently, so nothing else shows. |
+| `dashboard(level: :bogus)` | `ConfigurationError` for an unknown level |
 | `help` | Everything this demo understands |
 
 Arrow keys recall earlier input.

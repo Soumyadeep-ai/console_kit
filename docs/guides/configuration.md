@@ -3,6 +3,15 @@
 Covers every setting, the tenant constants format, and every rule `validate!` enforces. For a
 first-time setup walkthrough, see [Usage](../usage.md#usage).
 
+??? abstract "Relevant source files"
+
+    - [`lib/console_kit/configuration.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
+    - [`lib/console_kit/configuration_validator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration_validator.rb)
+    - [`lib/console_kit/errors.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
+    - [`lib/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
+    - [`lib/generators/console_kit/templates/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
+
+
 ## Settings
 
 Set inside `ConsoleKit.configure` (generated at `config/initializers/console_kit.rb` by

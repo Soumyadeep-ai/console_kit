@@ -4,6 +4,18 @@ Everything an application or console user is expected to call. Usage examples an
 are under [Programmatic API](../usage.md#programmatic-api) and
 [Observability](../switching.md#observability). This page is the complete list.
 
+??? abstract "Relevant source files"
+
+    - [`lib/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
+    - [`lib/console_kit/configuration.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
+    - [`lib/console_kit/tenant_switch.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
+    - [`lib/console_kit/tenant_state.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
+    - [`lib/console_kit/console_helpers.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/console_helpers.rb)
+    - [`lib/console_kit/instrumentation.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/instrumentation.rb)
+    - [`lib/console_kit/diagnostics.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/diagnostics.rb)
+    - [`lib/console_kit/errors.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
+
+
 ## `ConsoleKit`
 
 `lib/console_kit.rb`

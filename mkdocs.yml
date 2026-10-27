@@ -11,6 +11,7 @@ theme:
   font:
     text: Instrument Sans
     code: JetBrains Mono
+  favicon: assets/favicon.svg
   icon:
     logo: material/console-line
   features:
@@ -44,6 +45,7 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - pymdownx.details
   - attr_list
   - tables
   - toc:

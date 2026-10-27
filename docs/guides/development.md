@@ -1,5 +1,18 @@
 # Development, Testing and Release
 
+??? abstract "Relevant source files"
+
+    - [`Rakefile`](https://github.com/Soumyadeep-ai/console_kit/blob/master/Rakefile)
+    - [`.rubocop.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.rubocop.yml)
+    - [`spec/spec_helper.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/spec_helper.rb)
+    - [`.github/workflows/test_suite.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/test_suite.yml)
+    - [`.github/workflows/release.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/release.yml)
+    - [`.github/workflows/docs.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/docs.yml)
+    - [`benchmark/support/setup.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/benchmark/support/setup.rb)
+    - [`gemfiles/common.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/gemfiles/common.rb)
+    - [`console_kit.gemspec`](https://github.com/Soumyadeep-ai/console_kit/blob/master/console_kit.gemspec)
+    - [`mkdocs.yml`](https://github.com/Soumyadeep-ai/console_kit/blob/master/mkdocs.yml)
+
 ## Setup
 
 ```sh

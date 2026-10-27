@@ -5,6 +5,17 @@ Every backend ConsoleKit switches is a subclass of
 built-in handlers are written exactly this way (see [Backends](backends.md)). A handler of your own
 gets the same transaction, rollback, verification, validation, console output and dashboard row.
 
+??? abstract "Relevant source files"
+
+    - [`lib/console_kit/connections/base_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
+    - [`lib/console_kit/connections/connection_manager.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
+    - [`lib/console_kit/connections/sql_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
+    - [`lib/console_kit/connections/diagnostic_helpers.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/diagnostic_helpers.rb)
+    - [`lib/console_kit/connections/dashboard.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/dashboard.rb)
+    - [`spec/support/shared_examples/connection_handler_contract.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
+    - [`spec/support/shared_contexts/connection_handler_contracts.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_contexts/connection_handler_contracts.rb)
+
+
 ## Minimal handler
 
 ```ruby
