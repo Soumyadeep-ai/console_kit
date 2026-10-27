@@ -142,11 +142,50 @@
   letter-spacing: -0.01em;
 }
 
+/* Search: the form is the field. Closed it is a bordered well; open it joins the results panel
+   above a scrim, and the focus state is the form's border rather than a second ring on the input. */
+@media screen and (min-width: 60em) {
+  .md-search__form {
+    background-color: var(--ck-sunken);
+    border: 1px solid var(--ck-line);
+    border-radius: 6px;
+    box-shadow: none;
+  }
+
+  .md-search__form:hover {
+    border-color: var(--ck-muted);
+  }
+
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+    background-color: var(--ck-paper);
+    border-color: var(--ck-garnet);
+    border-bottom-color: var(--ck-line);
+    border-radius: 6px 6px 0 0;
+  }
+
+  .md-search__output {
+    border: 1px solid var(--ck-garnet);
+    border-top: 0;
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+  }
+
+  .md-search__overlay {
+    background-color: color-mix(in srgb, var(--ck-ink) 40%, transparent);
+  }
+
+  [data-md-color-scheme="slate"] .md-search__overlay {
+    background-color: rgba(0, 0, 0, 0.55);
+  }
+}
+
 .md-search__input {
-  background-color: var(--ck-sunken);
+  background-color: transparent;
   color: var(--ck-ink);
-  border: 1px solid var(--ck-line);
-  border-radius: 6px;
+}
+
+.md-search__input:hover {
+  background-color: transparent;
 }
 
 .md-search__input::placeholder,
@@ -154,8 +193,20 @@
   color: var(--ck-muted);
 }
 
-.md-search__input:hover {
+.md-search__input:focus-visible {
+  outline: none;
+}
+
+.md-search-result__meta {
   background-color: var(--ck-sunken);
+  color: var(--ck-muted);
+}
+
+.md-search-result mark {
+  color: var(--ck-garnet);
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 /* Navigation */
