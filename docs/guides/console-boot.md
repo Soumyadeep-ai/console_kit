@@ -3,14 +3,17 @@
 What happens between typing `bin/rails console` and getting a `[tenant]` prompt, and what each
 answer at the selection menu does.
 
-??? abstract "Relevant source files"
-
-    - [<code>lib/<wbr>console_kit/<wbr>railtie.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>tenant_orchestrator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>tenant_selector.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_selector.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>setup_ui.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/setup_ui.rb)
-    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>install_generator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/install_generator.rb)
-    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb"><code>lib/<wbr>console_kit/<wbr>railtie.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb"><code>lib/<wbr>console_kit/<wbr>tenant_orchestrator.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_selector.rb"><code>lib/<wbr>console_kit/<wbr>tenant_selector.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/setup_ui.rb"><code>lib/<wbr>console_kit/<wbr>setup_ui.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/install_generator.rb"><code>lib/<wbr>generators/<wbr>console_kit/<wbr>install_generator.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb"><code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code></a></li>
+</ul>
+</details>
 
 ## Install generator
 

@@ -1,17 +1,20 @@
 # Development, Testing and Release
 
-??? abstract "Relevant source files"
-
-    - [<code>Rakefile</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/Rakefile)
-    - [<code>.rubocop.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.rubocop.yml)
-    - [<code>spec/<wbr>spec_helper.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/spec_helper.rb)
-    - [<code>.github/<wbr>workflows/<wbr>test_suite.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/test_suite.yml)
-    - [<code>.github/<wbr>workflows/<wbr>release.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/release.yml)
-    - [<code>.github/<wbr>workflows/<wbr>docs.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/docs.yml)
-    - [<code>benchmark/<wbr>support/<wbr>setup.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/benchmark/support/setup.rb)
-    - [<code>gemfiles/<wbr>common.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/gemfiles/common.rb)
-    - [<code>console_kit.gemspec</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/console_kit.gemspec)
-    - [<code>mkdocs.yml</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/mkdocs.yml)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/Rakefile"><code>Rakefile</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/.rubocop.yml"><code>.rubocop.yml</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/spec_helper.rb"><code>spec/<wbr>spec_helper.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/test_suite.yml"><code>.github/<wbr>workflows/<wbr>test_suite.yml</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/release.yml"><code>.github/<wbr>workflows/<wbr>release.yml</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/.github/workflows/docs.yml"><code>.github/<wbr>workflows/<wbr>docs.yml</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/benchmark/support/setup.rb"><code>benchmark/<wbr>support/<wbr>setup.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/gemfiles/common.rb"><code>gemfiles/<wbr>common.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/console_kit.gemspec"><code>console_kit.gemspec</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/mkdocs.yml"><code>mkdocs.yml</code></a></li>
+</ul>
+</details>
 
 ## Setup
 

@@ -5,15 +5,18 @@ Every backend ConsoleKit switches is a subclass of
 built-in handlers are written exactly this way (see [Backends](backends.md)). A handler of your own
 gets the same transaction, rollback, verification, validation, console output and dashboard row.
 
-??? abstract "Relevant source files"
-
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>connection_manager.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>diagnostic_helpers.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/diagnostic_helpers.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>dashboard.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/dashboard.rb)
-    - [<code>spec/<wbr>support/<wbr>shared_examples/<wbr>connection_<wbr>handler_<wbr>contract.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
-    - [<code>spec/<wbr>support/<wbr>shared_contexts/<wbr>connection_<wbr>handler_<wbr>contracts.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_contexts/connection_handler_contracts.rb)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>connection_manager.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_connection_handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/diagnostic_helpers.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>diagnostic_helpers.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/dashboard.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>dashboard.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb"><code>spec/<wbr>support/<wbr>shared_examples/<wbr>connection_<wbr>handler_<wbr>contract.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_contexts/connection_handler_contracts.rb"><code>spec/<wbr>support/<wbr>shared_contexts/<wbr>connection_<wbr>handler_<wbr>contracts.rb</code></a></li>
+</ul>
+</details>
 
 
 ## Minimal handler

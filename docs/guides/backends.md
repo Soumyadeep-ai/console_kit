@@ -4,18 +4,21 @@ How each built-in handler switches, verifies and restores its backend, and when 
 summary table and thread-isolation matrix, see [Supported Connections](../usage.md#supported-connections)
 and [Concurrency and Isolation](../switching.md#concurrency-and-isolation).
 
-??? abstract "Relevant source files"
-
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_strategy.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_strategy.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>mongo_<wbr>connection_<wbr>handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongo_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>mongoid_support.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongoid_support.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>redis_<wbr>connection_<wbr>handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>redis_client_adapter.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_client_adapter.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>elasticsearch_<wbr>connection_<wbr>handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_connection_handler.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>elasticsearch_<wbr>prefix_<wbr>registry.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_prefix_registry.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
-    - [<code>spec/<wbr>support/<wbr>shared_examples/<wbr>connection_<wbr>handler_<wbr>contract.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_connection_handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_strategy.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_strategy.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongo_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>mongo_<wbr>connection_<wbr>handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/mongoid_support.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>mongoid_support.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>redis_<wbr>connection_<wbr>handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/redis_client_adapter.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>redis_client_adapter.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>elasticsearch_<wbr>connection_<wbr>handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/elasticsearch_prefix_registry.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>elasticsearch_<wbr>prefix_<wbr>registry.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb"><code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb"><code>spec/<wbr>support/<wbr>shared_examples/<wbr>connection_<wbr>handler_<wbr>contract.rb</code></a></li>
+</ul>
+</details>
 
 
 Every handler follows the same lifecycle inside a switch (see

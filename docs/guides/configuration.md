@@ -3,13 +3,16 @@
 Covers every setting, the tenant constants format, and every rule `validate!` enforces. For a
 first-time setup walkthrough, see [Usage](../usage.md#usage).
 
-??? abstract "Relevant source files"
-
-    - [<code>lib/<wbr>console_kit/<wbr>configuration.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>configuration_validator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration_validator.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>errors.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
-    - [<code>lib/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
-    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb"><code>lib/<wbr>console_kit/<wbr>configuration.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration_validator.rb"><code>lib/<wbr>console_kit/<wbr>configuration_validator.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb"><code>lib/<wbr>console_kit/<wbr>errors.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb"><code>lib/<wbr>console_kit.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb"><code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code></a></li>
+</ul>
+</details>
 
 
 ## Settings

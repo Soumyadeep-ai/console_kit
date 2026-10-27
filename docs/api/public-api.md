@@ -4,16 +4,19 @@ Everything an application or console user is expected to call. Usage examples an
 are under [Programmatic API](../usage.md#programmatic-api) and
 [Observability](../switching.md#observability). This page is the complete list.
 
-??? abstract "Relevant source files"
-
-    - [<code>lib/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>configuration.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>tenant_switch.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>tenant_state.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>console_helpers.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/console_helpers.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>instrumentation.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/instrumentation.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>diagnostics.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/diagnostics.rb)
-    - [<code>lib/<wbr>console_kit/<wbr>errors.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
+<details class="abstract">
+<summary>Relevant source files</summary>
+<ul>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb"><code>lib/<wbr>console_kit.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb"><code>lib/<wbr>console_kit/<wbr>configuration.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb"><code>lib/<wbr>console_kit/<wbr>tenant_switch.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb"><code>lib/<wbr>console_kit/<wbr>tenant_state.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/console_helpers.rb"><code>lib/<wbr>console_kit/<wbr>console_helpers.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/instrumentation.rb"><code>lib/<wbr>console_kit/<wbr>instrumentation.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/diagnostics.rb"><code>lib/<wbr>console_kit/<wbr>diagnostics.rb</code></a></li>
+<li><a href="https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb"><code>lib/<wbr>console_kit/<wbr>errors.rb</code></a></li>
+</ul>
+</details>
 
 
 ## `ConsoleKit`
