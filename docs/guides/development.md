@@ -95,8 +95,10 @@ mkdocs serve            # live preview at http://127.0.0.1:8000
 mkdocs build --strict   # what CI runs; fails on broken links or anchors
 ```
 
-`.github/workflows/docs.yml` builds the site on every pull request and deploys it to GitHub Pages
-on pushes to `master`.
+`.github/workflows/docs.yml` builds the site on every pull request. It deploys to GitHub Pages on
+pushes to `master` and on `vX.Y.Z` release tags, the tag `release.yml` publishes to RubyGems on.
+Deploying from a tag requires the `github-pages` environment to allow tags matching `v*.*.*`
+(Settings → Environments → github-pages → Deployment branches and tags).
 
 ## Benchmarks
 

@@ -3,6 +3,9 @@ name: Docs
 on:
   push:
     branches: [ "master" ]
+    # Release tags, the same pattern release.yml publishes to RubyGems on, so the site is rebuilt
+    # when a version actually ships.
+    tags: [ "v*.*.*" ]
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
