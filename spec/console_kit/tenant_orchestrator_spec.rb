@@ -25,7 +25,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
     it 'configures a tenant when selected' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-      allow(configurator).to receive(:configuration_success).and_return(true)
+      allow(configurator).to receive(:configure_tenant).and_return(true)
 
       described_class.run
 
@@ -34,7 +34,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
     it 'updates current_tenant when configured' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-      allow(configurator).to receive(:configuration_success).and_return(true)
+      allow(configurator).to receive(:configure_tenant).and_return(true)
 
       described_class.run
 
@@ -53,9 +53,8 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
   describe '.reset' do
     before do
       described_class.current_tenant = 'acme'
-      allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
       allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
+      allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(true)
       allow(described_class).to receive(:auto_select?).and_return(false)
       allow(ConsoleKit::SetupUI).to receive(:print_tenant_banner)
     end
@@ -78,7 +77,6 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
     it 'configures the new tenant when switching' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-      allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
 
       described_class.reset
 
@@ -87,7 +85,6 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
     it 'updates current_tenant to the new tenant' do
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
-      allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
 
       described_class.reset
 
@@ -108,6 +105,27 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       described_class.reset
 
       expect(described_class.current_tenant).to eq('acme')
+    end
+
+    # The previous tenant's state still answers configuration_success with true here; only
+    # configure_tenant's return value says whether *this* switch worked.
+    context 'when the switch to the selected tenant fails' do
+      before do
+        allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
+        allow(ConsoleKit::TenantConfigurator).to receive_messages(configure_tenant: false, configuration_success: true)
+      end
+
+      it 'keeps the previous tenant current' do
+        described_class.reset
+
+        expect(described_class.current_tenant).to eq('acme')
+      end
+
+      it 'does not print the banner for the failed tenant' do
+        described_class.reset
+
+        expect(ConsoleKit::SetupUI).not_to have_received(:print_tenant_banner)
+      end
     end
 
     context 'when no tenant was configured before the switch' do

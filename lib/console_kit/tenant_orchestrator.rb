@@ -86,8 +86,7 @@ module ConsoleKit
       end
 
       def configure(key)
-        TenantConfigurator.configure_tenant(key)
-        return unless TenantConfigurator.configuration_success
+        return unless TenantConfigurator.configure_tenant(key)
 
         self.current_tenant = key
         SetupUI.print_tenant_banner(key, ConsoleKit.configuration)

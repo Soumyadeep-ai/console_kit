@@ -25,8 +25,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
     allow(ConsoleKit::TenantSelector).to receive(:select).and_return(tenant)
 
     allow(ConsoleKit::TenantConfigurator).tap do |configurator|
-      configurator.to receive(:configure_tenant).with(tenant)
-      configurator.to receive(:configuration_success).and_return(true)
+      configurator.to receive(:configure_tenant).with(tenant).and_return(true)
     end
   end
 
@@ -73,8 +72,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
     context 'when configuration fails' do
       it 'does not set current_tenant' do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('acme')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(false)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).and_return(false)
         described_class.run
         expect(described_class.current_tenant).to be_nil
       end
@@ -182,16 +180,14 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
 
       it 'auto-selects the only tenant in interactive mode' do
         allow($stdin).to receive(:tty?).and_return(true)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one').and_return(true)
         described_class.run
         expect(described_class.current_tenant).to eq('only_one')
       end
 
       it 'auto-selects the only tenant in non-interactive mode' do
         allow($stdin).to receive(:tty?).and_return(false)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one')
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with('only_one').and_return(true)
         described_class.run
         expect(described_class.current_tenant).to eq('only_one')
       end
@@ -201,8 +197,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       before do
         allow($stdin).to receive(:tty?).and_return(false)
         allow(ConsoleKit::TenantConfigurator).tap do |configurator|
-          configurator.to receive(:configure_tenant).with('acme')
-          configurator.to receive(:configuration_success).and_return(true)
+          configurator.to receive(:configure_tenant).with('acme').and_return(true)
         end
       end
 
@@ -249,8 +244,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
           c.tenants = { acme: { constants: { shard: 'shard_acme', mongo_db: 'acme_db', partner_code: 'ACME' } } }
         end
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return(:acme)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme)
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
+        allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant).with(:acme).and_return(true)
       end
 
       it 'sets up tenant with symbol keys' do
@@ -375,7 +369,6 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
         allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
         allow(ConsoleKit::TenantConfigurator).to receive(:clear) { calls << :clear }
         allow(ConsoleKit::TenantConfigurator).to receive(:configure_tenant) { |key| calls << [:configure, key] }
-        allow(ConsoleKit::TenantConfigurator).to receive(:configuration_success).and_return(true)
         allow(ConsoleKit::Output).to receive(:print_warning)
       end
 
@@ -498,7 +491,7 @@ RSpec.describe ConsoleKit::TenantOrchestrator do
       allow(described_class).to receive(:auto_select?).and_return(false)
       allow(ConsoleKit::TenantSelector).to receive(:select).and_return('globex')
       allow(ConsoleKit::TenantConfigurator).to receive(:clear)
-      allow(ConsoleKit::TenantConfigurator).to receive_messages(configure_tenant: false, configuration_success: false)
+      allow(ConsoleKit::TenantConfigurator).to receive_messages(configure_tenant: false)
       described_class.reset
     end
 
