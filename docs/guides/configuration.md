@@ -5,11 +5,11 @@ first-time setup walkthrough, see [Usage](../usage.md#usage).
 
 ??? abstract "Relevant source files"
 
-    - [`lib/console_kit/configuration.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
-    - [`lib/console_kit/configuration_validator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration_validator.rb)
-    - [`lib/console_kit/errors.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
-    - [`lib/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
-    - [`lib/generators/console_kit/templates/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>configuration.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>configuration_validator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration_validator.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>errors.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
+    - [<code>lib/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
+    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
 
 
 ## Settings

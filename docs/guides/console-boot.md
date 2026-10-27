@@ -5,12 +5,12 @@ answer at the selection menu does.
 
 ??? abstract "Relevant source files"
 
-    - [`lib/console_kit/railtie.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb)
-    - [`lib/console_kit/tenant_orchestrator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb)
-    - [`lib/console_kit/tenant_selector.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_selector.rb)
-    - [`lib/console_kit/setup_ui.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/setup_ui.rb)
-    - [`lib/generators/console_kit/install_generator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/install_generator.rb)
-    - [`lib/generators/console_kit/templates/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>railtie.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_orchestrator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_selector.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_selector.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>setup_ui.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/setup_ui.rb)
+    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>install_generator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/install_generator.rb)
+    - [<code>lib/<wbr>generators/<wbr>console_kit/<wbr>templates/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/generators/console_kit/templates/console_kit.rb)
 
 ## Install generator
 

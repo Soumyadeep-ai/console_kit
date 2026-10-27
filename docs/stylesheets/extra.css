@@ -571,44 +571,103 @@
   font-feature-settings: "liga" 0, "calt" 0;
 }
 
-/* "Relevant source files" panel: a quiet collapsed admonition instead of Material's tinted abstract. */
+/* "Relevant source files": a quiet collapsible panel. One 40px gutter holds the icon; the title and
+   the file list both start at it, and the icon and arrow are centred on the title's line. */
 .md-typeset details.abstract {
-  margin: 1em 0 1.5em;
+  --ck-panel-gutter: 2.4rem;
+  --ck-panel-line: 1.4rem;
+  margin: 1.2em 0 1.6em;
   padding: 0;
   border: 1px solid var(--ck-line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--ck-sunken);
   box-shadow: none;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
 }
 
 .md-typeset details.abstract > summary {
-  padding: 0.5rem 1.9rem 0.5rem 2rem;
   margin: 0;
+  padding: 0.55rem 2.2rem 0.55rem var(--ck-panel-gutter);
+  line-height: var(--ck-panel-line);
   background: transparent;
-  color: var(--ck-muted);
-  font-weight: 500;
   border: 0;
+  border-radius: 8px;
+  color: var(--ck-muted);
+  font-weight: 600;
+}
+
+.md-typeset details.abstract > summary:hover {
+  color: var(--ck-ink);
+}
+
+.md-typeset details.abstract > summary::before,
+.md-typeset details.abstract > summary::after {
+  top: calc(0.55rem + (var(--ck-panel-line) - 1rem) / 2);
+  width: 1rem;
+  height: 1rem;
+  color: inherit;
 }
 
 .md-typeset details.abstract > summary::before {
-  background-color: var(--ck-muted);
+  left: calc((var(--ck-panel-gutter) - 1rem) / 2);
+  background-color: currentColor;
 }
 
 .md-typeset details.abstract > summary::after {
-  color: var(--ck-muted);
+  right: 0.8rem;
+  background-color: currentColor;
 }
 
 .md-typeset details.abstract[open] > summary {
   border-bottom: 1px solid var(--ck-line);
+  border-radius: 8px 8px 0 0;
 }
 
 .md-typeset details.abstract > ul {
   margin: 0;
-  padding: 0.5rem 1rem 0.5rem 2.2rem;
-  color: var(--ck-ink);
+  padding: 0.6rem 1rem 0.7rem var(--ck-panel-gutter);
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
 }
 
-.md-typeset details.abstract > ul li {
-  margin-bottom: 0.1rem;
+.md-typeset details.abstract > ul > li {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.md-typeset details.abstract > ul > li > a {
+  text-decoration: none;
+}
+
+/* Paths wrap after a "/" (a normal line-break opportunity), never mid-name unless one segment
+   cannot fit on a line at all. */
+.md-typeset details.abstract > ul > li > a > code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.95em;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset details.abstract > ul > li > a:hover > code {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Phones. Material runs code blocks edge to edge here, so drop their side borders and radius; and
+   give tables with three or more columns a readable minimum width - they scroll inside their own
+   frame - instead of squeezing the last column into a sliver. */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset > .highlight > pre > code,
+  .md-typeset > pre > code {
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .md-typeset table:not([class]):has(th:nth-child(3)) {
+    min-width: 36rem;
+  }
 }

@@ -7,16 +7,16 @@ For configuration and day-to-day usage, see [Usage](../usage.md). Related:
 
 ??? abstract "Relevant source files"
 
-    - [`lib/console_kit/tenant_switch.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
-    - [`lib/console_kit/tenant_plan.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_plan.rb)
-    - [`lib/console_kit/tenant_rollback.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_rollback.rb)
-    - [`lib/console_kit/tenant_state.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
-    - [`lib/console_kit/tenant_orchestrator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb)
-    - [`lib/console_kit/tenant_configurator.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_configurator.rb)
-    - [`lib/console_kit/railtie.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb)
-    - [`lib/console_kit/connections/connection_manager.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
-    - [`lib/console_kit/connections/base_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
-    - [`lib/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_switch.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_plan.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_plan.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_rollback.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_rollback.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_state.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_orchestrator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_orchestrator.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_configurator.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_configurator.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>railtie.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/railtie.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>connection_manager.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
+    - [<code>lib/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
 
 
 ## Components

@@ -6,14 +6,14 @@ are under [Programmatic API](../usage.md#programmatic-api) and
 
 ??? abstract "Relevant source files"
 
-    - [`lib/console_kit.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
-    - [`lib/console_kit/configuration.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
-    - [`lib/console_kit/tenant_switch.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
-    - [`lib/console_kit/tenant_state.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
-    - [`lib/console_kit/console_helpers.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/console_helpers.rb)
-    - [`lib/console_kit/instrumentation.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/instrumentation.rb)
-    - [`lib/console_kit/diagnostics.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/diagnostics.rb)
-    - [`lib/console_kit/errors.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
+    - [<code>lib/<wbr>console_kit.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>configuration.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/configuration.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_switch.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_switch.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>tenant_state.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/tenant_state.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>console_helpers.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/console_helpers.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>instrumentation.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/instrumentation.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>diagnostics.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/diagnostics.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>errors.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/errors.rb)
 
 
 ## `ConsoleKit`

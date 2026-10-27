@@ -7,13 +7,13 @@ gets the same transaction, rollback, verification, validation, console output an
 
 ??? abstract "Relevant source files"
 
-    - [`lib/console_kit/connections/base_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
-    - [`lib/console_kit/connections/connection_manager.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
-    - [`lib/console_kit/connections/sql_connection_handler.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
-    - [`lib/console_kit/connections/diagnostic_helpers.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/diagnostic_helpers.rb)
-    - [`lib/console_kit/connections/dashboard.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/dashboard.rb)
-    - [`spec/support/shared_examples/connection_handler_contract.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
-    - [`spec/support/shared_contexts/connection_handler_contracts.rb`](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_contexts/connection_handler_contracts.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>base_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/base_connection_handler.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>connection_manager.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/connection_manager.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>sql_connection_handler.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/sql_connection_handler.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>diagnostic_helpers.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/diagnostic_helpers.rb)
+    - [<code>lib/<wbr>console_kit/<wbr>connections/<wbr>dashboard.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/lib/console_kit/connections/dashboard.rb)
+    - [<code>spec/<wbr>support/<wbr>shared_examples/<wbr>connection_<wbr>handler_<wbr>contract.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_examples/connection_handler_contract.rb)
+    - [<code>spec/<wbr>support/<wbr>shared_contexts/<wbr>connection_<wbr>handler_<wbr>contracts.rb</code>](https://github.com/Soumyadeep-ai/console_kit/blob/master/spec/support/shared_contexts/connection_handler_contracts.rb)
 
 
 ## Minimal handler
