@@ -1,5 +1,7 @@
 /* ConsoleKit docs theme on top of MkDocs Material.
-   Tokens first; every rule below reads from them so light and dark stay paired. */
+   Two token blocks (light, dark), then one mapping onto Material's variables. The mapping sits on
+   [data-md-color-scheme] - the element Material puts the scheme on - so it re-resolves per scheme
+   instead of freezing the light values at :root. */
 
 :root,
 [data-md-color-scheme="default"] {
@@ -7,20 +9,44 @@
   --ck-sunken: #f1f3f6;
   --ck-ink: #1d2330;
   --ck-muted: #5b6577;
+  --ck-faint: #8a93a3;
   --ck-line: #e3e6ec;
   --ck-garnet: #a3213a;
   --ck-garnet-strong: #861a2f;
+  --ck-button: #a3213a;
+  --ck-button-strong: #861a2f;
+  --ck-footer: #1d2330;
 
   /* The console panel is dark in both schemes: code here is something you type into a terminal. */
   --ck-term: #182030;
   --ck-term-line: #2a3448;
   --ck-term-fg: #d7dce6;
   --ck-term-muted: #8a94a8;
+}
 
+[data-md-color-scheme="slate"] {
+  --ck-paper: #151a24;
+  --ck-sunken: #1c2230;
+  --ck-ink: #e6e9ef;
+  --ck-muted: #9aa3b2;
+  --ck-faint: #6f7889;
+  --ck-line: #2a3140;
+  /* Light garnet for text on dark; filled buttons keep a deep garnet with white text. */
+  --ck-garnet: #ec7489;
+  --ck-garnet-strong: #f4a0af;
+  --ck-button: #b3304a;
+  --ck-button-strong: #c63d58;
+  --ck-footer: #10141c;
+  --ck-term: #0d111a;
+  --ck-term-line: #2f3a52;
+  --md-hue: 222;
+}
+
+[data-md-color-scheme] {
   --md-default-bg-color: var(--ck-paper);
   --md-default-fg-color: var(--ck-ink);
   --md-default-fg-color--light: var(--ck-muted);
-  --md-default-fg-color--lighter: #8a93a3;
+  --md-default-fg-color--lighter: var(--ck-faint);
   --md-default-fg-color--lightest: var(--ck-line);
   --md-primary-fg-color: var(--ck-garnet);
   --md-primary-fg-color--light: var(--ck-garnet);
@@ -30,8 +56,8 @@
   --md-typeset-a-color: var(--ck-garnet);
   --md-code-bg-color: var(--ck-sunken);
   --md-code-fg-color: var(--ck-ink);
-  --md-footer-bg-color: var(--ck-ink);
-  --md-footer-bg-color--dark: #151a24;
+  --md-footer-bg-color: var(--ck-footer);
+  --md-footer-bg-color--dark: var(--ck-footer);
 
   --md-mermaid-font-family: var(--md-text-font-family), sans-serif;
   --md-mermaid-edge-color: var(--ck-muted);
@@ -45,22 +71,6 @@
   --md-mermaid-sequence-actor-line-color: var(--ck-line);
   --md-mermaid-sequence-message-fg-color: var(--ck-ink);
   --md-mermaid-sequence-message-line-color: var(--ck-muted);
-}
-
-[data-md-color-scheme="slate"] {
-  --ck-paper: #151a24;
-  --ck-sunken: #1c2230;
-  --ck-ink: #e6e9ef;
-  --ck-muted: #9aa3b2;
-  --ck-line: #2a3140;
-  --ck-garnet: #ec7489;
-  --ck-garnet-strong: #f4a0af;
-  --ck-term: #0f1420;
-  --ck-term-line: #273046;
-
-  --md-default-fg-color--lighter: #6f7889;
-  --md-primary-bg-color: #151a24;
-  --md-hue: 222;
 }
 
 /* Type */
@@ -323,15 +333,15 @@
 }
 
 .md-typeset .md-button--primary {
-  background-color: var(--ck-garnet);
-  border-color: var(--ck-garnet);
+  background-color: var(--ck-button);
+  border-color: var(--ck-button);
   color: var(--md-primary-bg-color);
 }
 
 .md-typeset .md-button--primary:hover,
 .md-typeset .md-button--primary:focus-visible {
-  background-color: var(--ck-garnet-strong);
-  border-color: var(--ck-garnet-strong);
+  background-color: var(--ck-button-strong);
+  border-color: var(--ck-button-strong);
   color: var(--md-primary-bg-color);
 }
 
@@ -459,4 +469,104 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ck-l { animation: none; }
+}
+
+/* Try-it console simulator (docs/try.md, docs/javascripts/console-sim.js) */
+
+.ck-sim {
+  margin: 1.4rem 0 2rem;
+  background: var(--ck-term);
+  border: 1px solid var(--ck-term-line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: var(--md-code-font-family);
+  font-size: 0.64rem;
+  color: var(--ck-term-fg);
+}
+
+.ck-sim__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.2rem;
+  padding: 0 0.9rem;
+  border-bottom: 1px solid var(--ck-term-line);
+  color: var(--ck-term-muted);
+  font-size: 0.6rem;
+}
+
+.ck-sim__restart {
+  font: inherit;
+  color: var(--ck-term-fg);
+  background: transparent;
+  border: 1px solid var(--ck-term-line);
+  border-radius: 5px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+.ck-sim__restart:hover {
+  border-color: var(--ck-term-muted);
+}
+
+.ck-sim__screen {
+  padding: 0.9rem 1.1rem 1rem;
+  cursor: text;
+}
+
+.ck-sim__log {
+  max-height: 26rem;
+  overflow: auto;
+}
+
+.ck-sim__line {
+  white-space: pre;
+  line-height: 1.7;
+  min-height: 1.7em;
+}
+
+.ck-sim__form {
+  display: flex;
+  align-items: baseline;
+  line-height: 1.7;
+}
+
+.ck-sim__form[hidden] {
+  display: none;
+}
+
+.ck-sim__label {
+  white-space: pre;
+  flex: none;
+}
+
+.ck-sim__input {
+  flex: 1;
+  min-width: 4ch;
+  font: inherit;
+  color: #ffffff;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  caret-color: #f08a9b;
+}
+
+.ck-sim__input:focus-visible {
+  outline: none;
+}
+
+.ck-sim:focus-within {
+  border-color: var(--ck-term-muted);
+}
+
+.ck-warn { color: #f5c37a; }
+.ck-p { color: #7fd4e0; }
+
+/* Terminals do not join `=>` or `!=` into ligatures; neither does this site. */
+.md-typeset code,
+.md-typeset kbd,
+.ck-sim {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }

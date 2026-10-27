@@ -66,6 +66,7 @@ nav:
   - Overview: index.md
   - Getting Started:
       - Usage: usage.md
+      - Try It in the Browser: try.md
       - Console Boot and Selection: guides/console-boot.md
       - Configuration: guides/configuration.md
   - Tenant Switching Core:
@@ -81,6 +82,9 @@ nav:
   - Changelog: changelog.md
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/console-sim.js
 
 exclude_docs: |
   requirements.txt
