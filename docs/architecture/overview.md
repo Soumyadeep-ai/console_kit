@@ -80,7 +80,7 @@ sequenceDiagram
     Switch->>H: prepare(target) for each
     Switch->>H: snapshot for each
     Switch->>Ctx: current_values (undo bundle)
-    rect rgb(240, 240, 240)
+    rect rgba(128, 128, 128, 0.15)
         note over Switch,H: transaction
         Switch->>Ctx: assign(constants)
         Switch->>H: connect!(target), in order
