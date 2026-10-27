@@ -66,6 +66,7 @@ nav:
   - Overview: index.md
   - Getting Started:
       - Usage: usage.md
+      - Console Boot and Selection: guides/console-boot.md
       - Configuration: guides/configuration.md
   - Tenant Switching Core:
       - Guarantees and Concurrency: switching.md
@@ -76,6 +77,7 @@ nav:
   - Reference:
       - Public API: api/public-api.md
   - Development: guides/development.md
+  - Glossary: glossary.md
   - Changelog: changelog.md
 extra_css:
   - stylesheets/extra.css

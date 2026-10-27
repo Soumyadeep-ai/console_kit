@@ -107,6 +107,20 @@ Points that matter:
 
 `StateStore` keeps the current `TenantState` in a **thread variable** (`:console_kit_state`). `TenantState` and its undo bundle are deep-frozen copies, so later changes to the config hash cannot change a committed state.
 
+Thread variables are shared by every fiber of a thread, so a tenant set on a thread is also current
+inside fibers it runs. ConsoleKit's smaller bookkeeping is fiber-local (`Thread.current[]`):
+output silencing, "already warned" flags for dropped handlers and Elasticsearch conflicts, and the
+memoized Redis isolation probe.
+
+`ContextWrapper` guards two edge cases when it writes to the context:
+
+- **Case mismatch.** If the context already holds a String that differs from the configured value
+  only by case (`'ACME'` vs `'acme'`), the switch proceeds and prints a warning. That usually
+  means the configuration and the application disagree.
+- **Unreadable attribute.** If reading an attribute raises, its previous value is recorded as
+  unreadable and a warning is printed. Should the switch then fail, rollback cannot restore that
+  attribute and reports it as a rollback failure instead of writing a guess.
+
 The backend connections are not all per-thread. See [Concurrency and Isolation](../switching.md#concurrency-and-isolation) for what each backend's scope is.
 
 ## Observability

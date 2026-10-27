@@ -439,11 +439,13 @@ When a tenant has an `environment` key in its constants:
 Browse everything below as a site: **https://soumyadeep-ai.github.io/console_kit/**
 
 - [Architecture overview](docs/architecture/overview.md) - components and the tenant switch sequence
+- [Console boot and tenant selection](docs/guides/console-boot.md) - what happens at startup and what each menu answer does
 - [Configuration and validation](docs/guides/configuration.md) - every setting and every `validate!` rule
 - [Backends](docs/guides/backends.md) - how each handler switches, verifies, restores and when it refuses
 - [Writing a backend handler](docs/guides/custom-backend-handler.md) - add your own backend
 - [Public API reference](docs/api/public-api.md) - methods, errors, instrumentation events
 - [Development, testing and release](docs/guides/development.md)
+- [Glossary](docs/glossary.md)
 
 ## Development
 

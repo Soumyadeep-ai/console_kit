@@ -34,6 +34,24 @@ Mixed into the console session by the Railtie (`lib/console_kit/console_helpers.
 
 The prompt shows `[tenant_key]` or `[no-tenant]` in both IRB and Pry.
 
+## Console output
+
+Every message ConsoleKit prints starts with `[ConsoleKit]` and has a type (`lib/console_kit/output.rb`):
+
+| Type | Marker | Colour | Used for |
+|---|---|---|---|
+| success | `[✓]` | bold green | `Tenant initialized: ...` |
+| error | `[✗]` | bold red | failures, the production warning |
+| warning | `[!]` | bold yellow | dropped backends, isolation warnings, staging |
+| header | `--- text ---` | bold blue | the selection menu, dashboard title |
+| prompt | none | bold cyan | `Selection (number or name) [1]:` (no newline) |
+| trace | none | dim grey | backtraces, timestamped |
+| info | none | default | connection progress such as `Switching to Redis DB: 1` |
+
+With `pretty_output = false` the colour codes are dropped and the markers stay, which keeps logs
+readable. `Output.silence { ... }` suppresses everything, and is how `reload!` re-applies a tenant
+quietly.
+
 ## Errors
 
 `lib/console_kit/errors.rb`. Rescue `ConsoleKit::Error` to catch all of them.
