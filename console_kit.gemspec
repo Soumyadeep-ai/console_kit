@@ -17,6 +17,7 @@ Gem::Specification.new do |spec|
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
   spec.metadata['source_code_uri'] = spec.homepage
+  spec.metadata['documentation_uri'] = 'https://soumyadeep-ai.github.io/console_kit/'
   spec.metadata['bug_tracker_uri'] = "#{spec.homepage}/issues"
   spec.metadata['changelog_uri'] = 'https://github.com/Soumyadeep-ai/console_kit/blob/master/CHANGELOG.md'
   spec.metadata['rubygems_mfa_required'] = 'true'

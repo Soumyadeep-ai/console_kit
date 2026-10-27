@@ -23,7 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   - Glossary
   - A **Try it** page with an in-browser console that simulates boot, tenant selection and the console helpers
 
-  The site includes the README and this changelog, so the two cannot drift. None of it ships in the gem.
+  The site includes the README and this changelog, so the two cannot drift. None of it ships in the gem. The gem's RubyGems page links to it through `documentation_uri`.
 
 ### Changed
 - **Ruby 3.1 is no longer supported; the minimum is now Ruby 3.2.** Ruby 3.1 reached end of life on 2025-03-26 and CI runners no longer provide it. Rails 6.1-8.1 support is unchanged, and the CI matrix is now 24 cells (Rails 6.1-8.1 x Ruby 3.2-4.0).
